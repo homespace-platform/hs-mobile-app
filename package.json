@@ -2,13 +2,14 @@
   "name": "hs-mobile-app",
   "version": "1.0.0",
   "scripts": {
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "start": "expo start",
+    "android": "expo start --android --port 4000",
+    "ios": "expo start --ios --port 4000",
+    "start": "expo start --port 4000",
+    "start:tunnel": "expo start --tunnel --port 4000",
     "prebuild": "expo prebuild",
     "lint": "eslint \"**/*.{js,jsx,ts,tsx}\" && prettier -c \"**/*.{js,jsx,ts,tsx,json}\"",
     "format": "eslint \"**/*.{js,jsx,ts,tsx}\" --fix && prettier \"**/*.{js,jsx,ts,tsx,json}\" --write",
-    "web": "expo start --web"
+    "web": "expo start --web --port 4000"
   },
   "dependencies": {
     "babel-preset-expo": "~54.0.10",
