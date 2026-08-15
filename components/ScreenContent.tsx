@@ -1,8 +1,6 @@
 import React from 'react';
 import { Text, View } from 'react-native';
 
-import { EditScreenInfo } from './EditScreenInfo';
-
 interface ScreenContentProps {
   title: string;
   path: string;
@@ -11,17 +9,10 @@ interface ScreenContentProps {
 
 export const ScreenContent: React.FC<ScreenContentProps> = ({ title, path, children }) => {
   return (
-    <View className={styles.container}>
-      <Text className={styles.title}>{title}</Text>
-      <View className={styles.separator} />
-      <EditScreenInfo path={path} />
-      {children}
+    <View className="flex-1 items-center justify-center bg-white">
+      <Text className="text-xl font-bold text-blue-500">
+        Welcome to Nativewind!sssssssss
+      </Text>
     </View>
   );
-};
-
-const styles = {
-  container: `items-center flex-1 justify-center bg-white`,
-  separator: `h-[1px] my-7 w-4/5 bg-gray-200`,
-  title: `text-xl font-bold`,
 };
