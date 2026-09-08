@@ -132,7 +132,7 @@ export default function MessagesScreen({
       const name = profile
         ? [profile.lastName, profile.firstName].filter(Boolean).join(' ') || profile.username
         : undefined;
-      const message = await sendMessage(selected.id, content, {
+      const message = await sendMessage(selected.id, content, selected.listing, {
         displayName: name,
         email: profile?.email,
         avatarUrl: profile?.avatarUrl ?? undefined,
@@ -264,6 +264,8 @@ export default function MessagesScreen({
             )}
           </Pressable>
         </View>
+
+        <BottomTabBar active="messages" onSelect={onSelectTab} />
       </SafeAreaView>
     );
   }

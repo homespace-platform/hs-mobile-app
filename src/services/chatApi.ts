@@ -69,11 +69,16 @@ export async function listMessages(conversationId: string) {
 export async function sendMessage(
   conversationId: string,
   content: string,
+  listing?: RelatedListing,
   senderProfile?: ParticipantProfile
 ) {
   const response = await axiosClient.post<ApiResponse<ChatMessage>>(
     `/api/v1/chat/conversations/${encodeURIComponent(conversationId)}/messages`,
-    { content, ...(senderProfile ? { senderProfile } : {}) }
+    {
+      content,
+      ...(listing ? { listing } : {}),
+      ...(senderProfile ? { senderProfile } : {}),
+    }
   );
   return response.data.result;
 }
