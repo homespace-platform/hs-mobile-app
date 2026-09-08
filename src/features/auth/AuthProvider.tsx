@@ -14,6 +14,7 @@ import { keycloakConfig } from '@/config/env';
 import {
   exchangeAuthorizationCode,
   isSignedIn,
+  loginWithPassword as loginWithPasswordSession,
   restoreSession,
   signOut,
   subscribeSession,
@@ -29,6 +30,7 @@ interface AuthContextValue {
   error: string | null;
   canLogin: boolean;
   login: () => Promise<void>;
+  loginWithPassword: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -115,6 +117,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await promptAsync();
   }, [promptAsync]);
 
+  const loginWithPassword = useCallback(async (username: string, password: string) => {
+    setError(null);
+    try {
+      await loginWithPasswordSession(username, password);
+    } catch (loginError: unknown) {
+      setStatus('signedOut');
+      throw loginError;
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     setStatus('loading');
     await signOut();
@@ -127,12 +139,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       error,
       canLogin: request !== null,
       login,
+      loginWithPassword,
       logout,
     }),
-    [error, login, logout, request, status]
+    [error, login, loginWithPassword, logout, request, status]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

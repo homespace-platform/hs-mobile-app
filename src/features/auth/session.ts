@@ -71,6 +71,45 @@ export const exchangeAuthorizationCode = async (code: string, codeVerifier: stri
   await applyTokens(next);
 };
 
+export const loginWithPassword = async (username: string, password: string) => {
+  const response = await fetch(discovery.tokenEndpoint!, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'password',
+      client_id: keycloakConfig.clientId,
+      username,
+      password,
+      scope: authScopes.join(' '),
+    }).toString(),
+  });
+
+  const payload = (await response.json().catch(() => null)) as {
+    access_token?: string;
+    refresh_token?: string;
+    token_type?: AuthSession.TokenType;
+    expires_in?: number;
+    scope?: string;
+    id_token?: string;
+    error_description?: string;
+  } | null;
+
+  if (!response.ok || !payload?.access_token) {
+    throw new Error(payload?.error_description ?? 'Tên đăng nhập hoặc mật khẩu không đúng');
+  }
+
+  await applyTokens(
+    new AuthSession.TokenResponse({
+      accessToken: payload.access_token,
+      refreshToken: payload.refresh_token,
+      tokenType: payload.token_type,
+      expiresIn: payload.expires_in,
+      scope: payload.scope,
+      idToken: payload.id_token,
+    })
+  );
+};
+
 export const restoreSession = async () => {
   const storedRefreshToken = await readRefreshToken();
   if (!storedRefreshToken) {
@@ -142,7 +181,7 @@ export const signOut = async () => {
         {
           clientId: keycloakConfig.clientId,
           token: refreshToken,
-          tokenTypeHint: AuthSession.TokenTypeHint.Refresh,
+          tokenTypeHint: AuthSession.TokenTypeHint.RefreshToken,
         },
         discovery
       );
@@ -164,10 +203,7 @@ export const signOut = async () => {
     .join('&');
 
   try {
-    await WebBrowser.openAuthSessionAsync(
-      `${discovery.endSessionEndpoint}?${query}`,
-      redirectUri
-    );
+    await WebBrowser.openAuthSessionAsync(`${discovery.endSessionEndpoint}?${query}`, redirectUri);
   } catch {
     // Keycloak SSO cookie may survive, but the app no longer holds any token.
   }
