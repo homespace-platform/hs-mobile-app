@@ -33,6 +33,7 @@
     },
     "android": {
       "package": "com.homespace.mobile",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/homespace-logo.png",
         "backgroundColor": "#ffffff"

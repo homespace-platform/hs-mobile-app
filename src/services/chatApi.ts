@@ -20,6 +20,14 @@ export type ChatConversation = {
   lastMessageAt?: string;
   lastMessageSenderId?: string;
   unreadCount: number;
+  participantRole?: 'TENANT' | 'LANDLORD';
+};
+
+export type ChatAttachment = {
+  storageId: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
 };
 
 export type ChatMessage = {
@@ -29,6 +37,7 @@ export type ChatMessage = {
   content: string;
   listing?: RelatedListing;
   createdAt: string;
+  attachments?: ChatAttachment[];
 };
 
 type MessagePage = { items: ChatMessage[]; nextBefore?: string };
@@ -70,7 +79,8 @@ export async function sendMessage(
   conversationId: string,
   content: string,
   listing?: RelatedListing,
-  senderProfile?: ParticipantProfile
+  senderProfile?: ParticipantProfile,
+  attachments?: ChatAttachment[]
 ) {
   const response = await axiosClient.post<ApiResponse<ChatMessage>>(
     `/api/v1/chat/conversations/${encodeURIComponent(conversationId)}/messages`,
@@ -78,6 +88,7 @@ export async function sendMessage(
       content,
       ...(listing ? { listing } : {}),
       ...(senderProfile ? { senderProfile } : {}),
+      ...(attachments?.length ? { attachments } : {}),
     }
   );
   return response.data.result;
@@ -85,4 +96,12 @@ export async function sendMessage(
 
 export async function markConversationRead(conversationId: string) {
   await axiosClient.patch(`/api/v1/chat/conversations/${encodeURIComponent(conversationId)}/read`);
+}
+
+export async function updateParticipantRole(conversationId: string, role: 'TENANT' | 'LANDLORD') {
+  const response = await axiosClient.patch<ApiResponse<ChatConversation>>(
+    `/api/v1/chat/conversations/${encodeURIComponent(conversationId)}/participant-role`,
+    { role }
+  );
+  return response.data.result;
 }
