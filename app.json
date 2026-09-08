@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "scheme": "homespace",
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/homespace-logo.png"
     },
     "experiments": {
       "tsconfigPaths": true
@@ -14,7 +14,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/splash.png",
+          "image": "./assets/homespace-logo.png",
           "backgroundColor": "#ffffff"
         }
       ],
@@ -24,11 +24,9 @@
       "expo-font"
     ],
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/homespace-logo.png",
     "userInterfaceStyle": "light",
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.homespace.mobile"
@@ -36,7 +34,7 @@
     "android": {
       "package": "com.homespace.mobile",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/homespace-logo.png",
         "backgroundColor": "#ffffff"
       }
     }
