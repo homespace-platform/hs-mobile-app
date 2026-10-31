@@ -4,6 +4,15 @@ export interface ApiResponse<T> {
   result: T;
 }
 
+export interface PageResponse<T> extends Omit<ApiResponse<T[]>, 'result'> {
+  result: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  hasMore: boolean;
+}
+
 export interface UserProfileResponse {
   id: string;
   username: string;
@@ -19,4 +28,6 @@ export interface UserProfileResponse {
   active?: boolean | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+  kycVerified?: boolean | null;
+  kycOptional?: boolean | null;
 }

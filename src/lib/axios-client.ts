@@ -1,4 +1,4 @@
-import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import { create, type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 
 import { gatewayBaseUrl } from '@/config/env';
 import { clearSession, getAccessToken } from '@/features/auth/session';
@@ -9,8 +9,9 @@ declare module 'axios' {
   }
 }
 
-const axiosClient = axios.create({
+const axiosClient = create({
   baseURL: gatewayBaseUrl,
+  timeout: 15000,
 });
 
 axiosClient.interceptors.request.use(async (config) => {
