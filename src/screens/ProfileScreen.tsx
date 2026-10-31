@@ -5,10 +5,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import Avatar from '@/components/Avatar';
 import ThemeSelector from '@/components/ThemeSelector';
+import { useDialog } from '@/components/AppDialog';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { getUserProfileApi } from '@/services/userApi';
 import type { UserProfileResponse } from '@/types/api';
+import type { ManagementSection } from '@/services/managementApi';
+import ProfileEditScreen from '@/screens/ProfileEditScreen';
+import AccountSecurityScreen from '@/screens/AccountSecurityScreen';
+import { apiError } from '@/lib/api-error';
+import { getReservationPolicy } from '@/services/bookingApi';
 
 function displayName(profile: UserProfileResponse | null) {
   if (!profile) return 'Người dùng';
@@ -29,9 +35,22 @@ function Field({ label, value }: { label: string; value: string }) {
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
-function Action({ icon, label, note }: { icon: IconName; label: string; note: string }) {
+function Action({
+  icon,
+  label,
+  note,
+  onPress,
+}: {
+  icon: IconName;
+  label: string;
+  note: string;
+  onPress: () => void;
+}) {
   return (
-    <Pressable className="w-[48%] rounded-2xl border border-border bg-surface p-4 shadow-sm">
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      className="w-[48%] rounded-2xl border border-border bg-surface p-4 shadow-sm">
       <View className="h-10 w-10 items-center justify-center rounded-xl bg-primary-soft">
         <Ionicons name={icon} size={22} className="text-primary" />
       </View>
@@ -41,9 +60,20 @@ function Action({ icon, label, note }: { icon: IconName; label: string; note: st
   );
 }
 
-function MenuItem({ icon, label }: { icon: IconName; label: string }) {
+function MenuItem({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: IconName;
+  label: string;
+  onPress: () => void;
+}) {
   return (
-    <Pressable className="flex-row items-center border-b border-border px-4 py-4 last:border-b-0">
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      className="flex-row items-center border-b border-border px-4 py-4 last:border-b-0">
       <Ionicons name={icon} size={20} className="text-muted-foreground" />
       <Text className="ml-3 flex-1 text-sm font-semibold text-foreground">{label}</Text>
       <Ionicons name="chevron-forward" size={18} className="text-subtle" />
@@ -51,11 +81,22 @@ function MenuItem({ icon, label }: { icon: IconName; label: string }) {
   );
 }
 
-export default function ProfileScreen({ onSelectTab }: { onSelectTab: (tab: MainTab) => void }) {
+export default function ProfileScreen({
+  onSelectTab,
+  onOpenManagement,
+  onOpenFavorites,
+}: {
+  onSelectTab: (tab: MainTab) => void;
+  onOpenManagement: (section: ManagementSection) => void;
+  onOpenFavorites: () => void;
+}) {
   const { logout } = useAuth();
+  const showDialog = useDialog();
   const [profile, setProfile] = useState<UserProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [security, setSecurity] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,7 +104,7 @@ export default function ProfileScreen({ onSelectTab }: { onSelectTab: (tab: Main
     try {
       setProfile(await getUserProfileApi());
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Không tải được hồ sơ');
+      setError(apiError(loadError));
     } finally {
       setLoading(false);
     }
@@ -74,6 +115,31 @@ export default function ProfileScreen({ onSelectTab }: { onSelectTab: (tab: Main
   }, [load]);
 
   const name = displayName(profile);
+  if (editing && profile)
+    return (
+      <ProfileEditScreen
+        profile={profile}
+        onBack={() => setEditing(false)}
+        onSaved={() => {
+          setEditing(false);
+          void load();
+        }}
+      />
+    );
+  if (security)
+    return (
+      <AccountSecurityScreen
+        onBack={() => {
+          setSecurity(false);
+          void load();
+        }}
+      />
+    );
+  const unavailable = (title: string) =>
+    showDialog(
+      title,
+      'Backend hiện chưa cung cấp API cho chức năng này. Ứng dụng chưa hỗ trợ mục này.'
+    );
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8">
@@ -85,7 +151,11 @@ export default function ProfileScreen({ onSelectTab }: { onSelectTab: (tab: Main
               </Text>
               <Text className="mt-1 text-2xl font-bold text-on-brand">Tài khoản</Text>
             </View>
-            <Pressable className="flex-row items-center rounded-full bg-on-brand/15 px-4 py-2">
+            <Pressable
+              disabled={!profile}
+              onPress={() => setEditing(true)}
+              accessibilityRole="button"
+              className="flex-row items-center rounded-full bg-on-brand/15 px-4 py-2">
               <Ionicons name="create-outline" size={15} className="text-on-brand" />
               <Text className="ml-1.5 text-xs font-semibold text-on-brand">Chỉnh sửa</Text>
             </Pressable>
@@ -114,7 +184,7 @@ export default function ProfileScreen({ onSelectTab }: { onSelectTab: (tab: Main
                   <View className="flex-row items-center">
                     <Ionicons name="checkmark-circle" size={14} className="text-on-brand" />
                     <Text className="ml-1 text-xs font-semibold text-on-brand">
-                      {profile?.emailVerified ? 'Đã xác thực' : 'Tài khoản hoạt động'}
+                      {profile?.kycVerified ? 'Đã xác minh danh tính' : 'Chưa xác minh danh tính'}
                     </Text>
                   </View>
                 </View>
@@ -129,17 +199,41 @@ export default function ProfileScreen({ onSelectTab }: { onSelectTab: (tab: Main
               icon="business-outline"
               label="Tin đăng của tôi"
               note="Quản lý nhà đang cho thuê"
+              onPress={() => onOpenManagement('landlord-properties')}
             />
-            <Action icon="heart-outline" label="Đã yêu thích" note="Các căn nhà bạn đã lưu" />
-            <Action icon="calendar-outline" label="Lịch xem nhà" note="Lịch hẹn sắp tới" />
-            <Action icon="document-text-outline" label="Hợp đồng" note="Theo dõi hợp đồng thuê" />
+            <Action
+              icon="heart-outline"
+              label="Đã yêu thích"
+              note="Các căn nhà bạn đã lưu"
+              onPress={onOpenFavorites}
+            />
+            <Action
+              icon="calendar-outline"
+              label="Lịch xem nhà"
+              note="Lịch hẹn sắp tới"
+              onPress={() => onOpenManagement('tenant-appointments')}
+            />
+            <Action
+              icon="document-text-outline"
+              label="Hợp đồng"
+              note="Theo dõi hợp đồng thuê"
+              onPress={() =>
+                showDialog('Hợp đồng', 'Bạn muốn xem hợp đồng ở vai trò nào?', [
+                  { text: 'Người thuê', onPress: () => onOpenManagement('tenant-contracts') },
+                  { text: 'Chủ nhà', onPress: () => onOpenManagement('landlord-contracts') },
+                  { text: 'Đóng', style: 'cancel' },
+                ])
+              }
+            />
           </View>
 
           {profile ? (
             <View className="mt-6 rounded-3xl border border-border bg-surface p-3 shadow-sm">
               <View className="flex-row items-center justify-between px-2 pb-2 pt-1">
                 <Text className="text-base font-bold text-foreground">Thông tin cá nhân</Text>
-                <Text className="text-xs font-semibold text-primary">Cập nhật</Text>
+                <Pressable onPress={() => setEditing(true)} accessibilityRole="button">
+                  <Text className="text-xs font-semibold text-primary">Cập nhật</Text>
+                </Pressable>
               </View>
               <View className="flex-row flex-wrap">
                 <Field label="Tên đăng nhập" value={profile.username} />
@@ -155,10 +249,33 @@ export default function ProfileScreen({ onSelectTab }: { onSelectTab: (tab: Main
           <ThemeSelector />
 
           <View className="mt-6 overflow-hidden rounded-3xl border border-border bg-surface shadow-sm">
-            <MenuItem icon="shield-checkmark-outline" label="Bảo mật tài khoản" />
-            <MenuItem icon="notifications-outline" label="Cài đặt thông báo" />
-            <MenuItem icon="help-circle-outline" label="Trung tâm hỗ trợ" />
-            <MenuItem icon="information-circle-outline" label="Điều khoản và chính sách" />
+            <MenuItem
+              icon="shield-checkmark-outline"
+              label="Bảo mật & xác minh danh tính"
+              onPress={() => setSecurity(true)}
+            />
+            <MenuItem
+              icon="notifications-outline"
+              label="Cài đặt thông báo (chưa hỗ trợ)"
+              onPress={() => unavailable('Thông báo')}
+            />
+            <MenuItem
+              icon="help-circle-outline"
+              label="Trung tâm hỗ trợ (chưa hỗ trợ)"
+              onPress={() => unavailable('Trung tâm hỗ trợ')}
+            />
+            <MenuItem
+              icon="information-circle-outline"
+              label="Điều khoản & chính sách giữ chỗ"
+              onPress={async () => {
+                try {
+                  const policy = await getReservationPolicy();
+                  showDialog(`Chính sách giữ chỗ · ${policy.version}`, policy.text);
+                } catch (e) {
+                  showDialog('Không tải được chính sách', apiError(e));
+                }
+              }}
+            />
           </View>
 
           <Pressable
