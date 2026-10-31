@@ -1,24 +1,33 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 
+import AuthLayout from '@/components/AuthLayout';
 import { useAuth } from '@/features/auth/AuthProvider';
 
-export default function LoginScreen() {
+export default function LoginScreen({ onRegister }: { onRegister: () => void }) {
   const { login, loginWithPassword, canLogin, error } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [openingSso, setOpeningSso] = useState(false);
+  const busy = submitting || openingSso;
+
+  async function openSso() {
+    if (busy) return;
+    setOpeningSso(true);
+    setFormError(null);
+    try {
+      await login();
+    } catch (loginError) {
+      setFormError(loginError instanceof Error ? loginError.message : 'Không mở được đăng nhập');
+    } finally {
+      setOpeningSso(false);
+    }
+  }
 
   const submit = async () => {
+    if (busy) return;
     if (!username.trim() || !password) {
       setFormError('Vui lòng nhập tài khoản và mật khẩu');
       return;
@@ -36,74 +45,86 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      className="flex-1 bg-slate-50">
-      <View className="flex-1 justify-center px-6">
-        <View className="w-full max-w-sm self-center rounded-3xl border border-slate-200 bg-white p-7">
-          <Text className="text-center text-3xl font-bold text-slate-900">HomeSpace</Text>
-          <Text className="mt-2 text-center text-sm text-slate-500">
-            Đăng nhập để tiếp tục tìm nơi ở phù hợp
+    <AuthLayout title="Chào mừng trở lại" subtitle="Đăng nhập để tiếp tục tìm nơi ở phù hợp.">
+      <Text className="mt-7 text-sm font-medium text-secondary">Tài khoản hoặc email</Text>
+      <TextInput
+        autoCapitalize="none"
+        accessibilityLabel="Tài khoản hoặc email"
+        autoComplete="username"
+        editable={!busy}
+        autoCorrect={false}
+        keyboardType="email-address"
+        onChangeText={setUsername}
+        placeholder="Nhập tài khoản hoặc email"
+        className="mt-2 rounded-xl border border-border px-4 py-3 text-foreground selection:text-primary placeholder:text-subtle"
+        value={username}
+      />
+
+      <Text className="mt-4 text-sm font-medium text-secondary">Mật khẩu</Text>
+      <TextInput
+        autoCapitalize="none"
+        accessibilityLabel="Mật khẩu"
+        autoComplete="current-password"
+        editable={!busy}
+        autoCorrect={false}
+        onChangeText={setPassword}
+        placeholder="Nhập mật khẩu"
+        secureTextEntry
+        className="mt-2 rounded-xl border border-border px-4 py-3 text-foreground selection:text-primary placeholder:text-subtle"
+        value={password}
+      />
+
+      {formError || error ? (
+        <Text
+          accessibilityRole="alert"
+          className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-center text-xs text-danger">
+          {formError ?? error}
+        </Text>
+      ) : null}
+
+      <Pressable
+        disabled={busy}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: busy, busy: submitting }}
+        onPress={submit}
+        className={`mt-6 min-h-12 items-center justify-center rounded-xl py-3 ${busy ? 'bg-disabled' : 'bg-inverse'}`}>
+        {submitting ? (
+          <ActivityIndicator className="text-on-disabled" />
+        ) : (
+          <Text
+            className={`text-center text-sm font-semibold ${busy ? 'text-on-disabled' : 'text-on-inverse'}`}>
+            Đăng nhập
           </Text>
+        )}
+      </Pressable>
 
-          <Text className="mt-7 text-sm font-medium text-slate-700">Tài khoản hoặc email</Text>
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            onChangeText={setUsername}
-            placeholder="Nhập tài khoản hoặc email"
-            placeholderTextColor="#94a3b8"
-            className="mt-2 rounded-xl border border-slate-200 px-4 py-3 text-slate-800"
-            value={username}
-          />
-
-          <Text className="mt-4 text-sm font-medium text-slate-700">Mật khẩu</Text>
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            onChangeText={setPassword}
-            placeholder="Nhập mật khẩu"
-            placeholderTextColor="#94a3b8"
-            secureTextEntry
-            className="mt-2 rounded-xl border border-slate-200 px-4 py-3 text-slate-800"
-            value={password}
-          />
-
-          {formError || error ? (
-            <Text className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-center text-xs text-red-600">
-              {formError ?? error}
-            </Text>
-          ) : null}
-
-          <Pressable
-            disabled={submitting}
-            onPress={submit}
-            className={`mt-6 rounded-xl py-3 ${submitting ? 'bg-slate-300' : 'bg-slate-900'}`}>
-            {submitting ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text className="text-center text-sm font-semibold text-white">Đăng nhập</Text>
-            )}
-          </Pressable>
-
-          <View className="my-5 flex-row items-center">
-            <View className="h-px flex-1 bg-slate-200" />
-            <Text className="px-3 text-xs text-slate-400">hoặc</Text>
-            <View className="h-px flex-1 bg-slate-200" />
-          </View>
-
-          <Pressable
-            disabled={!canLogin}
-            onPress={login}
-            className={`rounded-xl border py-3 ${canLogin ? 'border-slate-300' : 'border-slate-200'}`}>
-            <Text
-              className={`text-center text-sm font-semibold ${canLogin ? 'text-slate-700' : 'text-slate-400'}`}>
-              Đăng nhập qua Keycloak SSO
-            </Text>
-          </Pressable>
-        </View>
+      <View className="my-5 flex-row items-center">
+        <View className="h-px flex-1 bg-border" />
+        <Text className="px-3 text-xs text-subtle">hoặc</Text>
+        <View className="h-px flex-1 bg-border" />
       </View>
-    </KeyboardAvoidingView>
+
+      <Pressable
+        disabled={!canLogin || busy}
+        onPress={openSso}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: !canLogin || busy, busy: openingSso }}
+        className={`min-h-12 items-center justify-center rounded-xl border py-3 ${canLogin && !busy ? 'border-border-strong' : 'border-border'}`}>
+        <Text
+          className={`text-center text-sm font-semibold ${canLogin && !busy ? 'text-secondary' : 'text-subtle'}`}>
+          {openingSso ? 'Đang mở đăng nhập...' : 'Đăng nhập qua Keycloak SSO'}
+        </Text>
+      </Pressable>
+
+      <Pressable
+        onPress={onRegister}
+        disabled={busy}
+        accessibilityRole="button"
+        className="mt-4 min-h-12 items-center justify-center px-2 py-3">
+        <Text className="text-center text-sm text-muted-foreground">
+          Chưa có tài khoản? <Text className="font-semibold text-primary">Đăng ký ngay</Text>
+        </Text>
+      </Pressable>
+    </AuthLayout>
   );
 }

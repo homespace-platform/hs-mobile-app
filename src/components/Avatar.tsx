@@ -20,7 +20,7 @@ export default function Avatar({
         source={{ uri }}
         onError={() => setFailed(true)}
         style={{ width: size, height: size, borderRadius: size / 2 }}
-        className="bg-slate-100"
+        className="bg-muted"
       />
     );
   }
@@ -36,8 +36,8 @@ export default function Avatar({
   return (
     <View
       style={{ width: size, height: size, borderRadius: size / 2 }}
-      className="items-center justify-center bg-blue-100">
-      <Text style={{ fontSize: size * 0.32 }} className="font-extrabold text-blue-700">
+      className="items-center justify-center bg-primary-soft">
+      <Text style={{ fontSize: size * 0.32 }} className="font-extrabold text-primary">
         {initials || 'HS'}
       </Text>
     </View>

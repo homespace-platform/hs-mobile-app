@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@/components/Icon';
 import {
   ActivityIndicator,
   Image,
@@ -57,27 +57,27 @@ function ArticleCard({ article, onPress }: { article: NewsSummary; onPress: () =
   return (
     <Pressable
       onPress={onPress}
-      className="mb-4 overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
-      <NewsImage uri={article.thumbnailUrl} className="h-48 w-full bg-slate-100" />
+      className="mb-4 overflow-hidden rounded-3xl border border-border bg-surface shadow-sm">
+      <NewsImage uri={article.thumbnailUrl} className="h-48 w-full bg-muted" />
       <View className="p-4">
         <View className="flex-row items-center justify-between">
-          <Text className="text-xs font-bold uppercase tracking-wide text-blue-600">
+          <Text className="text-xs font-bold uppercase tracking-wide text-primary">
             {categoryLabel(article.category)}
           </Text>
           <View className="flex-row items-center">
-            <Ionicons name="eye-outline" size={14} color="#94a3b8" />
-            <Text className="ml-1 text-xs text-slate-400">{article.views}</Text>
+            <Ionicons name="eye-outline" size={14} className="text-subtle" />
+            <Text className="ml-1 text-xs text-subtle">{article.views}</Text>
           </View>
         </View>
-        <Text className="mt-2 text-lg font-bold leading-6 text-slate-900" numberOfLines={2}>
+        <Text className="mt-2 text-lg font-bold leading-6 text-foreground" numberOfLines={2}>
           {article.title}
         </Text>
-        <Text className="mt-2 text-sm leading-5 text-slate-500" numberOfLines={3}>
+        <Text className="mt-2 text-sm leading-5 text-muted-foreground" numberOfLines={3}>
           {plainText(article.summary)}
         </Text>
         <View className="mt-4 flex-row items-center justify-between">
-          <Text className="text-xs font-semibold text-slate-600">{article.authorName}</Text>
-          <Text className="text-xs text-slate-400">{formatDate(article.publishedAt)}</Text>
+          <Text className="text-xs font-semibold text-secondary">{article.authorName}</Text>
+          <Text className="text-xs text-subtle">{formatDate(article.publishedAt)}</Text>
         </View>
       </View>
     </Pressable>
@@ -107,23 +107,23 @@ function ArticleDetail({ slug, onBack }: { slug: string; onBack: () => void }) {
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator color="#2563eb" />
-        <Text className="mt-3 text-sm text-slate-500">Đang tải bài viết...</Text>
+      <SafeAreaView className="flex-1 items-center justify-center bg-surface">
+        <ActivityIndicator className="text-primary" />
+        <Text className="mt-3 text-sm text-muted-foreground">Đang tải bài viết...</Text>
       </SafeAreaView>
     );
   }
 
   if (!article || error) {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-white px-6">
-        <Ionicons name="newspaper-outline" size={42} color="#94a3b8" />
-        <Text className="mt-3 font-bold text-slate-800">Không thể tải bài viết</Text>
-        <Pressable onPress={load} className="mt-4 rounded-xl bg-blue-600 px-5 py-3">
-          <Text className="font-semibold text-white">Thử lại</Text>
+      <SafeAreaView className="flex-1 items-center justify-center bg-surface px-6">
+        <Ionicons name="newspaper-outline" size={42} className="text-subtle" />
+        <Text className="mt-3 font-bold text-foreground">Không thể tải bài viết</Text>
+        <Pressable onPress={load} className="mt-4 rounded-xl bg-brand px-5 py-3">
+          <Text className="font-semibold text-on-brand">Thử lại</Text>
         </Pressable>
         <Pressable onPress={onBack} className="mt-2 px-5 py-3">
-          <Text className="font-semibold text-slate-500">Quay lại</Text>
+          <Text className="font-semibold text-muted-foreground">Quay lại</Text>
         </Pressable>
       </SafeAreaView>
     );
@@ -133,37 +133,37 @@ function ArticleDetail({ slug, onBack }: { slug: string; onBack: () => void }) {
     article.media.find((item) => item.storageObjectId === storageObjectId)?.url;
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={['top', 'bottom']}>
-      <View className="flex-row items-center border-b border-slate-100 px-4 py-3">
+    <SafeAreaView className="flex-1 bg-surface" edges={['top', 'bottom']}>
+      <View className="flex-row items-center border-b border-border px-4 py-3">
         <Pressable onPress={onBack} className="h-10 w-10 items-center justify-center">
-          <Ionicons name="chevron-back" size={25} color="#0f172a" />
+          <Ionicons name="chevron-back" size={25} className="text-foreground" />
         </Pressable>
-        <Text className="ml-2 flex-1 text-base font-bold text-slate-900">Bài viết</Text>
+        <Text className="ml-2 flex-1 text-base font-bold text-foreground">Bài viết</Text>
         <Pressable className="h-10 w-10 items-center justify-center">
-          <Ionicons name="share-social-outline" size={22} color="#334155" />
+          <Ionicons name="share-social-outline" size={22} className="text-secondary" />
         </Pressable>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-10">
-        <NewsImage uri={article.thumbnailUrl} className="h-64 w-full bg-slate-100" />
+        <NewsImage uri={article.thumbnailUrl} className="h-64 w-full bg-muted" />
         <View className="px-5 py-6">
-          <Text className="text-xs font-bold uppercase tracking-wide text-blue-600">
+          <Text className="text-xs font-bold uppercase tracking-wide text-primary">
             {categoryLabel(article.category)}
           </Text>
-          <Text className="mt-3 text-3xl font-extrabold leading-10 text-slate-900">
+          <Text className="mt-3 text-3xl font-extrabold leading-10 text-foreground">
             {article.title}
           </Text>
-          <Text className="mt-4 text-base leading-7 text-slate-600">
+          <Text className="mt-4 text-base leading-7 text-secondary">
             {plainText(article.summary)}
           </Text>
 
-          <View className="my-6 flex-row items-center border-y border-slate-100 py-4">
-            <View className="h-10 w-10 items-center justify-center rounded-full bg-blue-100">
-              <Ionicons name="person" size={20} color="#2563eb" />
+          <View className="my-6 flex-row items-center border-y border-border py-4">
+            <View className="h-10 w-10 items-center justify-center rounded-full bg-primary-soft">
+              <Ionicons name="person" size={20} className="text-primary" />
             </View>
             <View className="ml-3 flex-1">
-              <Text className="text-sm font-bold text-slate-800">{article.authorName}</Text>
-              <Text className="mt-0.5 text-xs text-slate-400">
+              <Text className="text-sm font-bold text-foreground">{article.authorName}</Text>
+              <Text className="mt-0.5 text-xs text-subtle">
                 {formatDate(article.publishedAt)} · {article.views} lượt xem
               </Text>
             </View>
@@ -176,10 +176,10 @@ function ArticleDetail({ slug, onBack }: { slug: string; onBack: () => void }) {
                   <View key={`${block.type}-${index}`} className="my-4">
                     <NewsImage
                       uri={contentImage(block.storageObjectId)}
-                      className="h-56 w-full rounded-2xl bg-slate-100"
+                      className="h-56 w-full rounded-2xl bg-muted"
                     />
                     {block.caption ? (
-                      <Text className="mt-2 text-center text-xs italic text-slate-400">
+                      <Text className="mt-2 text-center text-xs italic text-subtle">
                         {plainText(block.caption)}
                       </Text>
                     ) : null}
@@ -190,7 +190,7 @@ function ArticleDetail({ slug, onBack }: { slug: string; onBack: () => void }) {
                 return (
                   <Text
                     key={`${block.type}-${index}`}
-                    className="mb-3 mt-6 text-xl font-bold text-slate-900">
+                    className="mb-3 mt-6 text-xl font-bold text-foreground">
                     {plainText(block.text)}
                   </Text>
                 );
@@ -199,8 +199,8 @@ function ArticleDetail({ slug, onBack }: { slug: string; onBack: () => void }) {
                 return (
                   <View
                     key={`${block.type}-${index}`}
-                    className="my-4 rounded-r-2xl border-l-4 border-blue-500 bg-blue-50 p-4">
-                    <Text className="text-base italic leading-7 text-blue-900">
+                    className="my-4 rounded-r-2xl border-l-4 border-primary bg-primary-soft p-4">
+                    <Text className="text-base italic leading-7 text-primary">
                       {plainText(block.text)}
                     </Text>
                   </View>
@@ -209,13 +209,13 @@ function ArticleDetail({ slug, onBack }: { slug: string; onBack: () => void }) {
               return (
                 <Text
                   key={`${block.type}-${index}`}
-                  className="mb-4 text-base leading-7 text-slate-700">
+                  className="mb-4 text-base leading-7 text-secondary">
                   {plainText(block.text)}
                 </Text>
               );
             })
           ) : (
-            <Text className="text-base leading-7 text-slate-700">{plainText(article.summary)}</Text>
+            <Text className="text-base leading-7 text-secondary">{plainText(article.summary)}</Text>
           )}
         </View>
       </ScrollView>
@@ -264,24 +264,23 @@ export default function NewsScreen({ onSelectTab }: { onSelectTab: (tab: MainTab
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50" edges={['top', 'bottom']}>
+    <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-6">
-        <View className="bg-white px-5 pb-5 pt-2">
-          <Text className="text-xs font-semibold uppercase tracking-widest text-blue-600">
+        <View className="bg-surface px-5 pb-5 pt-2">
+          <Text className="text-xs font-semibold uppercase tracking-widest text-primary">
             HomeSpace
           </Text>
-          <Text className="mt-1 text-2xl font-bold text-slate-900">Tin tức & Thị trường</Text>
-          <Text className="mt-2 text-sm leading-5 text-slate-500">
+          <Text className="mt-1 text-2xl font-bold text-foreground">Tin tức & Thị trường</Text>
+          <Text className="mt-2 text-sm leading-5 text-muted-foreground">
             Cập nhật giá thuê, pháp lý và kinh nghiệm tìm nhà an toàn.
           </Text>
-          <View className="mt-4 flex-row items-center rounded-2xl bg-slate-100 px-4">
-            <Ionicons name="search-outline" size={19} color="#94a3b8" />
+          <View className="mt-4 flex-row items-center rounded-2xl bg-muted px-4">
+            <Ionicons name="search-outline" size={19} className="text-subtle" />
             <TextInput
               value={search}
               onChangeText={setSearch}
               placeholder="Tìm kiếm bài viết..."
-              placeholderTextColor="#94a3b8"
-              className="ml-2 flex-1 py-3 text-sm text-slate-800"
+              className="ml-2 flex-1 py-3 text-sm text-foreground selection:text-primary placeholder:text-subtle"
             />
           </View>
         </View>
@@ -293,9 +292,9 @@ export default function NewsScreen({ onSelectTab }: { onSelectTab: (tab: MainTab
               <Pressable
                 key={item.value}
                 onPress={() => setCategory(item.value)}
-                className={`mr-2 rounded-full px-4 py-2.5 ${active ? 'bg-slate-900' : 'border border-slate-200 bg-white'}`}>
+                className={`mr-2 rounded-full px-4 py-2.5 ${active ? 'bg-inverse' : 'border border-border bg-surface'}`}>
                 <Text
-                  className={`text-sm font-semibold ${active ? 'text-white' : 'text-slate-600'}`}>
+                  className={`text-sm font-semibold ${active ? 'text-on-inverse' : 'text-secondary'}`}>
                   {item.label}
                 </Text>
               </Pressable>
@@ -305,26 +304,26 @@ export default function NewsScreen({ onSelectTab }: { onSelectTab: (tab: MainTab
 
         <View className="mt-6 px-5">
           <View className="mb-4 flex-row items-center justify-between">
-            <Text className="text-xl font-bold text-slate-900">Bản tin mới nhất</Text>
-            <Text className="text-xs font-semibold text-slate-400">{filtered.length} bài viết</Text>
+            <Text className="text-xl font-bold text-foreground">Bản tin mới nhất</Text>
+            <Text className="text-xs font-semibold text-subtle">{filtered.length} bài viết</Text>
           </View>
 
           {loading ? (
             <View className="items-center py-16">
-              <ActivityIndicator color="#2563eb" />
-              <Text className="mt-3 text-sm text-slate-500">Đang tải tin tức...</Text>
+              <ActivityIndicator className="text-primary" />
+              <Text className="mt-3 text-sm text-muted-foreground">Đang tải tin tức...</Text>
             </View>
           ) : error ? (
-            <View className="items-center rounded-3xl border border-slate-200 bg-white px-6 py-12">
-              <Ionicons name="cloud-offline-outline" size={38} color="#94a3b8" />
-              <Text className="mt-3 text-center font-bold text-slate-800">
+            <View className="items-center rounded-3xl border border-border bg-surface px-6 py-12">
+              <Ionicons name="cloud-offline-outline" size={38} className="text-subtle" />
+              <Text className="mt-3 text-center font-bold text-foreground">
                 News service chưa hoạt động
               </Text>
-              <Text className="mt-1 text-center text-sm text-slate-500">
+              <Text className="mt-1 text-center text-sm text-muted-foreground">
                 Khởi động service rồi bấm thử lại.
               </Text>
-              <Pressable onPress={load} className="mt-4 rounded-xl bg-blue-600 px-5 py-3">
-                <Text className="font-semibold text-white">Thử lại</Text>
+              <Pressable onPress={load} className="mt-4 rounded-xl bg-brand px-5 py-3">
+                <Text className="font-semibold text-on-brand">Thử lại</Text>
               </Pressable>
             </View>
           ) : filtered.length ? (
@@ -336,9 +335,9 @@ export default function NewsScreen({ onSelectTab }: { onSelectTab: (tab: MainTab
               />
             ))
           ) : (
-            <View className="items-center rounded-3xl border border-slate-200 bg-white px-6 py-12">
-              <Ionicons name="newspaper-outline" size={38} color="#94a3b8" />
-              <Text className="mt-3 font-bold text-slate-800">Không tìm thấy bài viết</Text>
+            <View className="items-center rounded-3xl border border-border bg-surface px-6 py-12">
+              <Ionicons name="newspaper-outline" size={38} className="text-subtle" />
+              <Text className="mt-3 font-bold text-foreground">Không tìm thấy bài viết</Text>
             </View>
           )}
         </View>

@@ -1,3 +1,65 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Single source of truth for app colors. Use semantic utilities in screens. */
+@layer base {
+  :root {
+    --color-background: 248 250 252;
+    --color-surface: 255 255 255;
+    /* The logo image contains dark lettering and needs a light backing in both modes. */
+    --color-logo: 255 255 255;
+    --color-muted: 241 245 249;
+    --color-foreground: 15 23 42;
+    --color-secondary: 51 65 85;
+    --color-muted-foreground: 100 116 139;
+    --color-subtle: 100 116 139;
+    --color-border: 226 232 240;
+    --color-border-strong: 203 213 225;
+    --color-primary: 29 78 216;
+    --color-primary-soft: 239 246 255;
+    --color-primary-border: 191 219 254;
+    --color-brand: 37 99 235;
+    --color-on-brand: 255 255 255;
+    --color-on-brand-muted: 219 234 254;
+    --color-inverse: 15 23 42;
+    --color-on-inverse: 255 255 255;
+    --color-disabled: 203 213 225;
+    --color-on-disabled: 51 65 85;
+    --color-danger: 185 28 28;
+    --color-danger-soft: 254 242 242;
+    --color-success: 4 120 87;
+    --color-success-soft: 236 253 245;
+    --color-warning: 146 64 14;
+    --color-warning-soft: 255 251 235;
+  }
+
+  .dark:root {
+    --color-background: 2 6 23;
+    --color-surface: 15 23 42;
+    --color-logo: 255 255 255;
+    --color-muted: 30 41 59;
+    --color-foreground: 241 245 249;
+    --color-secondary: 203 213 225;
+    --color-muted-foreground: 148 163 184;
+    --color-subtle: 148 163 184;
+    --color-border: 51 65 85;
+    --color-border-strong: 71 85 105;
+    --color-primary: 147 197 253;
+    --color-primary-soft: 23 37 84;
+    --color-primary-border: 30 64 175;
+    --color-brand: 29 78 216;
+    --color-on-brand: 255 255 255;
+    --color-on-brand-muted: 219 234 254;
+    --color-inverse: 219 234 254;
+    --color-on-inverse: 15 23 42;
+    --color-disabled: 71 85 105;
+    --color-on-disabled: 226 232 240;
+    --color-danger: 252 165 165;
+    --color-danger-soft: 69 10 10;
+    --color-success: 110 231 183;
+    --color-success-soft: 6 46 37;
+    --color-warning: 252 211 77;
+    --color-warning-soft: 69 26 3;
+  }
+}

@@ -5,6 +5,8 @@ import { keycloakConfig } from '@/config/env';
 
 const oidcBaseUrl = `${keycloakConfig.baseUrl}/realms/${keycloakConfig.realm}/protocol/openid-connect`;
 
+export const registrationEndpoint = `${oidcBaseUrl}/registrations`;
+
 export const discovery: DiscoveryDocument = {
   authorizationEndpoint: `${oidcBaseUrl}/auth`,
   tokenEndpoint: `${oidcBaseUrl}/token`,

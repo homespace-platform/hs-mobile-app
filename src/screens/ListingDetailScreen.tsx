@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@/components/Icon';
 import { ActivityIndicator, Image, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -81,9 +81,9 @@ function formatValue(value: string | number | boolean) {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <View className="w-[48%] rounded-2xl bg-slate-50 p-3">
-      <Text className="text-xs text-slate-500">{label}</Text>
-      <Text className="mt-1 text-sm font-bold text-slate-900">{value}</Text>
+    <View className="w-[48%] rounded-2xl bg-background p-3">
+      <Text className="text-xs text-muted-foreground">{label}</Text>
+      <Text className="mt-1 text-sm font-bold text-foreground">{value}</Text>
     </View>
   );
 }
@@ -136,24 +136,24 @@ export default function ListingDetailScreen({
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-slate-50">
-        <ActivityIndicator color="#2563eb" />
-        <Text className="mt-3 text-sm text-slate-500">Đang tải thông tin nhà...</Text>
+      <SafeAreaView className="flex-1 items-center justify-center bg-background">
+        <ActivityIndicator className="text-primary" />
+        <Text className="mt-3 text-sm text-muted-foreground">Đang tải thông tin nhà...</Text>
       </SafeAreaView>
     );
   }
 
   if (!listing || error) {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-slate-50 px-6">
-        <Text className="text-center text-base font-semibold text-slate-800">
+      <SafeAreaView className="flex-1 items-center justify-center bg-background px-6">
+        <Text className="text-center text-base font-semibold text-foreground">
           Không thể mở bài đăng
         </Text>
-        <Pressable onPress={load} className="mt-4 rounded-xl bg-blue-600 px-5 py-3">
-          <Text className="font-semibold text-white">Thử lại</Text>
+        <Pressable onPress={load} className="mt-4 rounded-xl bg-brand px-5 py-3">
+          <Text className="font-semibold text-on-brand">Thử lại</Text>
         </Pressable>
         <Pressable onPress={onBack} className="mt-3 px-5 py-3">
-          <Text className="font-semibold text-slate-500">Quay lại</Text>
+          <Text className="font-semibold text-muted-foreground">Quay lại</Text>
         </Pressable>
       </SafeAreaView>
     );
@@ -201,20 +201,20 @@ export default function ListingDetailScreen({
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={['top', 'bottom']}>
+    <SafeAreaView className="flex-1 bg-surface" edges={['top', 'bottom']}>
       <View className="absolute left-0 right-0 top-12 z-10 flex-row justify-between px-4">
         <Pressable
           onPress={onBack}
-          className="h-11 w-11 items-center justify-center rounded-full bg-white/95 shadow">
-          <Ionicons name="chevron-back" size={25} color="#0f172a" />
+          className="h-11 w-11 items-center justify-center rounded-full bg-surface/95 shadow">
+          <Ionicons name="chevron-back" size={25} className="text-foreground" />
         </Pressable>
         <Pressable
           onPress={() => setFavorite((value) => !value)}
-          className="h-11 w-11 items-center justify-center rounded-full bg-white/95 shadow">
+          className="h-11 w-11 items-center justify-center rounded-full bg-surface/95 shadow">
           <Ionicons
             name={favorite ? 'heart' : 'heart-outline'}
             size={24}
-            color={favorite ? '#ef4444' : '#334155'}
+            className={favorite ? 'text-danger' : 'text-secondary'}
           />
         </Pressable>
       </View>
@@ -225,36 +225,38 @@ export default function ListingDetailScreen({
             <Image
               key={`${url}-${index}`}
               source={{ uri: url }}
-              className="h-72 w-screen bg-slate-100"
+              className="h-72 w-screen bg-muted"
             />
           ))}
         </ScrollView>
 
         <View className="px-5 py-5">
           <View className="flex-row items-center justify-between">
-            <Text className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+            <Text className="rounded-full bg-primary-soft px-3 py-1 text-xs font-bold text-primary">
               {listing.category.replace(/_/g, ' ')}
             </Text>
             <View className="flex-row items-center">
-              <Ionicons name="eye-outline" size={15} color="#64748b" />
-              <Text className="ml-1 text-xs text-slate-500">{listing.viewCount ?? 0} lượt xem</Text>
+              <Ionicons name="eye-outline" size={15} className="text-muted-foreground" />
+              <Text className="ml-1 text-xs text-muted-foreground">
+                {listing.viewCount ?? 0} lượt xem
+              </Text>
             </View>
           </View>
-          <Text className="mt-3 text-2xl font-bold leading-8 text-slate-900">{listing.title}</Text>
+          <Text className="mt-3 text-2xl font-bold leading-8 text-foreground">{listing.title}</Text>
           <View className="mt-2 flex-row items-start">
-            <Ionicons name="location-outline" size={17} color="#64748b" />
-            <Text className="ml-1 flex-1 text-sm leading-5 text-slate-500">
+            <Ionicons name="location-outline" size={17} className="text-muted-foreground" />
+            <Text className="ml-1 flex-1 text-sm leading-5 text-muted-foreground">
               {listing.address?.fullAddress || 'Đang cập nhật địa chỉ'}
             </Text>
           </View>
-          <Text className="mt-4 text-2xl font-extrabold text-blue-700">
+          <Text className="mt-4 text-2xl font-extrabold text-primary">
             {formatMoney(listing.pricing.amount)}/tháng
           </Text>
           {listing.pricing.negotiable ? (
-            <Text className="mt-1 text-xs font-semibold text-emerald-600">Có thể thương lượng</Text>
+            <Text className="mt-1 text-xs font-semibold text-success">Có thể thương lượng</Text>
           ) : null}
 
-          <View className="mt-5 flex-row flex-wrap justify-between gap-y-3 rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
+          <View className="mt-5 flex-row flex-wrap justify-between gap-y-3 rounded-3xl border border-border bg-surface p-4 shadow-sm">
             <Metric label="Diện tích" value={`${listing.areaM2} m²`} />
             <Metric
               label="Phòng ngủ"
@@ -269,14 +271,14 @@ export default function ListingDetailScreen({
 
           {categoryDetails.length ? (
             <View className="mt-7">
-              <Text className="text-lg font-bold text-slate-900">Thông tin chi tiết</Text>
-              <View className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <Text className="text-lg font-bold text-foreground">Thông tin chi tiết</Text>
+              <View className="mt-3 overflow-hidden rounded-2xl border border-border bg-surface">
                 {categoryDetails.map(([key, value], index) => (
                   <View
                     key={key}
-                    className={`flex-row justify-between px-4 py-3 ${index ? 'border-t border-slate-100' : ''}`}>
-                    <Text className="text-sm text-slate-500">{LABELS[key]}</Text>
-                    <Text className="max-w-[55%] text-right text-sm font-semibold text-slate-800">
+                    className={`flex-row justify-between px-4 py-3 ${index ? 'border-t border-border' : ''}`}>
+                    <Text className="text-sm text-muted-foreground">{LABELS[key]}</Text>
+                    <Text className="max-w-[55%] text-right text-sm font-semibold text-foreground">
                       {formatValue(value)}
                     </Text>
                   </View>
@@ -286,7 +288,7 @@ export default function ListingDetailScreen({
           ) : null}
 
           <View className="mt-7">
-            <Text className="text-lg font-bold text-slate-900">Điều khoản thuê</Text>
+            <Text className="text-lg font-bold text-foreground">Điều khoản thuê</Text>
             <View className="mt-3 flex-row flex-wrap justify-between gap-y-3">
               <Metric
                 label="Tiền cọc"
@@ -310,15 +312,15 @@ export default function ListingDetailScreen({
 
           {listing.amenities.length || listing.customAmenities.length ? (
             <View className="mt-7">
-              <Text className="text-lg font-bold text-slate-900">Tiện ích</Text>
+              <Text className="text-lg font-bold text-foreground">Tiện ích</Text>
               <View className="mt-3 flex-row flex-wrap gap-2">
                 {[...listing.amenities.map((item) => item.name), ...listing.customAmenities].map(
                   (item) => (
                     <View
                       key={item}
-                      className="flex-row items-center rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">
-                      <Ionicons name="checkmark-circle" size={14} color="#1d4ed8" />
-                      <Text className="ml-1 text-xs font-semibold text-blue-700">{item}</Text>
+                      className="flex-row items-center rounded-xl border border-primary-border bg-primary-soft px-3 py-2">
+                      <Ionicons name="checkmark-circle" size={14} className="text-primary" />
+                      <Text className="ml-1 text-xs font-semibold text-primary">{item}</Text>
                     </View>
                   )
                 )}
@@ -328,16 +330,16 @@ export default function ListingDetailScreen({
 
           {listing.charges.length ? (
             <View className="mt-7">
-              <Text className="text-lg font-bold text-slate-900">Chi phí khác</Text>
-              <View className="mt-3 overflow-hidden rounded-2xl border border-slate-200">
+              <Text className="text-lg font-bold text-foreground">Chi phí khác</Text>
+              <View className="mt-3 overflow-hidden rounded-2xl border border-border">
                 {listing.charges.map((charge, index) => (
                   <View
                     key={`${charge.chargeType}-${index}`}
-                    className={`flex-row justify-between px-4 py-3 ${index ? 'border-t border-slate-100' : ''}`}>
-                    <Text className="text-sm text-slate-500">
+                    className={`flex-row justify-between px-4 py-3 ${index ? 'border-t border-border' : ''}`}>
+                    <Text className="text-sm text-muted-foreground">
                       {charge.customName || CHARGE_LABELS[charge.chargeType] || charge.chargeType}
                     </Text>
-                    <Text className="text-sm font-semibold text-slate-800">
+                    <Text className="text-sm font-semibold text-foreground">
                       {charge.includedInRent
                         ? 'Đã bao gồm'
                         : charge.amount
@@ -351,63 +353,63 @@ export default function ListingDetailScreen({
           ) : null}
 
           {listing.viewingDays?.length || listing.viewingSlots?.length ? (
-            <View className="mt-7 rounded-2xl bg-emerald-50 p-4">
-              <Text className="text-lg font-bold text-slate-900">Lịch xem nhà</Text>
-              <Text className="mt-2 text-sm text-slate-600">
+            <View className="mt-7 rounded-2xl bg-success-soft p-4">
+              <Text className="text-lg font-bold text-foreground">Lịch xem nhà</Text>
+              <Text className="mt-2 text-sm text-secondary">
                 {(listing.viewingDays ?? []).map((day) => DAY_LABELS[day] ?? day).join(', ')}
               </Text>
-              <Text className="mt-1 text-sm font-semibold text-emerald-700">
+              <Text className="mt-1 text-sm font-semibold text-success">
                 {(listing.viewingSlots ?? []).map((slot) => SLOT_LABELS[slot] ?? slot).join(' · ')}
               </Text>
             </View>
           ) : null}
 
           <View className="mt-7">
-            <Text className="text-lg font-bold text-slate-900">Mô tả chi tiết</Text>
-            <Text className="mt-3 text-sm leading-6 text-slate-600">
+            <Text className="text-lg font-bold text-foreground">Mô tả chi tiết</Text>
+            <Text className="mt-3 text-sm leading-6 text-secondary">
               {listing.description || 'Chủ nhà chưa thêm mô tả.'}
             </Text>
           </View>
 
-          <View className="mt-7 flex-row items-center rounded-2xl border border-slate-200 p-4">
+          <View className="mt-7 flex-row items-center rounded-2xl border border-border p-4">
             <Avatar
               uri={listing.owner?.avatarUrl}
               name={listing.owner?.displayName || 'HomeSpace'}
               size={48}
             />
             <View className="ml-3 flex-1">
-              <Text className="text-xs text-slate-500">Chủ nhà</Text>
-              <Text className="mt-0.5 font-bold text-slate-900">
+              <Text className="text-xs text-muted-foreground">Chủ nhà</Text>
+              <Text className="mt-0.5 font-bold text-foreground">
                 {listing.owner?.displayName || 'Người đăng tin'}
               </Text>
               <View className="mt-0.5 flex-row items-center">
-                <Ionicons name="checkmark-circle" size={13} color="#059669" />
-                <Text className="ml-1 text-xs text-emerald-600">Tài khoản đã xác thực</Text>
+                <Ionicons name="checkmark-circle" size={13} className="text-success" />
+                <Text className="ml-1 text-xs text-success">Tài khoản đã xác thực</Text>
               </View>
             </View>
           </View>
         </View>
       </ScrollView>
 
-      <View className="absolute bottom-0 left-0 right-0 flex-row gap-3 border-t border-slate-200 bg-white px-5 pb-5 pt-3">
+      <View className="absolute bottom-0 left-0 right-0 flex-row gap-3 border-t border-border bg-surface px-5 pb-5 pt-3">
         <Pressable
           onPress={() => listing.owner?.phone && Linking.openURL(`tel:${listing.owner.phone}`)}
-          className="flex-1 flex-row items-center justify-center rounded-2xl border border-blue-600 py-3.5">
-          <Ionicons name="call-outline" size={18} color="#1d4ed8" />
-          <Text className="ml-2 font-bold text-blue-700">Gọi điện</Text>
+          className="flex-1 flex-row items-center justify-center rounded-2xl border border-primary py-3.5">
+          <Ionicons name="call-outline" size={18} className="text-primary" />
+          <Text className="ml-2 font-bold text-primary">Gọi điện</Text>
         </Pressable>
         <Pressable
           onPress={handleOpenMessages}
           disabled={openingChat}
-          className="flex-1 flex-row items-center justify-center rounded-2xl bg-blue-600 py-3.5">
-          <Ionicons name="chatbubble-outline" size={18} color="white" />
-          <Text className="ml-2 font-bold text-white">
+          className="flex-1 flex-row items-center justify-center rounded-2xl bg-brand py-3.5">
+          <Ionicons name="chatbubble-outline" size={18} className="text-on-brand" />
+          <Text className="ml-2 font-bold text-on-brand">
             {openingChat ? 'Đang mở...' : 'Nhắn tin'}
           </Text>
         </Pressable>
       </View>
       {chatError ? (
-        <Text className="absolute bottom-20 left-5 right-5 rounded-xl bg-red-50 px-3 py-2 text-center text-xs text-red-600">
+        <Text className="absolute bottom-20 left-5 right-5 rounded-xl bg-danger-soft px-3 py-2 text-center text-xs text-danger">
           {chatError}
         </Text>
       ) : null}

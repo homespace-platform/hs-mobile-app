@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@/components/Icon';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import {
@@ -84,14 +84,14 @@ function MessageAttachment({
     <Pressable
       disabled={!url}
       onPress={() => url && void Linking.openURL(url)}
-      className={`mb-2 flex-row items-center rounded-xl px-2 py-1 ${mine ? 'bg-white/15' : 'bg-blue-50'}`}>
+      className={`mb-2 flex-row items-center rounded-xl px-2 py-1 ${mine ? 'bg-on-brand/15' : 'bg-primary-soft'}`}>
       <Ionicons
         name={contentType.startsWith('image/') ? 'image' : 'document'}
         size={18}
-        color={mine ? 'white' : '#2563eb'}
+        className={mine ? 'text-on-brand' : 'text-primary'}
       />
       <Text
-        className={`ml-2 max-w-[180px] text-xs ${mine ? 'text-white' : 'text-slate-700'}`}
+        className={`ml-2 max-w-[180px] text-xs ${mine ? 'text-on-brand' : 'text-secondary'}`}
         numberOfLines={1}>
         {fileName}
       </Text>
@@ -296,40 +296,40 @@ export default function MessagesScreen({
 
   if (selected) {
     return (
-      <SafeAreaView className="flex-1 bg-slate-50" edges={['top', 'bottom']}>
+      <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
         <KeyboardAvoidingView
           className="flex-1"
           behavior="padding"
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}>
-          <View className="flex-row items-center border-b border-slate-200 bg-white px-4 py-3">
+          <View className="flex-row items-center border-b border-border bg-surface px-4 py-3">
             <Pressable onPress={() => setSelectedId(null)} className="mr-3 px-1 py-2">
-              <Ionicons name="chevron-back" size={26} color="#1e293b" />
+              <Ionicons name="chevron-back" size={26} className="text-foreground" />
             </Pressable>
             <Avatar uri={selected.participantAvatar} name={conversationName(selected)} size={46} />
             <View className="ml-3 flex-1">
-              <Text className="font-bold text-slate-900" numberOfLines={1}>
+              <Text className="font-bold text-foreground" numberOfLines={1}>
                 {conversationName(selected)}
               </Text>
-              <Text className="mt-0.5 text-xs text-slate-500">Người dùng HomeSpace</Text>
+              <Text className="mt-0.5 text-xs text-muted-foreground">Người dùng HomeSpace</Text>
             </View>
             <Pressable
               onPress={() => onOpenConversationDetails(selected)}
-              className="h-10 w-10 items-center justify-center rounded-full bg-blue-50">
-              <Ionicons name="information-circle-outline" size={23} color="#2563eb" />
+              className="h-10 w-10 items-center justify-center rounded-full bg-primary-soft">
+              <Ionicons name="information-circle-outline" size={23} className="text-primary" />
             </Pressable>
           </View>
 
           {selected.listing ? (
-            <View className="mx-4 mt-3 flex-row rounded-2xl border border-slate-200 bg-white p-3">
+            <View className="mx-4 mt-3 flex-row rounded-2xl border border-border bg-surface p-3">
               <Image
                 source={{ uri: listingImage(selected.listing.image) }}
-                className="h-14 w-16 rounded-xl bg-slate-100"
+                className="h-14 w-16 rounded-xl bg-muted"
               />
               <View className="ml-3 flex-1">
-                <Text className="text-xs font-semibold text-slate-900" numberOfLines={2}>
+                <Text className="text-xs font-semibold text-foreground" numberOfLines={2}>
                   {selected.listing.title}
                 </Text>
-                <Text className="mt-1 text-xs font-bold text-blue-700">
+                <Text className="mt-1 text-xs font-bold text-primary">
                   {selected.listing.price}
                 </Text>
               </View>
@@ -342,17 +342,19 @@ export default function MessagesScreen({
             keyboardShouldPersistTaps="handled">
             {messagesLoading ? (
               <View className="items-center py-12">
-                <ActivityIndicator color="#2563eb" />
-                <Text className="mt-3 text-sm text-slate-500">Đang tải tin nhắn...</Text>
+                <ActivityIndicator className="text-primary" />
+                <Text className="mt-3 text-sm text-muted-foreground">Đang tải tin nhắn...</Text>
               </View>
             ) : messageError && !messages.length ? (
               <View className="items-center py-12">
-                <Ionicons name="cloud-offline-outline" size={36} color="#94a3b8" />
-                <Text className="mt-3 text-center text-sm text-slate-500">{messageError}</Text>
+                <Ionicons name="cloud-offline-outline" size={36} className="text-subtle" />
+                <Text className="mt-3 text-center text-sm text-muted-foreground">
+                  {messageError}
+                </Text>
                 <Pressable
                   onPress={() => openConversation(selected)}
-                  className="mt-4 rounded-xl bg-blue-600 px-4 py-2.5">
-                  <Text className="font-semibold text-white">Thử lại</Text>
+                  className="mt-4 rounded-xl bg-brand px-4 py-2.5">
+                  <Text className="font-semibold text-on-brand">Thử lại</Text>
                 </Pressable>
               </View>
             ) : messages.length ? (
@@ -363,7 +365,7 @@ export default function MessagesScreen({
                     key={message.id}
                     className={`mb-3 max-w-[82%] ${mine ? 'items-end self-end' : 'items-start self-start'}`}>
                     <View
-                      className={`rounded-2xl px-4 py-3 ${mine ? 'rounded-br-sm bg-blue-600' : 'rounded-bl-sm border border-slate-200 bg-white'}`}>
+                      className={`rounded-2xl px-4 py-3 ${mine ? 'rounded-br-sm bg-brand' : 'rounded-bl-sm border border-border bg-surface'}`}>
                       {message.attachments?.map((attachment) => (
                         <MessageAttachment
                           key={attachment.storageId}
@@ -374,11 +376,11 @@ export default function MessagesScreen({
                         />
                       ))}
                       <Text
-                        className={`text-sm leading-5 ${mine ? 'text-white' : 'text-slate-800'}`}>
+                        className={`text-sm leading-5 ${mine ? 'text-on-brand' : 'text-foreground'}`}>
                         {message.content}
                       </Text>
                     </View>
-                    <Text className="mt-1 px-1 text-[10px] text-slate-400">
+                    <Text className="mt-1 px-1 text-[10px] text-subtle">
                       {formatTime(message.createdAt)}
                     </Text>
                   </View>
@@ -386,54 +388,59 @@ export default function MessagesScreen({
               })
             ) : (
               <View className="items-center py-12">
-                <Ionicons name="chatbubbles-outline" size={38} color="#94a3b8" />
-                <Text className="mt-3 text-sm text-slate-500">Hãy bắt đầu cuộc trò chuyện</Text>
+                <Ionicons name="chatbubbles-outline" size={38} className="text-subtle" />
+                <Text className="mt-3 text-sm text-muted-foreground">
+                  Hãy bắt đầu cuộc trò chuyện
+                </Text>
               </View>
             )}
           </ScrollView>
 
           {messageError && messages.length ? (
-            <Text className="bg-red-50 px-4 py-2 text-center text-xs text-red-600">
+            <Text className="bg-danger-soft px-4 py-2 text-center text-xs text-danger">
               {messageError}
             </Text>
           ) : null}
 
           {pendingAttachment ? (
-            <View className="flex-row items-center border-t border-slate-100 bg-white px-4 pb-2 pt-2">
-              <Ionicons name="attach" size={16} color="#2563eb" />
-              <Text className="ml-2 flex-1 text-xs text-slate-600" numberOfLines={1}>
+            <View className="flex-row items-center border-t border-border bg-surface px-4 pb-2 pt-2">
+              <Ionicons name="attach" size={16} className="text-primary" />
+              <Text className="ml-2 flex-1 text-xs text-secondary" numberOfLines={1}>
                 {pendingAttachment.fileName}
               </Text>
               <Pressable onPress={() => setPendingAttachment(null)}>
-                <Ionicons name="close-circle" size={19} color="#94a3b8" />
+                <Ionicons name="close-circle" size={19} className="text-subtle" />
               </Pressable>
             </View>
           ) : null}
 
-          <View className="flex-row items-end gap-2 border-t border-slate-200 bg-white px-4 py-3">
+          <View className="flex-row items-end gap-2 border-t border-border bg-surface px-4 py-3">
             <Pressable
               onPress={chooseAttachment}
-              className="h-11 w-11 items-center justify-center rounded-full bg-slate-100">
-              <Ionicons name="add" size={24} color="#64748b" />
+              className="h-11 w-11 items-center justify-center rounded-full bg-muted">
+              <Ionicons name="add" size={24} className="text-muted-foreground" />
             </Pressable>
             <TextInput
               value={draft}
               onChangeText={setDraft}
               onSubmitEditing={handleSend}
               placeholder="Nhập tin nhắn..."
-              placeholderTextColor="#94a3b8"
               multiline
               editable={!sending}
-              className="max-h-28 flex-1 rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-800"
+              className="max-h-28 flex-1 rounded-2xl bg-muted px-4 py-3 text-sm text-foreground selection:text-primary placeholder:text-subtle"
             />
             <Pressable
               onPress={handleSend}
               disabled={!draft.trim() || sending}
-              className={`h-11 w-11 items-center justify-center rounded-full ${draft.trim() && !sending ? 'bg-blue-600' : 'bg-slate-300'}`}>
+              className={`h-11 w-11 items-center justify-center rounded-full ${draft.trim() && !sending ? 'bg-brand' : 'bg-disabled'}`}>
               {sending ? (
-                <ActivityIndicator size="small" color="white" />
+                <ActivityIndicator size="small" className="text-on-disabled" />
               ) : (
-                <Ionicons name="send" size={19} color="white" />
+                <Ionicons
+                  name="send"
+                  size={19}
+                  className={draft.trim() && !sending ? 'text-on-brand' : 'text-on-disabled'}
+                />
               )}
             </Pressable>
           </View>
@@ -443,29 +450,28 @@ export default function MessagesScreen({
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50" edges={['top', 'bottom']}>
-      <View className="border-b border-slate-100 bg-white px-5 pb-4 pt-2">
+    <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
+      <View className="border-b border-border bg-surface px-5 pb-4 pt-2">
         <Image
           source={require('../../assets/homespace-horizontal-logo.png')}
           resizeMode="contain"
           className="h-10 w-36"
         />
         <View className="mt-2 flex-row items-center justify-between">
-          <Text className="text-2xl font-bold text-slate-900">Tin nhắn</Text>
-          <View className="h-9 min-w-9 items-center justify-center rounded-full bg-blue-50 px-2">
-            <Text className="text-xs font-bold text-blue-700">
+          <Text className="text-2xl font-bold text-foreground">Tin nhắn</Text>
+          <View className="h-9 min-w-9 items-center justify-center rounded-full bg-primary-soft px-2">
+            <Text className="text-xs font-bold text-primary">
               {conversations.reduce((total, item) => total + item.unreadCount, 0)}
             </Text>
           </View>
         </View>
-        <View className="mt-4 flex-row items-center rounded-2xl bg-slate-100 px-4">
-          <Ionicons name="search-outline" size={19} color="#94a3b8" />
+        <View className="mt-4 flex-row items-center rounded-2xl bg-muted px-4">
+          <Ionicons name="search-outline" size={19} className="text-subtle" />
           <TextInput
             value={search}
             onChangeText={setSearch}
             placeholder="Tìm cuộc trò chuyện..."
-            placeholderTextColor="#94a3b8"
-            className="ml-2 flex-1 py-3 text-sm text-slate-800"
+            className="ml-2 flex-1 py-3 text-sm text-foreground selection:text-primary placeholder:text-subtle"
           />
         </View>
       </View>
@@ -476,18 +482,18 @@ export default function MessagesScreen({
         contentContainerClassName="py-2">
         {loading ? (
           <View className="items-center py-16">
-            <ActivityIndicator color="#2563eb" />
-            <Text className="mt-3 text-sm text-slate-500">Đang kết nối tin nhắn...</Text>
+            <ActivityIndicator className="text-primary" />
+            <Text className="mt-3 text-sm text-muted-foreground">Đang kết nối tin nhắn...</Text>
           </View>
         ) : error ? (
-          <View className="mx-5 items-center rounded-3xl border border-slate-200 bg-white px-6 py-12">
-            <Ionicons name="cloud-offline-outline" size={38} color="#94a3b8" />
-            <Text className="mt-3 text-center font-bold text-slate-800">
+          <View className="mx-5 items-center rounded-3xl border border-border bg-surface px-6 py-12">
+            <Ionicons name="cloud-offline-outline" size={38} className="text-subtle" />
+            <Text className="mt-3 text-center font-bold text-foreground">
               Không thể kết nối chat backend
             </Text>
-            <Text className="mt-1 text-center text-xs text-slate-500">{error}</Text>
-            <Pressable onPress={() => load()} className="mt-4 rounded-xl bg-blue-600 px-5 py-3">
-              <Text className="font-semibold text-white">Thử lại</Text>
+            <Text className="mt-1 text-center text-xs text-muted-foreground">{error}</Text>
+            <Pressable onPress={() => load()} className="mt-4 rounded-xl bg-brand px-5 py-3">
+              <Text className="font-semibold text-on-brand">Thử lại</Text>
             </Pressable>
           </View>
         ) : filtered.length ? (
@@ -495,7 +501,7 @@ export default function MessagesScreen({
             <Pressable
               key={conversation.id}
               onPress={() => openConversation(conversation)}
-              className="mx-3 flex-row items-center rounded-2xl px-3 py-4 active:bg-white">
+              className="mx-3 flex-row items-center rounded-2xl px-3 py-4 active:bg-surface">
               <Avatar
                 uri={conversation.participantAvatar}
                 name={conversationName(conversation)}
@@ -504,26 +510,28 @@ export default function MessagesScreen({
               <View className="ml-3 flex-1">
                 <View className="flex-row items-center justify-between">
                   <View className="flex-1 flex-row items-center">
-                    <Text className="shrink font-bold text-slate-900" numberOfLines={1}>
+                    <Text className="shrink font-bold text-foreground" numberOfLines={1}>
                       {conversationName(conversation)}
                     </Text>
                     {participantRoleLabel(conversation.participantRole) ? (
-                      <Text className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                      <Text className="ml-2 rounded-full bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
                         {participantRoleLabel(conversation.participantRole)}
                       </Text>
                     ) : null}
                   </View>
-                  <Text className="ml-2 text-[11px] text-slate-400">
+                  <Text className="ml-2 text-[11px] text-subtle">
                     {formatTime(conversation.lastMessageAt)}
                   </Text>
                 </View>
                 <View className="mt-1 flex-row items-center">
-                  <Text className="flex-1 text-sm leading-5 text-slate-500" numberOfLines={1}>
+                  <Text
+                    className="flex-1 text-sm leading-5 text-muted-foreground"
+                    numberOfLines={1}>
                     {conversation.lastMessage || 'Chưa có tin nhắn'}
                   </Text>
                   {conversation.unreadCount ? (
-                    <View className="ml-2 h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1">
-                      <Text className="text-[10px] font-bold text-white">
+                    <View className="ml-2 h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1">
+                      <Text className="text-[10px] font-bold text-on-brand">
                         {conversation.unreadCount}
                       </Text>
                     </View>
@@ -539,8 +547,8 @@ export default function MessagesScreen({
               resizeMode="contain"
               className="h-20 w-20 opacity-70"
             />
-            <Text className="mt-4 font-bold text-slate-800">Chưa có cuộc trò chuyện</Text>
-            <Text className="mt-1 text-center text-sm text-slate-500">
+            <Text className="mt-4 font-bold text-foreground">Chưa có cuộc trò chuyện</Text>
+            <Text className="mt-1 text-center text-sm text-muted-foreground">
               Mở một bài đăng và nhắn tin với chủ nhà để bắt đầu.
             </Text>
           </View>
