@@ -10,7 +10,9 @@ const tailwind = require('tailwindcss');
 const { cssToReactNativeRuntime } = require('react-native-css-interop/css-to-rn');
 const root = path.resolve(__dirname, '..');
 const config = require('../tailwind.config');
-const compiled = postcss([tailwind(config)])
+const compiled = postcss([
+  tailwind({ ...config, safelist: Object.keys(config.theme.colors).map((name) => `bg-${name}`) }),
+])
   .process(fs.readFileSync(path.join(root, 'global.css'), 'utf8'), {
     from: path.join(root, 'global.css'),
   })

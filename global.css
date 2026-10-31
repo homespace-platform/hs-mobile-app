@@ -7,6 +7,7 @@
   :root {
     --color-background: 248 250 252;
     --color-surface: 255 255 255;
+    --color-overlay: 2 6 23;
     /* The logo image contains dark lettering and needs a light backing in both modes. */
     --color-logo: 255 255 255;
     --color-muted: 241 245 249;
@@ -37,6 +38,7 @@
   .dark:root {
     --color-background: 2 6 23;
     --color-surface: 15 23 42;
+    --color-overlay: 2 6 23;
     --color-logo: 255 255 255;
     --color-muted: 30 41 59;
     --color-foreground: 241 245 249;

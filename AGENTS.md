@@ -11,3 +11,5 @@
   native `color` prop.
 - Keep theme selection in `ThemeProvider`; do not create per-screen theme state.
 - Run `npm run typecheck` and `npm run test:theme` after theme/UI changes.
+- Use `useDialog` from `src/components/AppDialog.tsx` for app notifications,
+  confirmations, and choices; do not add native `Alert.alert` dialogs to the UI.

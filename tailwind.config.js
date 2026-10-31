@@ -9,6 +9,7 @@ module.exports = {
       [
         'background',
         'surface',
+        'overlay',
         'logo',
         'muted',
         'foreground',
