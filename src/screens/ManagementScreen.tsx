@@ -24,6 +24,7 @@ import { getUserProfileApi } from '@/services/userApi';
 import {
   getContractDocuments,
   getManagementPage,
+  getRentalRequestCounts,
   getAppointmentCalendar,
   performManagementAction,
   refreshManagementEntry,
@@ -35,6 +36,7 @@ import {
   type ManagementEntry,
   type ManagementSection,
   type AppointmentListFilter,
+  type RentalRequestStatus,
 } from '@/services/managementApi';
 import { getStorageViewUrl, uploadFile, type LocalFile } from '@/services/storageApi';
 
@@ -59,6 +61,21 @@ const MENUS: Record<'tenant' | 'landlord', Menu[]> = {
     { section: 'landlord-contracts', title: 'Hợp đồng cho thuê', icon: 'document-text-outline' },
   ],
 };
+
+const REQUEST_TONES = {
+  warning: { border: 'border-warning', fill: 'bg-warning-soft', text: 'text-warning' },
+  success: { border: 'border-success', fill: 'bg-success-soft', text: 'text-success' },
+  primary: { border: 'border-primary', fill: 'bg-primary-soft', text: 'text-primary' },
+  danger: { border: 'border-danger', fill: 'bg-danger-soft', text: 'text-danger' },
+  neutral: { border: 'border-border-strong', fill: 'bg-muted', text: 'text-secondary' },
+};
+function requestTone(status: string) {
+  if (status === 'PENDING') return REQUEST_TONES.warning;
+  if (status === 'ACCEPTED') return REQUEST_TONES.success;
+  if (status === 'COMPLETED') return REQUEST_TONES.primary;
+  if (status === 'REJECTED') return REQUEST_TONES.danger;
+  return REQUEST_TONES.neutral;
+}
 
 function EntryDetail({
   section,
@@ -182,7 +199,8 @@ function EntryDetail({
         contentContainerClassName="px-5 pb-10 pt-5"
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
         <Text className="text-xl font-bold text-foreground">{entry.title}</Text>
-        <Text className="mt-2 self-start rounded-full bg-primary-soft px-3 py-2 text-sm font-bold text-primary">
+        <Text
+          className={`mt-2 self-start rounded-full px-3 py-2 text-sm font-bold ${section.endsWith('-requests') ? `${requestTone(entry.status).fill} ${requestTone(entry.status).text}` : 'bg-primary-soft text-primary'}`}>
           {statusLabel(entry.status)}
         </Text>
         <ErrorNotice message={error} />
@@ -356,6 +374,17 @@ export default function ManagementScreen({
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
+  const [requestCounts, setRequestCounts] = useState<{
+    section: ManagementSection;
+    items: Awaited<ReturnType<typeof getRentalRequestCounts>>;
+  } | null>(null);
+  const [requestSelection, setRequestSelection] = useState<{
+    section: ManagementSection;
+    status: RentalRequestStatus | null;
+  } | null>(null);
+  const [requestCountsLoading, setRequestCountsLoading] = useState(false);
+  const [requestCountsError, setRequestCountsError] = useState<string | null>(null);
+  const [requestCountsVersion, setRequestCountsVersion] = useState(0);
   const [appointmentView, setAppointmentView] = useState<'calendar' | 'list'>('calendar');
   const [appointmentFilter, setAppointmentFilter] = useState<AppointmentListFilter>('ALL');
   const [calendarState, setCalendarState] = useState<CalendarState>(() => ({
@@ -364,16 +393,46 @@ export default function ManagementScreen({
     selected: dateKey(new Date()),
   }));
   const isAppointments = Boolean(section?.endsWith('-appointments'));
+  const isRequests = Boolean(section?.endsWith('-requests'));
+  const requestStatus = requestSelection?.section === section ? requestSelection.status : null;
+  const visibleRequestTabs =
+    requestCounts?.section === section ? requestCounts.items.filter((item) => item.count > 0) : [];
   const showCalendar = isAppointments && appointmentView === 'calendar';
   const listFilter = isAppointments && !showCalendar ? appointmentFilter : 'ALL';
   const requestId = useRef(0);
   const invalidateRequests = useCallback(() => {
     requestId.current++;
   }, []);
+  useEffect(() => {
+    if (!section?.endsWith('-requests')) return;
+    let active = true;
+    setRequestSelection({ section, status: null });
+    setRequestCounts(null);
+    setRequestCountsError(null);
+    setRequestCountsLoading(true);
+    void getRentalRequestCounts(section.startsWith('landlord-'))
+      .then((items) => {
+        if (!active) return;
+        setRequestCounts({ section, items });
+        setRequestSelection({
+          section,
+          status: items.find((item) => item.count > 0)?.status ?? null,
+        });
+      })
+      .catch((e) => {
+        if (active) setRequestCountsError(apiError(e));
+      })
+      .finally(() => {
+        if (active) setRequestCountsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [section, requestCountsVersion]);
   const load = useCallback(
     async (nextPage = 1) => {
       const ticket = ++requestId.current;
-      if (!section) return;
+      if (!section || (isRequests && !requestStatus)) return;
       setLoading(true);
       setError(null);
       try {
@@ -383,7 +442,13 @@ export default function ManagementScreen({
           : null;
         const data = items
           ? { items, hasMore: false, total: items.length }
-          : await getManagementPage(section, nextPage, profile.id, listFilter);
+          : await getManagementPage(
+              section,
+              nextPage,
+              profile.id,
+              listFilter,
+              requestStatus ?? undefined
+            );
         if (ticket !== requestId.current) return;
         setUserId(profile.id);
         setRows((current) =>
@@ -403,7 +468,7 @@ export default function ManagementScreen({
         if (ticket === requestId.current) setLoading(false);
       }
     },
-    [section, showCalendar, listFilter]
+    [section, showCalendar, listFilter, isRequests, requestStatus]
   );
   useEffect(() => {
     setRows([]);
@@ -425,7 +490,8 @@ export default function ManagementScreen({
         onBack={() => setEntry(null)}
         onChanged={() => {
           setEntry(null);
-          void load();
+          if (isRequests) setRequestCountsVersion((current) => current + 1);
+          else void load();
         }}
         onOpenListing={onOpenListing}
       />
@@ -445,7 +511,14 @@ export default function ManagementScreen({
       <ScrollView
         contentContainerClassName="px-5 pb-8 pt-5"
         refreshControl={
-          section ? <RefreshControl refreshing={loading} onRefresh={() => load()} /> : undefined
+          section ? (
+            <RefreshControl
+              refreshing={loading || (isRequests && requestCountsLoading)}
+              onRefresh={() =>
+                isRequests ? setRequestCountsVersion((current) => current + 1) : void load()
+              }
+            />
+          ) : undefined
         }>
         {!section ? (
           <>
@@ -544,6 +617,41 @@ export default function ManagementScreen({
                 ) : null}
               </View>
             ) : null}
+            {isRequests && visibleRequestTabs.length ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                className="mb-5"
+                accessibilityRole="tablist">
+                {visibleRequestTabs.map((tab) => {
+                  const tone = requestTone(tab.status);
+                  const selected = requestStatus === tab.status;
+                  return (
+                    <Pressable
+                      key={tab.status}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected }}
+                      onPress={() => setRequestSelection({ section: section!, status: tab.status })}
+                      className={`mr-2 min-h-12 flex-row items-center justify-center gap-2 rounded-xl border px-4 ${selected ? `${tone.border} ${tone.fill}` : 'border-border bg-surface'}`}>
+                      <Text className={`font-semibold ${selected ? tone.text : 'text-secondary'}`}>
+                        {statusLabel(tab.status)}
+                      </Text>
+                      <Text
+                        className={`min-w-6 overflow-hidden rounded-full px-1.5 py-0.5 text-center text-xs font-bold ${selected ? `${tone.fill} ${tone.text}` : 'bg-muted text-secondary'}`}>
+                        {tab.count}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            ) : null}
+            <ErrorNotice message={isRequests ? requestCountsError : null} />
+            {isRequests && requestCountsError ? (
+              <Button
+                label="Thử lại"
+                onPress={() => setRequestCountsVersion((current) => current + 1)}
+              />
+            ) : null}
             <ErrorNotice message={error} />
             {error ? <Button label="Thử lại" onPress={() => load()} disabled={loading} /> : null}
             {showCalendar ? (
@@ -557,18 +665,41 @@ export default function ManagementScreen({
               />
             ) : (
               <>
-                <Text className="mb-3 text-sm text-muted-foreground">
-                  {total} {isAppointments ? 'lịch hẹn' : 'mục'}
-                </Text>
+                {!isRequests ? (
+                  <Text className="mb-3 text-sm text-muted-foreground">
+                    {total} {isAppointments ? 'lịch hẹn' : 'mục'}
+                  </Text>
+                ) : null}
                 {rows.map((row) => (
                   <Pressable
                     key={row.id}
                     onPress={() => setEntry(row)}
                     accessibilityRole="button"
-                    className="mb-3 rounded-2xl border border-border bg-surface p-4">
-                    <Text className="font-bold text-foreground">{row.title}</Text>
-                    <Text className="mt-2 text-xs text-primary">{statusLabel(row.status)}</Text>
-                    <Text className="mt-1 text-xs text-muted-foreground">{row.fields[0]?.[1]}</Text>
+                    className={`mb-3 rounded-2xl border bg-surface p-4 ${isRequests ? `border-l-4 ${requestTone(row.status).border}` : 'border-border'}`}>
+                    <View className="flex-row items-start gap-3">
+                      <Text className="flex-1 font-bold text-foreground">{row.title}</Text>
+                      {isRequests ? (
+                        <Icon name="chevron-forward" size={18} className="text-subtle" />
+                      ) : null}
+                    </View>
+                    <Text
+                      className={
+                        isRequests
+                          ? `mt-3 self-start overflow-hidden rounded-full px-3 py-1 text-xs font-bold ${requestTone(row.status).fill} ${requestTone(row.status).text}`
+                          : 'mt-2 text-xs text-primary'
+                      }>
+                      {statusLabel(row.status)}
+                    </Text>
+                    <Text
+                      className={`${isRequests ? 'mt-2' : 'mt-1'} text-xs text-muted-foreground`}>
+                      {row.fields[0]?.[1]}
+                    </Text>
+                    {isRequests ? (
+                      <Text className="mt-2 text-xs font-semibold text-secondary">
+                        Vào ở: {row.fields.find(([label]) => label === 'Ngày vào ở')?.[1]} ·{' '}
+                        {row.fields.find(([label]) => label === 'Thời hạn')?.[1]}
+                      </Text>
+                    ) : null}
                     {row.appointment ? (
                       <Text className="mt-2 text-xs font-semibold text-secondary">
                         {row.appointment.appointmentDate.split('-').reverse().join('/')} ·{' '}
@@ -580,15 +711,19 @@ export default function ManagementScreen({
                 ))}
               </>
             )}
-            {loading ? (
+            {loading || (isRequests && requestCountsLoading) ? (
               <ActivityIndicator className="my-6 text-primary" />
-            ) : !showCalendar && !rows.length && !error ? (
+            ) : !showCalendar && !rows.length && !error && !(isRequests && requestCountsError) ? (
               <Text className="py-10 text-center text-muted-foreground">
-                {isAppointments && listFilter === 'UNVIEWED'
-                  ? 'Không có lịch chưa xem.'
-                  : isAppointments && listFilter === 'COMPLETED'
-                    ? 'Chưa có lịch hoàn thành.'
-                    : 'Chưa có dữ liệu trong mục này.'}
+                {isRequests
+                  ? requestStatus
+                    ? `Chưa có yêu cầu ${statusLabel(requestStatus).toLowerCase()}.`
+                    : 'Chưa có yêu cầu thuê nào.'
+                  : isAppointments && listFilter === 'UNVIEWED'
+                    ? 'Không có lịch chưa xem.'
+                    : isAppointments && listFilter === 'COMPLETED'
+                      ? 'Chưa có lịch hoàn thành.'
+                      : 'Chưa có dữ liệu trong mục này.'}
               </Text>
             ) : null}
             {hasMore ? (

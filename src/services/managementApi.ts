@@ -13,6 +13,17 @@ export type ManagementSection =
   | 'tenant-contracts'
   | 'landlord-contracts';
 export type AppointmentListFilter = 'ALL' | 'UNVIEWED' | 'COMPLETED';
+export const RENTAL_REQUEST_STATUSES = [
+  'PENDING',
+  'ACCEPTED',
+  'COMPLETED',
+  'REJECTED',
+  'EXPIRED',
+  'CANCELLED_BY_RENTER',
+  'CANCELLED_BY_OWNER',
+  'CANCELLED_BY_SYSTEM',
+] as const;
+export type RentalRequestStatus = (typeof RENTAL_REQUEST_STATUSES)[number];
 export type ManagementAction =
   | 'approve'
   | 'reject'
@@ -343,7 +354,8 @@ export async function getManagementPage(
   section: ManagementSection,
   page: number,
   userId: string,
-  appointmentFilter: AppointmentListFilter = 'ALL'
+  appointmentFilter: AppointmentListFilter = 'ALL',
+  rentalStatus?: RentalRequestStatus
 ) {
   const owner = section.startsWith('landlord-');
   const params = { page, size: 12 };
@@ -387,7 +399,7 @@ export async function getManagementPage(
   if (section.endsWith('-requests')) {
     const response = await axiosClient.get<PageResponse<RentalRequest>>(
       `/api/v1/rental-requests/${owner ? 'owner' : 'my-requests'}`,
-      { params }
+      { params: { ...params, ...(rentalStatus ? { status: rentalStatus } : {}) } }
     );
     return {
       items: response.data.result.map((row) => rentalEntry(row, owner)),
@@ -413,6 +425,18 @@ export async function getManagementPage(
     hasMore: response.data.hasMore,
     total: response.data.totalElements,
   };
+}
+
+export async function getRentalRequestCounts(owner: boolean) {
+  const endpoint = `/api/v1/rental-requests/${owner ? 'owner' : 'my-requests'}`;
+  return Promise.all(
+    RENTAL_REQUEST_STATUSES.map(async (status) => {
+      const response = await axiosClient.get<PageResponse<RentalRequest>>(endpoint, {
+        params: { page: 1, size: 1, status },
+      });
+      return { status, count: response.data.totalElements };
+    })
+  );
 }
 
 export async function getAppointmentCalendar(owner: boolean) {

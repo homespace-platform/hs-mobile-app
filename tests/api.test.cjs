@@ -99,6 +99,39 @@ test('each management menu calls its real endpoint and preserves pagination', as
   }
 });
 
+test('rental request tabs count each status and fetch only the selected status', async () => {
+  for (const [section, endpoint] of [
+    ['tenant-requests', '/api/v1/rental-requests/my-requests'],
+    ['landlord-requests', '/api/v1/rental-requests/owner'],
+  ]) {
+    const calls = [];
+    const client = {
+      async get(path, options) {
+        calls.push({ path, params: options.params });
+        return {
+          data: {
+            result: [],
+            hasMore: false,
+            totalElements: options.params.status === 'ACCEPTED' ? 2 : 0,
+          },
+        };
+      },
+    };
+    const api = load('services/managementApi.ts', { '@/lib/axios-client': client });
+    const counts = await api.getRentalRequestCounts(section.startsWith('landlord-'));
+    assert.equal(calls.length, api.RENTAL_REQUEST_STATUSES.length);
+    assert.ok(calls.every((call) => call.path === endpoint && call.params.size === 1));
+    assert.deepEqual(
+      Array.from(counts, (item) => item.status),
+      Array.from(api.RENTAL_REQUEST_STATUSES)
+    );
+    assert.equal(counts.find((item) => item.status === 'PENDING').count, 0);
+    assert.equal(counts.find((item) => item.count > 0).status, 'ACCEPTED');
+    await api.getManagementPage(section, 2, 'user', 'ALL', 'ACCEPTED');
+    assert.deepEqual({ ...calls.at(-1).params }, { page: 2, size: 12, status: 'ACCEPTED' });
+  }
+});
+
 test('payment menus distinguish rent and refunds by actor and direction', async () => {
   const refund = {
     ...payment,
