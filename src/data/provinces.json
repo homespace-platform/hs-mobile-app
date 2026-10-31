@@ -1,0 +1,138 @@
+[
+  {
+    "code": "11",
+    "name": "Thành phố Hà Nội"
+  },
+  {
+    "code": "12",
+    "name": "Thành phố Hồ Chí Minh"
+  },
+  {
+    "code": "13",
+    "name": "Thành phố Đà Nẵng"
+  },
+  {
+    "code": "14",
+    "name": "Thành phố Hải Phòng"
+  },
+  {
+    "code": "15",
+    "name": "Thành phố Cần Thơ"
+  },
+  {
+    "code": "16",
+    "name": "Thành phố Huế"
+  },
+  {
+    "code": "17",
+    "name": "Tỉnh An Giang"
+  },
+  {
+    "code": "18",
+    "name": "Tỉnh Bắc Ninh"
+  },
+  {
+    "code": "19",
+    "name": "Tỉnh Cà Mau"
+  },
+  {
+    "code": "20",
+    "name": "Tỉnh Cao Bằng"
+  },
+  {
+    "code": "21",
+    "name": "Tỉnh Đắk Lắk"
+  },
+  {
+    "code": "22",
+    "name": "Tỉnh Điện Biên"
+  },
+  {
+    "code": "23",
+    "name": "Thành phố Đồng Nai"
+  },
+  {
+    "code": "24",
+    "name": "Tỉnh Đồng Tháp"
+  },
+  {
+    "code": "25",
+    "name": "Tỉnh Gia Lai"
+  },
+  {
+    "code": "26",
+    "name": "Tỉnh Hà Tĩnh"
+  },
+  {
+    "code": "27",
+    "name": "Tỉnh Hưng Yên"
+  },
+  {
+    "code": "28",
+    "name": "Tỉnh Khánh Hòa"
+  },
+  {
+    "code": "29",
+    "name": "Tỉnh Lai Châu"
+  },
+  {
+    "code": "30",
+    "name": "Tỉnh Lâm Đồng"
+  },
+  {
+    "code": "31",
+    "name": "Tỉnh Lạng Sơn"
+  },
+  {
+    "code": "32",
+    "name": "Tỉnh Lào Cai"
+  },
+  {
+    "code": "33",
+    "name": "Tỉnh Nghệ An"
+  },
+  {
+    "code": "34",
+    "name": "Tỉnh Ninh Bình"
+  },
+  {
+    "code": "35",
+    "name": "Tỉnh Phú Thọ"
+  },
+  {
+    "code": "36",
+    "name": "Tỉnh Quảng Ngãi"
+  },
+  {
+    "code": "37",
+    "name": "Tỉnh Quảng Ninh"
+  },
+  {
+    "code": "38",
+    "name": "Tỉnh Quảng Trị"
+  },
+  {
+    "code": "39",
+    "name": "Tỉnh Sơn La"
+  },
+  {
+    "code": "40",
+    "name": "Tỉnh Tây Ninh"
+  },
+  {
+    "code": "41",
+    "name": "Tỉnh Thái Nguyên"
+  },
+  {
+    "code": "42",
+    "name": "Tỉnh Thanh Hóa"
+  },
+  {
+    "code": "43",
+    "name": "Tỉnh Tuyên Quang"
+  },
+  {
+    "code": "44",
+    "name": "Tỉnh Vĩnh Long"
+  }
+]

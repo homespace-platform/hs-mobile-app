@@ -1,5 +1,5 @@
 import axiosClient from '@/lib/axios-client';
-import type { ApiResponse } from '@/types/api';
+import type { ApiResponse, PageResponse } from '@/types/api';
 
 export const MOCK_NEWS_IMAGE =
   'https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=80';
@@ -32,11 +32,11 @@ export type NewsDetail = NewsSummary & {
   media: { storageObjectId: string; role: string; url: string | null }[];
 };
 
-export async function getPublicNews() {
-  const response = await axiosClient.get<{ result?: NewsSummary[] }>('/api/v1/public/news', {
-    params: { page: 1, size: 50 },
+export async function getPublicNews(params: { page: number; category?: string; keyword?: string }) {
+  const response = await axiosClient.get<PageResponse<NewsSummary>>('/api/v1/public/news', {
+    params: { size: 12, ...params },
   });
-  return response.data.result ?? [];
+  return response.data;
 }
 
 export async function getNewsBySlug(slug: string) {

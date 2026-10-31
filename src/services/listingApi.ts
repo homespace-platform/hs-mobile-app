@@ -1,5 +1,5 @@
 import axiosClient from '@/lib/axios-client';
-import type { ApiResponse } from '@/types/api';
+import type { ApiResponse, PageResponse } from '@/types/api';
 
 export const MOCK_LISTING_IMAGE =
   'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267d?auto=format&fit=crop&w=1200&q=80';
@@ -96,11 +96,21 @@ export type ListingDetail = {
   viewCount?: number;
 };
 
-type PageResponse = { result?: ListingSummary[] };
-
 export async function getPublicListings(params: Record<string, string | number>) {
-  const response = await axiosClient.get<PageResponse>('/api/v1/public/listings', { params });
-  return response.data.result ?? [];
+  return (await getPublicListingsPage(params)).result ?? [];
+}
+
+export async function getPublicListingsPage(params: Record<string, string | number>) {
+  if (!params.cityId) throw new Error('Vui lòng chọn tỉnh/thành trước khi tìm nhà.');
+  return (
+    await axiosClient.get<PageResponse<ListingSummary>>('/api/v1/public/listings', { params })
+  ).data;
+}
+
+export async function getAccessibleListing(id: string) {
+  return (
+    await axiosClient.get<ApiResponse<ListingDetail>>(`/api/v1/listings/${encodeURIComponent(id)}`)
+  ).data.result;
 }
 
 export async function getPublicListing(id: string) {
