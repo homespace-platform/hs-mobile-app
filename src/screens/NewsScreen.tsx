@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Ionicons from '@/components/Icon';
 import {
   ActivityIndicator,
   Image,
   Pressable,
+  RefreshControl,
   ScrollView,
+  Share,
   Text,
   TextInput,
   View,
@@ -12,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
+import { useDialog } from '@/components/AppDialog';
 import {
   getNewsBySlug,
   getPublicNews,
@@ -85,6 +88,7 @@ function ArticleCard({ article, onPress }: { article: NewsSummary; onPress: () =
 }
 
 function ArticleDetail({ slug, onBack }: { slug: string; onBack: () => void }) {
+  const showDialog = useDialog();
   const [article, setArticle] = useState<NewsDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -139,7 +143,15 @@ function ArticleDetail({ slug, onBack }: { slug: string; onBack: () => void }) {
           <Ionicons name="chevron-back" size={25} className="text-foreground" />
         </Pressable>
         <Text className="ml-2 flex-1 text-base font-bold text-foreground">Bài viết</Text>
-        <Pressable className="h-10 w-10 items-center justify-center">
+        <Pressable
+          onPress={() =>
+            Share.share({ message: `${article.title}\n\n${plainText(article.summary)}` }).catch(
+              () => showDialog('Chia sẻ', 'Không thể mở bảng chia sẻ. Vui lòng thử lại.')
+            )
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Chia sẻ bài viết"
+          className="h-10 w-10 items-center justify-center">
           <Ionicons name="share-social-outline" size={22} className="text-secondary" />
         </Pressable>
       </View>
@@ -227,37 +239,57 @@ export default function NewsScreen({ onSelectTab }: { onSelectTab: (tab: MainTab
   const [articles, setArticles] = useState<NewsSummary[]>([]);
   const [category, setCategory] = useState('ALL');
   const [search, setSearch] = useState('');
+  const [keyword, setKeyword] = useState('');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
+  const requestId = useRef(0);
+  const invalidateRequests = useCallback(() => {
+    requestId.current++;
+  }, []);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(false);
-    try {
-      setArticles(await getPublicNews());
-    } catch {
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (nextPage = 1) => {
+      const id = ++requestId.current;
+      setLoading(true);
+      setError(false);
+      if (nextPage === 1) {
+        setArticles([]);
+        setHasMore(false);
+        setTotal(0);
+      }
+      try {
+        const result = await getPublicNews({
+          page: nextPage,
+          ...(category !== 'ALL' ? { category } : {}),
+          ...(keyword ? { keyword } : {}),
+        });
+        if (id !== requestId.current) return;
+        setArticles((current) => (nextPage === 1 ? result.result : [...current, ...result.result]));
+        setPage(nextPage);
+        setHasMore(result.hasMore);
+        setTotal(result.totalElements);
+      } catch {
+        if (id === requestId.current) setError(true);
+      } finally {
+        if (id === requestId.current) setLoading(false);
+      }
+    },
+    [category, keyword]
+  );
+
+  useEffect(() => {
+    const timer = setTimeout(() => setKeyword(search.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     load();
-  }, [load]);
-
-  const filtered = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-    return articles.filter(
-      (article) =>
-        (category === 'ALL' || article.category === category) &&
-        (!keyword ||
-          article.title.toLowerCase().includes(keyword) ||
-          article.summary.toLowerCase().includes(keyword) ||
-          article.tags.some((tag) => tag.toLowerCase().includes(keyword)))
-    );
-  }, [articles, category, search]);
+    return invalidateRequests;
+  }, [load, invalidateRequests]);
 
   if (selectedSlug) {
     return <ArticleDetail slug={selectedSlug} onBack={() => setSelectedSlug(null)} />;
@@ -265,7 +297,12 @@ export default function NewsScreen({ onSelectTab }: { onSelectTab: (tab: MainTab
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-6">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerClassName="pb-6"
+        refreshControl={
+          <RefreshControl refreshing={loading && page === 1} onRefresh={() => load()} />
+        }>
         <View className="bg-surface px-5 pb-5 pt-2">
           <Text className="text-xs font-semibold uppercase tracking-widest text-primary">
             HomeSpace
@@ -305,10 +342,10 @@ export default function NewsScreen({ onSelectTab }: { onSelectTab: (tab: MainTab
         <View className="mt-6 px-5">
           <View className="mb-4 flex-row items-center justify-between">
             <Text className="text-xl font-bold text-foreground">Bản tin mới nhất</Text>
-            <Text className="text-xs font-semibold text-subtle">{filtered.length} bài viết</Text>
+            <Text className="text-xs font-semibold text-subtle">{total} bài viết</Text>
           </View>
 
-          {loading ? (
+          {loading && !articles.length ? (
             <View className="items-center py-16">
               <ActivityIndicator className="text-primary" />
               <Text className="mt-3 text-sm text-muted-foreground">Đang tải tin tức...</Text>
@@ -317,17 +354,17 @@ export default function NewsScreen({ onSelectTab }: { onSelectTab: (tab: MainTab
             <View className="items-center rounded-3xl border border-border bg-surface px-6 py-12">
               <Ionicons name="cloud-offline-outline" size={38} className="text-subtle" />
               <Text className="mt-3 text-center font-bold text-foreground">
-                News service chưa hoạt động
+                Không thể tải tin tức
               </Text>
               <Text className="mt-1 text-center text-sm text-muted-foreground">
-                Khởi động service rồi bấm thử lại.
+                Vui lòng thử lại sau.
               </Text>
-              <Pressable onPress={load} className="mt-4 rounded-xl bg-brand px-5 py-3">
+              <Pressable onPress={() => load()} className="mt-4 rounded-xl bg-brand px-5 py-3">
                 <Text className="font-semibold text-on-brand">Thử lại</Text>
               </Pressable>
             </View>
-          ) : filtered.length ? (
-            filtered.map((article) => (
+          ) : articles.length ? (
+            articles.map((article) => (
               <ArticleCard
                 key={article.id}
                 article={article}
@@ -340,6 +377,16 @@ export default function NewsScreen({ onSelectTab }: { onSelectTab: (tab: MainTab
               <Text className="mt-3 font-bold text-foreground">Không tìm thấy bài viết</Text>
             </View>
           )}
+          {hasMore && !error ? (
+            <Pressable
+              disabled={loading}
+              onPress={() => load(page + 1)}
+              className="items-center rounded-xl bg-brand px-5 py-3">
+              <Text className="font-semibold text-on-brand">
+                {loading ? 'Đang tải...' : 'Xem thêm'}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       </ScrollView>
 

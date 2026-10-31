@@ -4,7 +4,6 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Linking,
@@ -19,6 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import Avatar from '@/components/Avatar';
+import { useDialog } from '@/components/AppDialog';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import {
   listConversations,
@@ -108,6 +108,7 @@ export default function MessagesScreen({
   onSelectTab: (tab: MainTab) => void;
   onOpenConversationDetails: (conversation: ChatConversation) => void;
 }) {
+  const showDialog = useDialog();
   const [profile, setProfile] = useState<UserProfileResponse | null>(null);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -251,7 +252,7 @@ export default function MessagesScreen({
   }
 
   function chooseAttachment() {
-    Alert.alert('Đính kèm tin nhắn', 'Chọn loại tệp muốn gửi', [
+    showDialog('Đính kèm tin nhắn', 'Chọn loại tệp muốn gửi', [
       { text: 'Ảnh', onPress: () => void pickImage() },
       { text: 'Tệp', onPress: () => void pickDocument() },
       { text: 'Hủy', style: 'cancel' },
@@ -431,15 +432,19 @@ export default function MessagesScreen({
             />
             <Pressable
               onPress={handleSend}
-              disabled={!draft.trim() || sending}
-              className={`h-11 w-11 items-center justify-center rounded-full ${draft.trim() && !sending ? 'bg-brand' : 'bg-disabled'}`}>
+              disabled={(!draft.trim() && !pendingAttachment) || sending}
+              className={`h-11 w-11 items-center justify-center rounded-full ${(draft.trim() || pendingAttachment) && !sending ? 'bg-brand' : 'bg-disabled'}`}>
               {sending ? (
                 <ActivityIndicator size="small" className="text-on-disabled" />
               ) : (
                 <Ionicons
                   name="send"
                   size={19}
-                  className={draft.trim() && !sending ? 'text-on-brand' : 'text-on-disabled'}
+                  className={
+                    (draft.trim() || pendingAttachment) && !sending
+                      ? 'text-on-brand'
+                      : 'text-on-disabled'
+                  }
                 />
               )}
             </Pressable>
