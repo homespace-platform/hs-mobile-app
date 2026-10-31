@@ -3,6 +3,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import './global.css';
 import { ThemeProvider } from '@/theme/ThemeProvider';
+import { DialogProvider } from '@/components/AppDialog';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 import type { MainTab } from '@/components/BottomTabBar';
 import type { ChatConversation } from '@/services/chatApi';
@@ -16,22 +17,58 @@ import ListingDetailScreen from '@/screens/ListingDetailScreen';
 import MessagesScreen from '@/screens/MessagesScreen';
 import NewsScreen from '@/screens/NewsScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
+import ListingCollectionScreen from '@/screens/ListingCollectionScreen';
+import type { ManagementSection } from '@/services/managementApi';
 
 function SignedInApp() {
-  const [screen, setScreen] = useState<MainTab | 'detail' | 'conversation-detail'>('home');
+  const [screen, setScreen] = useState<
+    MainTab | 'detail' | 'conversation-detail' | 'favorites' | 'browse'
+  >('home');
+  const [returnScreen, setReturnScreen] = useState<MainTab | 'favorites' | 'browse'>('home');
+  const [ownListing, setOwnListing] = useState(false);
+  const [managementSection, setManagementSection] = useState<ManagementSection | null>(null);
+  const [filters, setFilters] = useState<Record<string, string | number>>({});
   const [listingId, setListingId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversationDetail, setConversationDetail] = useState<ChatConversation | null>(null);
   const selectTab = (tab: MainTab) => {
     setConversationId(null);
     setScreen(tab);
+    if (tab === 'management') setManagementSection(null);
   };
+
+  const openListing = (id: string, own = false, section?: ManagementSection) => {
+    if (screen !== 'detail' && screen !== 'conversation-detail') setReturnScreen(screen);
+    setOwnListing(own);
+    setListingId(id);
+    setScreen('detail');
+    if (section) setManagementSection(section);
+  };
+  const openManagement = (section: ManagementSection) => {
+    setManagementSection(section);
+    setScreen('management');
+  };
+  const browse = (nextFilters: Record<string, string | number>) => {
+    setFilters(nextFilters);
+    setScreen('browse');
+  };
+
+  if (screen === 'favorites' || screen === 'browse')
+    return (
+      <ListingCollectionScreen
+        favorites={screen === 'favorites'}
+        filters={filters}
+        onBack={() => setScreen(screen === 'favorites' ? 'profile' : 'home')}
+        onOpenListing={openListing}
+      />
+    );
 
   if (screen === 'detail' && listingId) {
     return (
       <ListingDetailScreen
         listingId={listingId}
-        onBack={() => setScreen('home')}
+        own={ownListing}
+        onBack={() => setScreen(returnScreen)}
         onOpenMessages={(id) => {
           setConversationId(id);
           setScreen('messages');
@@ -68,22 +105,26 @@ function SignedInApp() {
   }
 
   if (screen === 'management') {
-    return <ManagementScreen onSelectTab={selectTab} />;
+    return (
+      <ManagementScreen
+        onSelectTab={selectTab}
+        onOpenListing={openListing}
+        initialSection={managementSection}
+      />
+    );
   }
 
   if (screen === 'profile') {
-    return <ProfileScreen onSelectTab={selectTab} />;
+    return (
+      <ProfileScreen
+        onSelectTab={selectTab}
+        onOpenManagement={openManagement}
+        onOpenFavorites={() => setScreen('favorites')}
+      />
+    );
   }
 
-  return (
-    <HomeScreen
-      onSelectTab={selectTab}
-      onOpenListing={(id) => {
-        setListingId(id);
-        setScreen('detail');
-      }}
-    />
-  );
+  return <HomeScreen onSelectTab={selectTab} onOpenListing={openListing} onBrowse={browse} />;
 }
 
 function SignedOutApp() {
@@ -109,9 +150,11 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <AuthProvider>
-          <AuthGate />
-        </AuthProvider>
+        <DialogProvider>
+          <AuthProvider>
+            <AuthGate />
+          </AuthProvider>
+        </DialogProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );
