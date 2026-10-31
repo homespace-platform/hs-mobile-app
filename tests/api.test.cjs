@@ -217,6 +217,32 @@ test('rental policy and authoritative cost estimate go through the backend', asy
   assert.equal(calls[1].args[0], '/api/v1/rental-requests/estimate');
 });
 
+test('listing rental action reads the existing request and returns the newly created status', async () => {
+  const { client, calls } = mockApi({ result: { id: 'request1', status: 'PENDING' } });
+  const api = load('services/bookingApi.ts', { '@/lib/axios-client': client });
+  assert.equal((await api.getMyRentalRequestByListing('listing/1')).status, 'PENDING');
+  assert.equal(calls[0].args[0], '/api/v1/rental-requests/by-listing/listing%2F1');
+  const created = await api.createRentalRequest({
+    listingId: 'listing/1',
+    moveInDate: '2026-11-01',
+    leaseMonths: 12,
+    occupantCount: 1,
+    motorbikeCount: 0,
+    carCount: 0,
+    renterName: 'Người thuê',
+    renterPhone: '0900000000',
+    renterEmail: '',
+    renterNote: '',
+    reservationPolicyAccepted: true,
+    reservationPolicyVersion: 'server-version',
+  });
+  assert.equal(created.status, 'PENDING');
+  assert.equal(calls[1].args[0], '/api/v1/rental-requests');
+  const absent = mockApi({ result: null });
+  const emptyApi = load('services/bookingApi.ts', { '@/lib/axios-client': absent.client });
+  assert.equal(await emptyApi.getMyRentalRequestByListing('listing/2'), null);
+});
+
 test('dates and numeric form validation reject invalid calendar and count values', () => {
   const validate = load('lib/form-validation.ts');
   assert.equal(validate.validDate('2026-02-31'), false);

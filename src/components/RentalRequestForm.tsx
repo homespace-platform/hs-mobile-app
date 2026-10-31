@@ -11,6 +11,7 @@ import {
   createRentalRequest,
   estimateRental,
   getReservationPolicy,
+  type ActiveRentalRequest,
   type RentalEstimate,
 } from '@/services/bookingApi';
 import { getUserProfileApi } from '@/services/userApi';
@@ -92,7 +93,7 @@ export default function RentalRequestForm({
 }: {
   listingId: string;
   onBack: () => void;
-  onSuccess: () => void;
+  onSuccess: (request: ActiveRentalRequest) => void;
 }) {
   const showDialog = useDialog();
   const scroll = useRef<ScrollView>(null);
@@ -187,7 +188,7 @@ export default function RentalRequestForm({
     setBusy(true);
     setError(null);
     try {
-      await createRentalRequest({
+      const request = await createRentalRequest({
         ...payload,
         renterName: name.trim(),
         renterPhone: phone.trim(),
@@ -202,7 +203,7 @@ export default function RentalRequestForm({
         undefined,
         'success'
       );
-      onSuccess();
+      onSuccess(request);
     } catch (e) {
       setError(apiError(e));
     } finally {

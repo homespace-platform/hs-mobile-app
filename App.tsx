@@ -69,6 +69,7 @@ function SignedInApp() {
         listingId={listingId}
         own={ownListing}
         onBack={() => setScreen(returnScreen)}
+        onOpenManagement={openManagement}
         onOpenMessages={(id) => {
           setConversationId(id);
           setScreen('messages');

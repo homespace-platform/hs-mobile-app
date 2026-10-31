@@ -13,6 +13,8 @@ import BookingForm from '@/components/BookingForm';
 import RentalRequestForm from '@/components/RentalRequestForm';
 import { Button } from '@/components/Screen';
 import { apiError } from '@/lib/api-error';
+import { getMyRentalRequestByListing, type ActiveRentalRequest } from '@/services/bookingApi';
+import type { ManagementSection } from '@/services/managementApi';
 
 const LABELS: Record<string, string> = {
   projectName: 'Dự án',
@@ -99,11 +101,13 @@ export default function ListingDetailScreen({
   listingId,
   onBack,
   onOpenMessages,
+  onOpenManagement,
   own = false,
 }: {
   listingId: string;
   onBack: () => void;
   onOpenMessages: (conversationId: string) => void;
+  onOpenManagement: (section: ManagementSection) => void;
   own?: boolean;
 }) {
   const [listing, setListing] = useState<ListingDetail | null>(null);
@@ -116,6 +120,33 @@ export default function ListingDetailScreen({
   const [favoriteSaving, setFavoriteSaving] = useState(false);
   const [userId, setUserId] = useState('');
   const [form, setForm] = useState<'booking' | 'rental' | null>(null);
+  const [rentalRequest, setRentalRequest] = useState<ActiveRentalRequest | null>(null);
+  const [rentalLoading, setRentalLoading] = useState(true);
+  const [rentalError, setRentalError] = useState<string | null>(null);
+  const [rentalReload, setRentalReload] = useState(0);
+  useEffect(() => {
+    if (own) {
+      setRentalLoading(false);
+      return;
+    }
+    let active = true;
+    setRentalLoading(true);
+    setRentalRequest(null);
+    setRentalError(null);
+    getMyRentalRequestByListing(listingId)
+      .then((request) => {
+        if (active) setRentalRequest(request);
+      })
+      .catch((error) => {
+        if (active) setRentalError(apiError(error));
+      })
+      .finally(() => {
+        if (active) setRentalLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [listingId, own, rentalReload]);
   const loadInteractions = useCallback(async () => {
     setFavoriteReady(false);
     setChatError(null);
@@ -188,7 +219,10 @@ export default function ListingDetailScreen({
       <RentalRequestForm
         listingId={listingId}
         onBack={() => setForm(null)}
-        onSuccess={() => setForm(null)}
+        onSuccess={(request) => {
+          setRentalRequest(request);
+          setForm(null);
+        }}
       />
     );
 
@@ -317,7 +351,46 @@ export default function ListingDetailScreen({
           {!own && userId && userId !== listing.ownerId ? (
             <>
               <Button label="Đặt lịch xem nhà" onPress={() => setForm('booking')} />
-              <Button label="Gửi yêu cầu thuê" onPress={() => setForm('rental')} />
+              {rentalLoading ? (
+                <Button label="Đang kiểm tra yêu cầu thuê..." onPress={() => {}} disabled />
+              ) : rentalError ? (
+                <View className="mt-3 rounded-2xl bg-danger-soft p-4">
+                  <Text className="text-sm text-danger">
+                    Chưa kiểm tra được yêu cầu thuê của bạn.
+                  </Text>
+                  <Button
+                    label="Thử kiểm tra lại"
+                    onPress={() => setRentalReload((value) => value + 1)}
+                  />
+                </View>
+              ) : rentalRequest ? (
+                <View className="mt-3 rounded-2xl border border-border bg-primary-soft p-4">
+                  <View className="flex-row items-center gap-2">
+                    <Ionicons
+                      name={
+                        rentalRequest.status === 'PENDING'
+                          ? 'time-outline'
+                          : 'checkmark-circle-outline'
+                      }
+                      size={20}
+                      className="text-primary"
+                    />
+                    <Text className="flex-1 text-sm font-bold text-foreground">
+                      {rentalRequest.status === 'PENDING'
+                        ? 'Đã gửi yêu cầu thuê · Chờ duyệt'
+                        : 'Yêu cầu thuê đã được chấp thuận'}
+                    </Text>
+                  </View>
+                  <Button
+                    label="Xem yêu cầu của tôi"
+                    onPress={() => onOpenManagement('tenant-requests')}
+                  />
+                </View>
+              ) : listing.status !== 'PUBLISHED' ? (
+                <Button label="Nhà hiện không nhận yêu cầu thuê" onPress={() => {}} disabled />
+              ) : (
+                <Button label="Gửi yêu cầu thuê" onPress={() => setForm('rental')} />
+              )}
             </>
           ) : null}
           {!favoriteReady && chatError ? (

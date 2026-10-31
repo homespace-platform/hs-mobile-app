@@ -69,6 +69,17 @@ export async function getReservationPolicy() {
     )
   ).data.result;
 }
+
+export type ActiveRentalRequest = { id: string; status: 'PENDING' | 'ACCEPTED' };
+
+export async function getMyRentalRequestByListing(listingId: string) {
+  return (
+    await axiosClient.get<ApiResponse<ActiveRentalRequest | null>>(
+      `/api/v1/rental-requests/by-listing/${encodeURIComponent(listingId)}`
+    )
+  ).data.result;
+}
+
 export async function createRentalRequest(
   payload: RentalEstimateInput & {
     renterName: string;
@@ -79,5 +90,7 @@ export async function createRentalRequest(
     reservationPolicyVersion: string;
   }
 ) {
-  await axiosClient.post('/api/v1/rental-requests', payload);
+  return (
+    await axiosClient.post<ApiResponse<ActiveRentalRequest>>('/api/v1/rental-requests', payload)
+  ).data.result;
 }
