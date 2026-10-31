@@ -449,7 +449,9 @@ export default function RentalRequestForm({
                 <Text className="text-sm font-bold text-foreground">
                   Phiên bản {policy.version}
                 </Text>
-                <Text className="mt-2 text-sm leading-6 text-secondary">{policy.text}</Text>
+                <Text className="mt-2 text-sm leading-6 text-secondary">
+                  {policy.text.replace(/^./, (letter) => letter.toUpperCase())}
+                </Text>
               </View>
             ) : (
               <Button label="Tải lại điều kiện giữ chỗ" onPress={loadDefaults} disabled={busy} />

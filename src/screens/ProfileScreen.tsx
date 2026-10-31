@@ -270,7 +270,10 @@ export default function ProfileScreen({
               onPress={async () => {
                 try {
                   const policy = await getReservationPolicy();
-                  showDialog(`Chính sách giữ chỗ · ${policy.version}`, policy.text);
+                  showDialog(
+                    `Chính sách giữ chỗ · ${policy.version}`,
+                    policy.text.replace(/^./, (letter) => letter.toUpperCase())
+                  );
                 } catch (e) {
                   showDialog('Không tải được chính sách', apiError(e));
                 }
