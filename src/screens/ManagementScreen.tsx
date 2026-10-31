@@ -357,10 +357,12 @@ export default function ManagementScreen({
   onSelectTab,
   onOpenListing,
   initialSection,
+  onExit,
 }: {
   onSelectTab: (tab: MainTab) => void;
   onOpenListing: (id: string, own?: boolean, section?: ManagementSection) => void;
   initialSection?: ManagementSection | null;
+  onExit?: () => void;
 }) {
   const [role, setRole] = useState<'tenant' | 'landlord'>(
     initialSection?.startsWith('landlord-') ? 'landlord' : 'tenant'
@@ -499,7 +501,7 @@ export default function ManagementScreen({
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       {section ? (
-        <ScreenHeader title={title} onBack={() => setSection(null)} />
+        <ScreenHeader title={title} onBack={onExit ?? (() => setSection(null))} />
       ) : (
         <View className="bg-brand px-5 py-5">
           <Text className="text-2xl font-bold text-on-brand">Quản lý</Text>

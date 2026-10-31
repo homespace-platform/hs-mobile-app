@@ -27,6 +27,7 @@ function SignedInApp() {
   const [returnScreen, setReturnScreen] = useState<MainTab | 'favorites' | 'browse'>('home');
   const [ownListing, setOwnListing] = useState(false);
   const [managementSection, setManagementSection] = useState<ManagementSection | null>(null);
+  const [managementOrigin, setManagementOrigin] = useState<'profile' | 'detail' | null>(null);
   const [filters, setFilters] = useState<Record<string, string | number>>({});
   const [listingId, setListingId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -34,7 +35,10 @@ function SignedInApp() {
   const selectTab = (tab: MainTab) => {
     setConversationId(null);
     setScreen(tab);
-    if (tab === 'management') setManagementSection(null);
+    if (tab === 'management') {
+      setManagementSection(null);
+      setManagementOrigin(null);
+    }
   };
 
   const openListing = (id: string, own = false, section?: ManagementSection) => {
@@ -46,6 +50,7 @@ function SignedInApp() {
   };
   const openManagement = (section: ManagementSection) => {
     setManagementSection(section);
+    setManagementOrigin(screen === 'profile' || screen === 'detail' ? screen : null);
     setScreen('management');
   };
   const browse = (nextFilters: Record<string, string | number>) => {
@@ -108,9 +113,19 @@ function SignedInApp() {
   if (screen === 'management') {
     return (
       <ManagementScreen
+        key={managementSection ?? 'root'}
         onSelectTab={selectTab}
         onOpenListing={openListing}
         initialSection={managementSection}
+        onExit={
+          managementOrigin
+            ? () => {
+                setManagementSection(null);
+                setScreen(managementOrigin);
+                setManagementOrigin(null);
+              }
+            : undefined
+        }
       />
     );
   }
