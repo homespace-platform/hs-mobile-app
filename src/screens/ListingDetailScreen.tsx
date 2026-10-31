@@ -6,6 +6,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Avatar from '@/components/Avatar';
 import { createConversation, type RelatedListing } from '@/services/chatApi';
 import { getPublicListing, listingImage, type ListingDetail } from '@/services/listingApi';
+import { getAccessibleListing } from '@/services/listingApi';
+import { getFavoriteIds, toggleFavorite, recordListingHistory } from '@/services/favoriteApi';
+import { getUserProfileApi } from '@/services/userApi';
+import BookingForm from '@/components/BookingForm';
+import RentalRequestForm from '@/components/RentalRequestForm';
+import { Button } from '@/components/Screen';
+import { apiError } from '@/lib/api-error';
 
 const LABELS: Record<string, string> = {
   projectName: 'Dự án',
@@ -92,10 +99,12 @@ export default function ListingDetailScreen({
   listingId,
   onBack,
   onOpenMessages,
+  own = false,
 }: {
   listingId: string;
   onBack: () => void;
   onOpenMessages: (conversationId: string) => void;
+  own?: boolean;
 }) {
   const [listing, setListing] = useState<ListingDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -103,18 +112,50 @@ export default function ListingDetailScreen({
   const [favorite, setFavorite] = useState(false);
   const [openingChat, setOpeningChat] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [favoriteReady, setFavoriteReady] = useState(false);
+  const [favoriteSaving, setFavoriteSaving] = useState(false);
+  const [userId, setUserId] = useState('');
+  const [form, setForm] = useState<'booking' | 'rental' | null>(null);
+  const loadInteractions = useCallback(async () => {
+    setFavoriteReady(false);
+    setChatError(null);
+    try {
+      const [ids, profile] = await Promise.all([getFavoriteIds(), getUserProfileApi()]);
+      setFavorite(ids.includes(listingId));
+      setUserId(profile.id);
+      setFavoriteReady(true);
+    } catch (e) {
+      setChatError(apiError(e));
+    }
+  }, [listingId]);
+  useEffect(() => {
+    void loadInteractions();
+  }, [loadInteractions]);
+  async function saveFavorite() {
+    if (!favoriteReady || favoriteSaving) return;
+    setFavoriteSaving(true);
+    setChatError(null);
+    try {
+      setFavorite(await toggleFavorite(listingId));
+    } catch (e) {
+      setChatError(apiError(e));
+    } finally {
+      setFavoriteSaving(false);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setListing(await getPublicListing(listingId));
+      setListing(await (own ? getAccessibleListing(listingId) : getPublicListing(listingId)));
+      if (!own) void recordListingHistory(listingId).catch(() => undefined);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Không tải được bài đăng');
     } finally {
       setLoading(false);
     }
-  }, [listingId]);
+  }, [listingId, own]);
 
   useEffect(() => {
     load();
@@ -133,6 +174,23 @@ export default function ListingDetailScreen({
       ([key, value]) => LABELS[key] && value !== null && value !== undefined && value !== ''
     ) as [string, string | number | boolean][];
   }, [listing]);
+
+  if (form === 'booking')
+    return (
+      <BookingForm
+        listingId={listingId}
+        onBack={() => setForm(null)}
+        onSuccess={() => setForm(null)}
+      />
+    );
+  if (form === 'rental')
+    return (
+      <RentalRequestForm
+        listingId={listingId}
+        onBack={() => setForm(null)}
+        onSuccess={() => setForm(null)}
+      />
+    );
 
   if (loading) {
     return (
@@ -209,7 +267,11 @@ export default function ListingDetailScreen({
           <Ionicons name="chevron-back" size={25} className="text-foreground" />
         </Pressable>
         <Pressable
-          onPress={() => setFavorite((value) => !value)}
+          onPress={saveFavorite}
+          disabled={!favoriteReady || favoriteSaving}
+          accessibilityRole="button"
+          accessibilityLabel={favorite ? 'Bỏ yêu thích' : 'Lưu yêu thích'}
+          accessibilityState={{ selected: favorite, disabled: !favoriteReady || favoriteSaving }}
           className="h-11 w-11 items-center justify-center rounded-full bg-surface/95 shadow">
           <Ionicons
             name={favorite ? 'heart' : 'heart-outline'}
@@ -252,6 +314,15 @@ export default function ListingDetailScreen({
           <Text className="mt-4 text-2xl font-extrabold text-primary">
             {formatMoney(listing.pricing.amount)}/tháng
           </Text>
+          {!own && userId && userId !== listing.ownerId ? (
+            <>
+              <Button label="Đặt lịch xem nhà" onPress={() => setForm('booking')} />
+              <Button label="Gửi yêu cầu thuê" onPress={() => setForm('rental')} />
+            </>
+          ) : null}
+          {!favoriteReady && chatError ? (
+            <Button label="Thử tải lại thao tác" onPress={loadInteractions} />
+          ) : null}
           {listing.pricing.negotiable ? (
             <Text className="mt-1 text-xs font-semibold text-success">Có thể thương lượng</Text>
           ) : null}
@@ -394,13 +465,14 @@ export default function ListingDetailScreen({
       <View className="absolute bottom-0 left-0 right-0 flex-row gap-3 border-t border-border bg-surface px-5 pb-5 pt-3">
         <Pressable
           onPress={() => listing.owner?.phone && Linking.openURL(`tel:${listing.owner.phone}`)}
+          disabled={!listing.owner?.phone}
           className="flex-1 flex-row items-center justify-center rounded-2xl border border-primary py-3.5">
           <Ionicons name="call-outline" size={18} className="text-primary" />
           <Text className="ml-2 font-bold text-primary">Gọi điện</Text>
         </Pressable>
         <Pressable
           onPress={handleOpenMessages}
-          disabled={openingChat}
+          disabled={openingChat || userId === listing.ownerId || !userId}
           className="flex-1 flex-row items-center justify-center rounded-2xl bg-brand py-3.5">
           <Ionicons name="chatbubble-outline" size={18} className="text-on-brand" />
           <Text className="ml-2 font-bold text-on-brand">

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Ionicons from '@/components/Icon';
 import {
   ActivityIndicator,
@@ -17,6 +17,7 @@ import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import { getPublicListings, listingImage, type ListingSummary } from '@/services/listingApi';
 import { getUserProfileApi } from '@/services/userApi';
 import type { UserProfileResponse } from '@/types/api';
+import provinces from '@/data/provinces.json';
 
 type Category = { label: string; value?: string };
 
@@ -90,9 +91,11 @@ function ListingCard({ listing, onPress }: { listing: ListingSummary; onPress: (
 export default function HomeScreen({
   onSelectTab,
   onOpenListing,
+  onBrowse,
 }: {
   onSelectTab?: (tab: MainTab) => void;
   onOpenListing?: (id: string) => void;
+  onBrowse: (filters: Record<string, string | number>) => void;
 }) {
   const [listings, setListings] = useState<ListingSummary[]>([]);
   const [activeCategory, setActiveCategory] = useState<Category>(CATEGORIES[0]);
@@ -102,36 +105,53 @@ export default function HomeScreen({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestId = useRef(0);
+  const invalidateRequests = useCallback(() => {
+    requestId.current++;
+  }, []);
+  const [city, setCity] = useState(
+    provinces.find((item) => item.name.includes('Hồ Chí Minh')) || provinces[0]
+  );
+  const browseFilters: Record<string, string | number> = {
+    cityId: city.code,
+    ...(activeCategory.value ? { category: activeCategory.value } : {}),
+    ...(submittedSearch.trim() ? { keyword: submittedSearch.trim() } : {}),
+  };
 
   const loadListings = useCallback(
     async (isRefresh = false) => {
+      const id = ++requestId.current;
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
       try {
-        setListings(
-          await getPublicListings({
-            page: 1,
-            size: 8,
-            sort: 'newest',
-            ...(activeCategory.value ? { category: activeCategory.value } : {}),
-            ...(submittedSearch.trim() ? { keyword: submittedSearch.trim() } : {}),
-          })
-        );
+        const result = await getPublicListings({
+          page: 1,
+          size: 8,
+          sort: 'newest',
+          cityId: city.code,
+          ...(activeCategory.value ? { category: activeCategory.value } : {}),
+          ...(submittedSearch.trim() ? { keyword: submittedSearch.trim() } : {}),
+        });
+        if (id === requestId.current) setListings(result);
       } catch (loadError) {
+        if (id !== requestId.current) return;
         setListings([]);
         setError(loadError instanceof Error ? loadError.message : 'Không tải được tin đăng');
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (id === requestId.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     },
-    [activeCategory.value, submittedSearch]
+    [activeCategory.value, submittedSearch, city.code]
   );
 
   useEffect(() => {
     loadListings();
-  }, [loadListings]);
+    return invalidateRequests;
+  }, [loadListings, invalidateRequests]);
 
   useEffect(() => {
     getUserProfileApi()
@@ -209,12 +229,18 @@ export default function HomeScreen({
         <View className="mt-7 px-5">
           <View className="flex-row items-end justify-between">
             <View>
-              <Text className="text-xl font-bold text-foreground">Nhà cho thuê quanh đây</Text>
+              <Text className="text-xl font-bold text-foreground">Nhà cho thuê</Text>
+              <Text className="mt-1 text-sm font-semibold text-primary">{city.name}</Text>
               <Text className="mt-1 text-sm text-muted-foreground">
                 Những tin mới nhất dành cho bạn
               </Text>
             </View>
-            <Text className="text-sm font-semibold text-primary">Xem tất cả</Text>
+            <Pressable
+              onPress={() => onBrowse(browseFilters)}
+              accessibilityRole="button"
+              className="min-h-11 justify-center">
+              <Text className="text-sm font-semibold text-primary">Xem tất cả</Text>
+            </Pressable>
           </View>
 
           {loading ? (
@@ -257,12 +283,14 @@ export default function HomeScreen({
         <View className="mt-8 px-5">
           <Text className="text-xl font-bold text-foreground">Khám phá theo khu vực</Text>
           <View className="mt-4 flex-row flex-wrap gap-3">
-            {['TP. Hồ Chí Minh', 'Hà Nội', 'Đà Nẵng', 'Bình Dương'].map((location) => (
+            {provinces.map((location) => (
               <Pressable
-                key={location}
+                key={location.code}
+                onPress={() => setCity(location)}
+                accessibilityRole="button"
                 className="flex-row items-center rounded-2xl border border-border bg-surface px-4 py-3">
                 <Ionicons name="location-outline" size={16} className="text-primary" />
-                <Text className="ml-1.5 text-sm font-semibold text-secondary">{location}</Text>
+                <Text className="ml-1.5 text-sm font-semibold text-secondary">{location.name}</Text>
               </Pressable>
             ))}
           </View>
