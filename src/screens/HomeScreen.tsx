@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import Avatar from '@/components/Avatar';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
+import { matchesProvince } from '@/lib/location-search';
 import { getPublicListings, listingImage, type ListingSummary } from '@/services/listingApi';
 import { getUserProfileApi } from '@/services/userApi';
 import type { UserProfileResponse } from '@/types/api';
@@ -101,6 +102,8 @@ export default function HomeScreen({
   const [activeCategory, setActiveCategory] = useState<Category>(CATEGORIES[0]);
   const [search, setSearch] = useState('');
   const [submittedSearch, setSubmittedSearch] = useState('');
+  const [areaExpanded, setAreaExpanded] = useState(false);
+  const [areaQuery, setAreaQuery] = useState('');
   const [profile, setProfile] = useState<UserProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -117,6 +120,7 @@ export default function HomeScreen({
     ...(activeCategory.value ? { category: activeCategory.value } : {}),
     ...(submittedSearch.trim() ? { keyword: submittedSearch.trim() } : {}),
   };
+  const filteredProvinces = provinces.filter((item) => matchesProvince(item.name, areaQuery));
 
   const loadListings = useCallback(
     async (isRefresh = false) => {
@@ -162,6 +166,7 @@ export default function HomeScreen({
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <ScrollView
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => loadListings(true)} />
         }
@@ -227,6 +232,74 @@ export default function HomeScreen({
         </ScrollView>
 
         <View className="mt-7 px-5">
+          <Text className="text-xl font-bold text-foreground">Khám phá theo khu vực</Text>
+          <Text className="mt-1 text-sm text-muted-foreground">
+            Chọn tỉnh/thành để xem những tin mới trong khu vực.
+          </Text>
+          <Pressable
+            onPress={() => setAreaExpanded((current) => !current)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: areaExpanded }}
+            accessibilityLabel={`Tỉnh thành: ${city.name}`}
+            className="mt-4 min-h-14 flex-row items-center rounded-2xl border border-primary-border bg-surface px-4">
+            <View className="h-9 w-9 items-center justify-center rounded-xl bg-primary-soft">
+              <Ionicons name="location-outline" size={20} className="text-primary" />
+            </View>
+            <Text className="ml-3 flex-1 text-sm font-bold text-foreground">{city.name}</Text>
+            <Ionicons
+              name={areaExpanded ? 'chevron-up' : 'chevron-down'}
+              size={19}
+              className="text-secondary"
+            />
+          </Pressable>
+          {areaExpanded ? (
+            <View className="mt-2 overflow-hidden rounded-2xl border border-border bg-surface">
+              <View className="m-3 flex-row items-center rounded-xl bg-muted px-3">
+                <Ionicons name="search-outline" size={18} className="text-subtle" />
+                <TextInput
+                  value={areaQuery}
+                  onChangeText={setAreaQuery}
+                  placeholder="Nhập tên tỉnh/thành"
+                  autoCorrect={false}
+                  className="ml-2 min-h-11 flex-1 text-sm text-foreground selection:text-primary placeholder:text-subtle"
+                />
+              </View>
+              <ScrollView
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+                className="max-h-64">
+                {filteredProvinces.length ? (
+                  filteredProvinces.map((location) => (
+                    <Pressable
+                      key={location.code}
+                      onPress={() => {
+                        setCity(location);
+                        setAreaExpanded(false);
+                        setAreaQuery('');
+                      }}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: location.code === city.code }}
+                      className="min-h-12 flex-row items-center border-t border-border px-4 py-3">
+                      <Text
+                        className={`flex-1 text-sm ${location.code === city.code ? 'font-bold text-primary' : 'text-foreground'}`}>
+                        {location.name}
+                      </Text>
+                      {location.code === city.code ? (
+                        <Ionicons name="checkmark-circle" size={20} className="text-primary" />
+                      ) : null}
+                    </Pressable>
+                  ))
+                ) : (
+                  <Text className="px-4 py-5 text-center text-sm text-muted-foreground">
+                    Không tìm thấy tỉnh/thành phù hợp.
+                  </Text>
+                )}
+              </ScrollView>
+            </View>
+          ) : null}
+        </View>
+
+        <View className="mt-7 px-5">
           <View className="flex-row items-end justify-between">
             <View>
               <Text className="text-xl font-bold text-foreground">Nhà cho thuê</Text>
@@ -281,17 +354,69 @@ export default function HomeScreen({
         </View>
 
         <View className="mt-8 px-5">
-          <Text className="text-xl font-bold text-foreground">Khám phá theo khu vực</Text>
-          <View className="mt-4 flex-row flex-wrap gap-3">
-            {provinces.map((location) => (
-              <Pressable
-                key={location.code}
-                onPress={() => setCity(location)}
-                accessibilityRole="button"
-                className="flex-row items-center rounded-2xl border border-border bg-surface px-4 py-3">
-                <Ionicons name="location-outline" size={16} className="text-primary" />
-                <Text className="ml-1.5 text-sm font-semibold text-secondary">{location.name}</Text>
-              </Pressable>
+          <Text className="text-xl font-bold text-foreground">Tìm theo nhu cầu</Text>
+          <Text className="mt-1 text-sm text-muted-foreground">
+            Bắt đầu với loại nhà bạn đang quan tâm.
+          </Text>
+          <View className="mt-4 flex-row gap-3">
+            <Pressable
+              onPress={() => onBrowse({ cityId: city.code, category: 'APARTMENT' })}
+              accessibilityRole="button"
+              className="min-h-36 flex-1 justify-between rounded-2xl border border-primary-border bg-primary-soft p-4">
+              <Ionicons name="business-outline" size={28} className="text-primary" />
+              <View>
+                <Text className="text-base font-bold text-foreground">Căn hộ</Text>
+                <Text className="mt-1 text-xs text-muted-foreground">Khám phá căn hộ cho thuê</Text>
+              </View>
+            </Pressable>
+            <Pressable
+              onPress={() => onBrowse({ cityId: city.code, category: 'ROOM' })}
+              accessibilityRole="button"
+              className="min-h-36 flex-1 justify-between rounded-2xl border border-border bg-warning-soft p-4">
+              <Ionicons name="bed-outline" size={28} className="text-warning" />
+              <View>
+                <Text className="text-base font-bold text-foreground">Phòng trọ</Text>
+                <Text className="mt-1 text-xs text-muted-foreground">
+                  Xem phòng tại {city.name}
+                </Text>
+              </View>
+            </Pressable>
+          </View>
+        </View>
+
+        <View className="mt-8 px-5">
+          <Text className="text-xl font-bold text-foreground">Từ tìm nhà đến dọn vào</Text>
+          <View className="mt-4 rounded-3xl border border-border bg-surface px-4">
+            {(
+              [
+                {
+                  icon: 'options-outline',
+                  title: 'Tìm đúng nơi',
+                  note: 'Lọc theo khu vực và loại nhà.',
+                },
+                {
+                  icon: 'calendar-outline',
+                  title: 'Hẹn lịch xem',
+                  note: 'Chọn ngày giờ thuận tiện.',
+                },
+                {
+                  icon: 'list-outline',
+                  title: 'Theo dõi dễ dàng',
+                  note: 'Xem lịch hẹn và yêu cầu thuê trong Quản lý.',
+                },
+              ] as const
+            ).map((item, index) => (
+              <View
+                key={item.title}
+                className={`flex-row items-center py-4 ${index ? 'border-t border-border' : ''}`}>
+                <View className="h-10 w-10 items-center justify-center rounded-xl bg-primary-soft">
+                  <Ionicons name={item.icon} size={20} className="text-primary" />
+                </View>
+                <View className="ml-3 flex-1">
+                  <Text className="text-sm font-bold text-foreground">{item.title}</Text>
+                  <Text className="mt-1 text-xs text-muted-foreground">{item.note}</Text>
+                </View>
+              </View>
             ))}
           </View>
         </View>

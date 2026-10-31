@@ -223,6 +223,14 @@ test('report transfer requires proof and sends the displayed server amount', asy
   assert.equal(calls[0].args[1].bankTransactionReference, 'BANK001');
 });
 
+test('province search accepts names typed without Vietnamese accents', () => {
+  const { matchesProvince } = load('lib/location-search.ts');
+  assert.equal(matchesProvince('Thành phố Hồ Chí Minh', 'ho chi minh'), true);
+  assert.equal(matchesProvince('Thành phố Đà Nẵng', 'DA NANG'), true);
+  assert.equal(matchesProvince('Tỉnh Bình Dương', 'binh duong'), true);
+  assert.equal(matchesProvince('Tỉnh An Giang', 'da nang'), false);
+});
+
 test('public search requires the current Vietmap city ID; favorites use server boolean', async () => {
   const { client, calls } = mockApi({ result: { isFavorite: false }, hasMore: false });
   const listing = load('services/listingApi.ts', { '@/lib/axios-client': client });
