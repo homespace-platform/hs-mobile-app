@@ -13,12 +13,14 @@ export default function BookingDatePicker({
   allowedDays,
   minDate,
   disabled,
+  hint = 'Chọn ngày bạn muốn đến xem nhà.',
 }: {
   value: string;
   onChange: (value: string) => void;
   allowedDays?: string[];
   minDate: string;
   disabled: boolean;
+  hint?: string;
 }) {
   const [anchor, setAnchor] = useState(() => new Date(`${value}T00:00:00`));
   const days = calendarDays(anchor, 'month');
@@ -102,7 +104,7 @@ export default function BookingDatePicker({
       <View className="mt-3 border-t border-border px-1 pt-3">
         <Text className="text-xs leading-5 text-muted-foreground">
           {allowedDays === undefined
-            ? 'Chọn ngày bạn muốn đến xem nhà.'
+            ? hint
             : allowedDays.length
               ? `Chủ nhà nhận xem: ${[1, 2, 3, 4, 5, 6, 0]
                   .map((index) =>
