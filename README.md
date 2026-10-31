@@ -19,12 +19,50 @@ npm run typecheck
 npm run lint
 npm run test:theme
 npm run test:auth
+npm run test:api
 ```
+
+# API coverage
+
+Mobile screens use the gateway configured by `EXPO_PUBLIC_GATEWAY_BASE_URL`:
+
+- Search listings by Vietmap city, category and keyword; browse pages, open details,
+  save favorites, and record viewing history.
+- Request viewing slots and rescheduling; manage appointments as tenant or landlord.
+  Booking/rescheduling uses a two-step date/time picker and contact confirmation.
+  The calendar disables past/closed days; changing dates automatically reloads
+  slots and cancels the previous request. Morning/afternoon/evening slot buttons
+  and the fixed footer show the selected time before anything is submitted.
+  Both roles can switch between a month/week calendar (confirmed/completed
+  appointments) and a vertical list of every status. Select a day for its schedule,
+  then tap an appointment to open the existing details and actions.
+  The vertical list filters All / Not viewed (pending or confirmed) / Completed.
+- Estimate rental costs on the server, read the current reservation policy and
+  submit/manage rental requests.
+- View payments, bank details and QR codes; upload private proof before reporting
+  a transfer; confirm, reject or dispute receipts according to actor and status.
+- List owned properties/branches, change listing visibility, and read contracts
+  and generated documents. Contract editing/signing and property creation are not
+  part of the current mobile screens.
+- Update profile/avatar/password, open KYC verification, and refresh its status.
+- Search and paginate news; chat and attachment uploads use the existing services.
+
+Notification preferences and help remain marked unavailable because there are no
+corresponding backend endpoints. API tests mock HTTP and storage; they never submit
+real rental requests or payment confirmations. Test those flows with dedicated
+tenant/landlord accounts before release.
 
 # Device testing
 
 For Android Studio's emulator with services on this computer, keep the
-`localhost` URLs in `.env` and forward the service ports after starting the emulator:
+`localhost` URLs in `.env` and set `EXPO_PUBLIC_ANDROID_API_HOST=10.0.2.2`.
+In Android development builds, API calls and Keycloak token/refresh requests then
+use the emulator's direct host address, so password login does not depend on ADB
+port forwarding surviving an emulator/ADB restart. This override is ignored on
+iOS, web and production builds; remote URLs are never rewritten.
+
+Keycloak browser login/registration still uses its canonical `localhost` hostname.
+For those browser flows, forward the service ports after starting the emulator:
 
 ```powershell
 & "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" reverse tcp:9000 tcp:9000
@@ -36,8 +74,18 @@ Repeat the port forwarding after reconnecting/restarting the emulator. This also
 keeps Keycloak's `localhost` redirects and token issuer consistent with the web
 and backend. Restart Metro after changing `.env` so the bundle gets the new URLs.
 
+`npm run run:android`, `npm run android` and `npm run start:dev-client` now forward
+the Metro port and localhost service ports from `.env` to connected Android devices
+automatically. Start the emulator first. If you restart the emulator while Metro
+is already running, reconnect without restarting Metro:
+
+```powershell
+npm run android:connect
+```
+
 Create `.env` from `.env.example` and replace `localhost` with the LAN IP of
 the machine running Keycloak and the gateway when testing on a physical device.
+Leave `EXPO_PUBLIC_ANDROID_API_HOST` empty on a physical device.
 Use a Development Build for Keycloak OAuth redirects; Expo Go cannot use the
 custom `homespace://` scheme reliably.
 
