@@ -1,380 +1,602 @@
-import { useState, type ComponentProps } from 'react';
-import Ionicons from '@/components/Icon';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Linking,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as DocumentPicker from 'expo-document-picker';
 
+import Icon from '@/components/Icon';
+import { useDialog } from '@/components/AppDialog';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
+import { Button, ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
+import BookingForm from '@/components/BookingForm';
+import AppointmentCalendar, { type CalendarState } from '@/components/AppointmentCalendar';
+import { dateKey } from '@/lib/appointment-calendar';
+import { apiError } from '@/lib/api-error';
+import { getUserProfileApi } from '@/services/userApi';
+import {
+  getContractDocuments,
+  getManagementPage,
+  getAppointmentCalendar,
+  performManagementAction,
+  refreshManagementEntry,
+  reportPaymentTransfer,
+  statusLabel,
+  money,
+  type ContractDocument,
+  type ManagementAction,
+  type ManagementEntry,
+  type ManagementSection,
+  type AppointmentListFilter,
+} from '@/services/managementApi';
+import { getStorageViewUrl, uploadFile, type LocalFile } from '@/services/storageApi';
 
-type IconName = ComponentProps<typeof Ionicons>['name'];
-type ManagementRole = 'tenant' | 'landlord';
-
-type ManagementItem = {
-  id: string;
+type Menu = {
+  section: ManagementSection;
   title: string;
-  description: string;
-  icon: IconName;
-  count: number;
-  rows: ManagementRow[];
+  icon: ComponentProps<typeof Icon>['name'];
+};
+const MENUS: Record<'tenant' | 'landlord', Menu[]> = {
+  tenant: [
+    { section: 'tenant-appointments', title: 'Lịch đi xem', icon: 'calendar-outline' },
+    { section: 'tenant-requests', title: 'Yêu cầu đã gửi', icon: 'paper-plane-outline' },
+    { section: 'tenant-payments', title: 'Thanh toán', icon: 'card-outline' },
+    { section: 'tenant-contracts', title: 'Hợp đồng thuê', icon: 'document-text-outline' },
+  ],
+  landlord: [
+    { section: 'landlord-properties', title: 'Tin đăng của tôi', icon: 'home-outline' },
+    { section: 'landlord-branches', title: 'Chi nhánh / Tòa nhà', icon: 'business-outline' },
+    { section: 'landlord-appointments', title: 'Lịch xem nhà', icon: 'calendar-outline' },
+    { section: 'landlord-requests', title: 'Yêu cầu thuê', icon: 'mail-unread-outline' },
+    { section: 'landlord-payments', title: 'Thanh toán', icon: 'wallet-outline' },
+    { section: 'landlord-contracts', title: 'Hợp đồng cho thuê', icon: 'document-text-outline' },
+  ],
 };
 
-type ManagementRow = {
-  title: string;
-  subtitle: string;
-  meta: string;
-  status: string;
-  tone: 'blue' | 'amber' | 'emerald' | 'slate';
-};
-
-const TENANT_ITEMS: ManagementItem[] = [
-  {
-    id: 'tenant-appointments',
-    title: 'Lịch đi xem',
-    description: 'Theo dõi lịch hẹn và đề xuất đổi giờ',
-    icon: 'calendar-outline',
-    count: 2,
-    rows: [
-      {
-        title: 'Căn hộ 2 phòng ngủ gần trung tâm',
-        subtitle: 'Thứ Hai · 09:00–10:00',
-        meta: 'Quận Bình Thạnh, TP. Hồ Chí Minh',
-        status: 'Đã xác nhận',
-        tone: 'emerald',
-      },
-      {
-        title: 'Phòng trọ đầy đủ nội thất',
-        subtitle: 'Thứ Tư · 14:00–15:00',
-        meta: 'TP. Thủ Đức, TP. Hồ Chí Minh',
-        status: 'Chờ xác nhận',
-        tone: 'amber',
-      },
-    ],
-  },
-  {
-    id: 'tenant-requests',
-    title: 'Yêu cầu đã gửi',
-    description: 'Theo dõi yêu cầu thuê và tiến độ xử lý',
-    icon: 'paper-plane-outline',
-    count: 2,
-    rows: [
-      {
-        title: 'Căn hộ studio có ban công',
-        subtitle: 'Ngày vào ở dự kiến: 01/11/2026',
-        meta: 'Đã gửi yêu cầu thuê',
-        status: 'Chờ phản hồi',
-        tone: 'amber',
-      },
-      {
-        title: 'Phòng riêng gần Đại học Quốc gia',
-        subtitle: 'Ngày vào ở dự kiến: 05/11/2026',
-        meta: 'Chủ nhà đã chấp thuận',
-        status: 'Đã chấp nhận',
-        tone: 'emerald',
-      },
-    ],
-  },
-  {
-    id: 'tenant-payments',
-    title: 'Thanh toán',
-    description: 'Kiểm tra khoản giữ chỗ cần thanh toán',
-    icon: 'card-outline',
-    count: 1,
-    rows: [
-      {
-        title: 'Thanh toán giữ chỗ',
-        subtitle: 'Phòng riêng gần Đại học Quốc gia',
-        meta: '3.000.000 đ · Hạn thanh toán còn 23 giờ',
-        status: 'Cần thanh toán',
-        tone: 'blue',
-      },
-    ],
-  },
-];
-
-const LANDLORD_ITEMS: ManagementItem[] = [
-  {
-    id: 'landlord-properties',
-    title: 'Tin đăng',
-    description: 'Quản lý nhà và trạng thái tin cho thuê',
-    icon: 'home-outline',
-    count: 2,
-    rows: [
-      {
-        title: 'Căn hộ 2 phòng ngủ gần trung tâm',
-        subtitle: '12.000.000 đ/tháng',
-        meta: '124 lượt xem · 3 khách quan tâm',
-        status: 'Đang hiển thị',
-        tone: 'emerald',
-      },
-      {
-        title: 'Phòng studio đầy đủ nội thất',
-        subtitle: '5.500.000 đ/tháng',
-        meta: 'Cập nhật lần cuối hôm nay',
-        status: 'Chờ duyệt',
-        tone: 'amber',
-      },
-    ],
-  },
-  {
-    id: 'landlord-branches',
-    title: 'Chi nhánh / Tòa nhà',
-    description: 'Quản lý các địa điểm và phòng trực thuộc',
-    icon: 'business-outline',
-    count: 2,
-    rows: [
-      {
-        title: 'HomeSpace Nguyễn Gia Trí',
-        subtitle: '12 phòng · 3 phòng đang trống',
-        meta: 'Quận Bình Thạnh, TP. Hồ Chí Minh',
-        status: 'Đang hoạt động',
-        tone: 'emerald',
-      },
-      {
-        title: 'HomeSpace Võ Văn Ngân',
-        subtitle: '8 phòng · 1 phòng đang trống',
-        meta: 'TP. Thủ Đức, TP. Hồ Chí Minh',
-        status: 'Đang hoạt động',
-        tone: 'emerald',
-      },
-    ],
-  },
-  {
-    id: 'landlord-appointments',
-    title: 'Lịch xem nhà',
-    description: 'Duyệt và quản lý lịch hẹn của khách',
-    icon: 'calendar-outline',
-    count: 3,
-    rows: [
-      {
-        title: 'Nguyễn Minh Anh',
-        subtitle: 'Căn hộ 2 phòng ngủ · Thứ Hai, 09:00',
-        meta: 'Khách muốn xem trực tiếp',
-        status: 'Chờ xác nhận',
-        tone: 'amber',
-      },
-      {
-        title: 'Trần Hoàng Nam',
-        subtitle: 'Phòng studio · Thứ Ba, 15:30',
-        meta: 'Đã xác nhận lịch với khách',
-        status: 'Đã xác nhận',
-        tone: 'emerald',
-      },
-    ],
-  },
-  {
-    id: 'landlord-requests',
-    title: 'Yêu cầu thuê',
-    description: 'Xem và phản hồi yêu cầu từ khách thuê',
-    icon: 'mail-unread-outline',
-    count: 2,
-    rows: [
-      {
-        title: 'Lê Khánh Linh',
-        subtitle: 'Muốn thuê căn hộ studio từ 01/11/2026',
-        meta: '2 người ở · 1 xe máy',
-        status: 'Mới',
-        tone: 'blue',
-      },
-      {
-        title: 'Phạm Quốc Bảo',
-        subtitle: 'Muốn thuê phòng riêng từ 05/11/2026',
-        meta: '1 người ở · Không có phương tiện',
-        status: 'Đang xem xét',
-        tone: 'amber',
-      },
-    ],
-  },
-  {
-    id: 'landlord-payments',
-    title: 'Thanh toán',
-    description: 'Kiểm tra giao dịch giữ chỗ từ khách',
-    icon: 'wallet-outline',
-    count: 1,
-    rows: [
-      {
-        title: 'Khoản giữ chỗ từ Lê Khánh Linh',
-        subtitle: 'Căn hộ studio có ban công',
-        meta: '3.000.000 đ · Khách đã báo chuyển',
-        status: 'Cần xác nhận',
-        tone: 'blue',
-      },
-    ],
-  },
-];
-
-const TONE_CLASSES = {
-  blue: 'bg-primary-soft text-primary',
-  amber: 'bg-warning-soft text-warning',
-  emerald: 'bg-success-soft text-success',
-  slate: 'bg-muted text-secondary',
-};
-
-function RoleButton({
-  active,
-  icon,
-  label,
-  onPress,
+function EntryDetail({
+  section,
+  initialEntry,
+  userId,
+  onBack,
+  onChanged,
+  onOpenListing,
 }: {
-  active: boolean;
-  icon: IconName;
-  label: string;
-  onPress: () => void;
+  section: ManagementSection;
+  initialEntry: ManagementEntry;
+  userId: string;
+  onBack: () => void;
+  onChanged: () => void;
+  onOpenListing: (id: string, own?: boolean, section?: ManagementSection) => void;
 }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      className={`flex-1 flex-row items-center justify-center rounded-xl py-3 ${active ? 'bg-surface shadow-sm' : ''}`}>
-      <Ionicons
-        name={icon}
-        size={18}
-        className={active ? 'text-primary' : 'text-muted-foreground'}
-      />
-      <Text
-        className={`ml-2 text-sm font-bold ${active ? 'text-primary' : 'text-muted-foreground'}`}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
+  const showDialog = useDialog();
+  const [entry, setEntry] = useState(initialEntry);
+  const [documents, setDocuments] = useState<ContractDocument[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [reason, setReason] = useState('');
+  const [proof, setProof] = useState<LocalFile | null>(null);
+  const [reference, setReference] = useState('');
+  const [rescheduling, setRescheduling] = useState(false);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setEntry(await refreshManagementEntry(section, initialEntry, userId));
+      if (section.endsWith('-contracts')) setDocuments(await getContractDocuments(initialEntry.id));
+    } catch (e) {
+      setError(apiError(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [section, initialEntry, userId]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-function DetailView({ item, onBack }: { item: ManagementItem; onBack: () => void }) {
+  async function act(action: ManagementAction) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await performManagementAction(section, entry, action, reason);
+      onChanged();
+    } catch (e) {
+      setError(apiError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function chooseProof() {
+    setError(null);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) return;
+      const file = result.assets[0];
+      if (!file.size || file.size > 15 * 1024 * 1024) throw new Error('Chứng từ tối đa 15 MB.');
+      setProof({
+        uri: file.uri,
+        fileName: file.name,
+        contentType: file.mimeType || 'application/octet-stream',
+        sizeBytes: file.size,
+      });
+    } catch (e) {
+      setError(apiError(e));
+    }
+  }
+  async function reportTransfer() {
+    if (!entry.payment || !proof || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const stored = await uploadFile(proof, {
+        purpose: 'PAYMENT_PROOF',
+        visibility: 'PRIVATE',
+        referenceType: 'PAYMENT_REQUEST',
+        referenceId: entry.id,
+      });
+      await reportPaymentTransfer(entry.payment, stored.id, reference);
+      onChanged();
+    } catch (e) {
+      setError(apiError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function openDocument(doc: ContractDocument) {
+    setError(null);
+    try {
+      const url =
+        doc.viewUrl ||
+        doc.downloadUrl ||
+        (doc.storageObjectId ? await getStorageViewUrl(doc.storageObjectId) : null);
+      if (!url) throw new Error('Văn bản chưa có tệp để xem.');
+      await Linking.openURL(url);
+    } catch (e) {
+      setError(apiError(e));
+    }
+  }
+  if (rescheduling && entry.appointment)
+    return (
+      <BookingForm
+        listingId={entry.appointment.listingId}
+        appointment={entry.appointment}
+        onBack={() => setRescheduling(false)}
+        onSuccess={onChanged}
+      />
+    );
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <View className="flex-row items-center border-b border-border bg-surface px-4 py-3">
-        <Pressable
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel="Quay lại quản lý"
-          className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-muted">
-          <Ionicons name="chevron-back" size={24} className="text-foreground" />
-        </Pressable>
-        <View className="flex-1">
-          <Text className="text-lg font-extrabold text-foreground">{item.title}</Text>
-          <Text className="text-xs text-muted-foreground">{item.description}</Text>
-        </View>
-      </View>
-
-      <ScrollView contentContainerClassName="px-5 pb-10 pt-5">
-        <View className="mb-4 flex-row items-center rounded-2xl bg-primary-soft px-4 py-3">
-          <Ionicons name="color-wand-outline" size={18} className="text-primary" />
-          <Text className="ml-2 flex-1 text-xs font-semibold text-primary">
-            Dữ liệu giao diện mẫu · API sẽ được nối ở bước tiếp theo
-          </Text>
-        </View>
-
-        {item.rows.map((row) => (
-          <Pressable
-            key={`${item.id}-${row.title}`}
-            className="mb-3 rounded-3xl border border-border bg-surface p-4 shadow-sm">
-            <View className="flex-row items-start">
-              <View className="mr-3 h-11 w-11 items-center justify-center rounded-2xl bg-primary-soft">
-                <Ionicons name={item.icon} size={21} className="text-primary" />
-              </View>
-              <View className="flex-1">
-                <Text className="text-sm font-extrabold text-foreground">{row.title}</Text>
-                <Text className="mt-1 text-xs font-semibold text-secondary">{row.subtitle}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} className="text-subtle" />
-            </View>
-            <View className="mt-4 flex-row items-center justify-between border-t border-border pt-3">
-              <Text className="mr-3 flex-1 text-xs text-muted-foreground">{row.meta}</Text>
-              <View className={`rounded-full px-3 py-1.5 ${TONE_CLASSES[row.tone]}`}>
-                <Text className={`text-[11px] font-bold ${TONE_CLASSES[row.tone].split(' ')[1]}`}>
-                  {row.status}
-                </Text>
-              </View>
-            </View>
-          </Pressable>
+      <ScreenHeader title="Chi tiết" onBack={onBack} />
+      <ScrollView
+        contentContainerClassName="px-5 pb-10 pt-5"
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
+        <Text className="text-xl font-bold text-foreground">{entry.title}</Text>
+        <Text className="mt-2 self-start rounded-full bg-primary-soft px-3 py-2 text-sm font-bold text-primary">
+          {statusLabel(entry.status)}
+        </Text>
+        <ErrorNotice message={error} />
+        {error && !busy ? <Button label="Tải lại chi tiết" onPress={load} /> : null}
+        {entry.fields.map(([label, value]) => (
+          <View key={label} className="mt-4 border-b border-border pb-3">
+            <Text className="text-xs text-muted-foreground">{label}</Text>
+            <Text selectable className="mt-1 text-sm font-semibold text-foreground">
+              {value || '—'}
+            </Text>
+          </View>
+        ))}
+        {entry.listingId ? (
+          <Button
+            label="Xem tin đăng liên quan"
+            disabled={busy}
+            onPress={() => onOpenListing(entry.listingId!, true, section)}
+          />
+        ) : null}
+        {section.endsWith('-contracts') ? (
+          <View className="mt-5">
+            <Text className="font-bold text-foreground">Văn bản hợp đồng</Text>
+            {loading ? (
+              <ActivityIndicator className="mt-3 text-primary" />
+            ) : documents.length ? (
+              documents.map((doc) => (
+                <Button
+                  key={doc.id}
+                  label={(doc.fileName || doc.documentType) + ' · ' + statusLabel(doc.status)}
+                  disabled={doc.status !== 'READY'}
+                  onPress={() => openDocument(doc)}
+                />
+              ))
+            ) : (
+              <Text className="mt-2 text-sm text-muted-foreground">Chưa có văn bản được tạo.</Text>
+            )}
+          </View>
+        ) : null}
+        {entry.payment?.qrImageUrl ? (
+          <Image
+            accessibilityLabel="Mã QR chuyển khoản"
+            source={{ uri: entry.payment.qrImageUrl }}
+            resizeMode="contain"
+            className="mt-5 h-64 w-full rounded-2xl bg-logo"
+          />
+        ) : null}
+        {entry.payment?.evidences?.map((evidence) => (
+          <Button
+            key={evidence.storageObjectId}
+            label="Xem chứng từ thanh toán"
+            onPress={async () => {
+              try {
+                await Linking.openURL(await getStorageViewUrl(evidence.storageObjectId));
+              } catch (e) {
+                setError(apiError(e));
+              }
+            }}
+          />
+        ))}
+        {!loading &&
+        !error &&
+        entry.payment?.payerId === userId &&
+        ['AWAITING_TRANSFER', 'REJECTED', 'OVERDUE'].includes(entry.status) ? (
+          <View className="mt-5 rounded-2xl border border-border bg-surface p-4">
+            <Text className="font-bold text-foreground">Báo chuyển khoản</Text>
+            <Text className="mt-2 text-sm leading-5 text-muted-foreground">
+              Chuyển đúng số tiền và nội dung ở trên. Chỉ báo sau khi ngân hàng xác nhận chuyển
+              thành công.
+            </Text>
+            <Field
+              label="Mã giao dịch ngân hàng (nếu có)"
+              value={reference}
+              onChangeText={setReference}
+              editable={!busy}
+              maxLength={100}
+            />
+            <Button
+              label={proof ? 'Chứng từ: ' + proof.fileName : 'Chọn chứng từ ảnh/PDF'}
+              onPress={chooseProof}
+              disabled={busy}
+            />
+            <Button
+              label="Tôi đã chuyển khoản"
+              busy={busy}
+              disabled={!proof}
+              onPress={() =>
+                showDialog(
+                  'Xác nhận khai báo',
+                  'Bạn xác nhận đã chuyển ' +
+                    money(entry.payment!.totalAmount) +
+                    ' với nội dung ' +
+                    entry.payment!.transferReference +
+                    '?',
+                  [
+                    { text: 'Chưa', style: 'cancel' },
+                    { text: 'Đã chuyển', onPress: () => void reportTransfer() },
+                  ]
+                )
+              }
+            />
+          </View>
+        ) : null}
+        {!loading &&
+        !error &&
+        entry.appointment &&
+        section === 'tenant-appointments' &&
+        ['PENDING', 'CONFIRMED'].includes(entry.status) &&
+        !entry.appointment.rescheduleRequested ? (
+          <Button label="Đề xuất đổi lịch" disabled={busy} onPress={() => setRescheduling(true)} />
+        ) : null}
+        {entry.actions.some((action) => action.needsReason) ? (
+          <Field
+            label="Lý do (bắt buộc khi từ chối/hủy/đối soát)"
+            value={reason}
+            onChangeText={setReason}
+            multiline
+            maxLength={500}
+            editable={!busy}
+          />
+        ) : null}
+        {entry.actions.map((option) => (
+          <Button
+            key={option.action}
+            label={option.label}
+            disabled={loading || Boolean(error) || (option.needsReason && !reason.trim())}
+            busy={busy}
+            danger={option.danger}
+            onPress={() =>
+              showDialog(
+                option.label,
+                option.action === 'accept'
+                  ? 'Chấp thuận sẽ giữ chỗ căn nhà và có thể hủy các yêu cầu cạnh tranh theo chính sách hệ thống. Tiếp tục?'
+                  : option.action === 'confirm-receipt'
+                    ? 'Chỉ xác nhận sau khi kiểm tra ngân hàng đã nhận đủ tiền. Tiếp tục?'
+                    : 'Xác nhận thao tác với “' + entry.title + '”?',
+                [
+                  { text: 'Quay lại', style: 'cancel' },
+                  {
+                    text: 'Xác nhận',
+                    style: option.danger ? 'destructive' : 'default',
+                    onPress: () => void act(option.action),
+                  },
+                ]
+              )
+            }
+          />
         ))}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-export default function ManagementScreen({ onSelectTab }: { onSelectTab: (tab: MainTab) => void }) {
-  const [role, setRole] = useState<ManagementRole>('tenant');
-  const [selectedItem, setSelectedItem] = useState<ManagementItem | null>(null);
-  const items = role === 'tenant' ? TENANT_ITEMS : LANDLORD_ITEMS;
-
-  if (selectedItem) {
-    return <DetailView item={selectedItem} onBack={() => setSelectedItem(null)} />;
-  }
-
+export default function ManagementScreen({
+  onSelectTab,
+  onOpenListing,
+  initialSection,
+}: {
+  onSelectTab: (tab: MainTab) => void;
+  onOpenListing: (id: string, own?: boolean, section?: ManagementSection) => void;
+  initialSection?: ManagementSection | null;
+}) {
+  const [role, setRole] = useState<'tenant' | 'landlord'>(
+    initialSection?.startsWith('landlord-') ? 'landlord' : 'tenant'
+  );
+  const [section, setSection] = useState<ManagementSection | null>(initialSection ?? null);
+  const [entry, setEntry] = useState<ManagementEntry | null>(null);
+  const [rows, setRows] = useState<ManagementEntry[]>([]);
+  const [userId, setUserId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [appointmentView, setAppointmentView] = useState<'calendar' | 'list'>('calendar');
+  const [appointmentFilter, setAppointmentFilter] = useState<AppointmentListFilter>('ALL');
+  const [calendarState, setCalendarState] = useState<CalendarState>(() => ({
+    view: 'month',
+    anchor: new Date(),
+    selected: dateKey(new Date()),
+  }));
+  const isAppointments = Boolean(section?.endsWith('-appointments'));
+  const showCalendar = isAppointments && appointmentView === 'calendar';
+  const listFilter = isAppointments && !showCalendar ? appointmentFilter : 'ALL';
+  const requestId = useRef(0);
+  const invalidateRequests = useCallback(() => {
+    requestId.current++;
+  }, []);
+  const load = useCallback(
+    async (nextPage = 1) => {
+      const ticket = ++requestId.current;
+      if (!section) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const profile = await getUserProfileApi();
+        const items = showCalendar
+          ? await getAppointmentCalendar(section.startsWith('landlord-'))
+          : null;
+        const data = items
+          ? { items, hasMore: false, total: items.length }
+          : await getManagementPage(section, nextPage, profile.id, listFilter);
+        if (ticket !== requestId.current) return;
+        setUserId(profile.id);
+        setRows((current) =>
+          nextPage === 1
+            ? data.items
+            : [
+                ...current.filter((item) => !data.items.some((next) => next.id === item.id)),
+                ...data.items,
+              ]
+        );
+        setPage(nextPage);
+        setHasMore(data.hasMore);
+        setTotal(data.total);
+      } catch (e) {
+        if (ticket === requestId.current) setError(apiError(e));
+      } finally {
+        if (ticket === requestId.current) setLoading(false);
+      }
+    },
+    [section, showCalendar, listFilter]
+  );
+  useEffect(() => {
+    setRows([]);
+    setHasMore(false);
+    setTotal(0);
+    void load();
+    return invalidateRequests;
+  }, [load, invalidateRequests]);
+  const title =
+    [...MENUS.tenant, ...MENUS.landlord].find((item) => item.section === section)?.title ||
+    'Quản lý';
+  if (entry && section)
+    return (
+      <EntryDetail
+        key={entry.id}
+        section={section}
+        initialEntry={entry}
+        userId={userId}
+        onBack={() => setEntry(null)}
+        onChanged={() => {
+          setEntry(null);
+          void load();
+        }}
+        onOpenListing={onOpenListing}
+      />
+    );
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8">
-        <View className="bg-brand px-5 pb-7 pt-3">
-          <Text className="text-xs font-semibold uppercase tracking-widest text-on-brand-muted">
-            HomeSpace
-          </Text>
-          <Text className="mt-1 text-2xl font-extrabold text-on-brand">Quản lý</Text>
-          <Text className="mt-2 text-sm leading-5 text-on-brand-muted">
-            Theo dõi hành trình thuê nhà ở cả hai vai trò.
+      {section ? (
+        <ScreenHeader title={title} onBack={() => setSection(null)} />
+      ) : (
+        <View className="bg-brand px-5 py-5">
+          <Text className="text-2xl font-bold text-on-brand">Quản lý</Text>
+          <Text className="mt-1 text-sm text-on-brand-muted">
+            Theo dõi thuê nhà và cho thuê trên HomeSpace
           </Text>
         </View>
-
-        <View className="-mt-4 px-5">
-          <View className="flex-row rounded-2xl border border-border bg-muted p-1.5 shadow-sm">
-            <RoleButton
-              active={role === 'tenant'}
-              icon="key-outline"
-              label="Người thuê"
-              onPress={() => setRole('tenant')}
-            />
-            <RoleButton
-              active={role === 'landlord'}
-              icon="business-outline"
-              label="Cho thuê"
-              onPress={() => setRole('landlord')}
-            />
-          </View>
-
-          <View className="mt-6 flex-row items-end justify-between">
-            <View className="flex-1">
-              <Text className="text-lg font-extrabold text-foreground">
-                {role === 'tenant' ? 'Quản lý đi thuê' : 'Quản lý cho thuê'}
-              </Text>
-              <Text className="mt-1 text-xs leading-5 text-muted-foreground">
-                {role === 'tenant'
-                  ? 'Lịch xem, yêu cầu thuê và khoản cần thanh toán.'
-                  : 'Nhà cho thuê, lịch hẹn và yêu cầu từ khách.'}
-              </Text>
-            </View>
-            <View className="rounded-full bg-primary-soft px-3 py-1.5">
-              <Text className="text-xs font-bold text-primary">{items.length} mục</Text>
-            </View>
-          </View>
-
-          <View className="mt-4 overflow-hidden rounded-3xl border border-border bg-surface shadow-sm">
-            {items.map((item, index) => (
-              <Pressable
-                key={item.id}
-                onPress={() => setSelectedItem(item)}
-                accessibilityRole="button"
-                accessibilityLabel={`Mở ${item.title}`}
-                className={`flex-row items-center px-4 py-4 ${index < items.length - 1 ? 'border-b border-border' : ''}`}>
-                <View className="h-12 w-12 items-center justify-center rounded-2xl bg-primary-soft">
-                  <Ionicons name={item.icon} size={23} className="text-primary" />
-                </View>
-                <View className="ml-3 flex-1">
-                  <Text className="text-sm font-extrabold text-foreground">{item.title}</Text>
-                  <Text className="mt-1 text-xs leading-4 text-muted-foreground">
-                    {item.description}
+      )}
+      <ScrollView
+        contentContainerClassName="px-5 pb-8 pt-5"
+        refreshControl={
+          section ? <RefreshControl refreshing={loading} onRefresh={() => load()} /> : undefined
+        }>
+        {!section ? (
+          <>
+            <View className="flex-row gap-2">
+              {(['tenant', 'landlord'] as const).map((value) => (
+                <Pressable
+                  key={value}
+                  onPress={() => setRole(value)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: value === role }}
+                  className={
+                    value === role
+                      ? 'min-h-12 flex-1 items-center justify-center rounded-xl border border-primary bg-primary-soft'
+                      : 'min-h-12 flex-1 items-center justify-center rounded-xl border border-border bg-surface'
+                  }>
+                  <Text
+                    className={
+                      value === role ? 'font-bold text-primary' : 'font-bold text-secondary'
+                    }>
+                    {value === 'tenant' ? 'Người thuê' : 'Cho thuê'}
                   </Text>
-                </View>
-                {item.count > 0 ? (
-                  <View className="mr-2 min-w-7 items-center rounded-full bg-danger-soft px-2 py-1">
-                    <Text className="text-xs font-extrabold text-danger">{item.count}</Text>
-                  </View>
-                ) : null}
-                <Ionicons name="chevron-forward" size={19} className="text-subtle" />
+                </Pressable>
+              ))}
+            </View>
+            {MENUS[role].map((item) => (
+              <Pressable
+                key={item.section}
+                onPress={() => setSection(item.section)}
+                accessibilityRole="button"
+                className="mt-3 flex-row items-center rounded-2xl border border-border bg-surface p-4">
+                <Icon name={item.icon} size={25} className="text-primary" />
+                <Text className="ml-3 flex-1 font-bold text-foreground">{item.title}</Text>
+                <Icon name="chevron-forward" size={20} className="text-subtle" />
               </Pressable>
             ))}
-          </View>
-        </View>
+          </>
+        ) : (
+          <>
+            {isAppointments ? (
+              <View className="mb-4 flex-row gap-2" accessibilityRole="tablist">
+                {(['calendar', 'list'] as const).map((mode) => (
+                  <Pressable
+                    key={mode}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: appointmentView === mode }}
+                    onPress={() => setAppointmentView(mode)}
+                    className={`min-h-12 flex-1 flex-row items-center justify-center gap-2 rounded-xl border ${appointmentView === mode ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
+                    <Icon
+                      name={mode === 'calendar' ? 'calendar-outline' : 'list-outline'}
+                      size={19}
+                      className={appointmentView === mode ? 'text-primary' : 'text-secondary'}
+                    />
+                    <Text
+                      className={
+                        appointmentView === mode
+                          ? 'font-bold text-primary'
+                          : 'font-semibold text-secondary'
+                      }>
+                      {mode === 'calendar' ? 'Lịch' : 'Danh sách'}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+            {isAppointments && !showCalendar ? (
+              <View className="mb-4">
+                <View className="flex-row gap-2" accessibilityRole="tablist">
+                  {(
+                    [
+                      { value: 'ALL', label: 'Tất cả' },
+                      { value: 'UNVIEWED', label: 'Chưa xem' },
+                      { value: 'COMPLETED', label: 'Hoàn thành' },
+                    ] as const
+                  ).map((option) => (
+                    <Pressable
+                      key={option.value}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: appointmentFilter === option.value }}
+                      onPress={() => setAppointmentFilter(option.value)}
+                      className={`min-h-11 flex-1 items-center justify-center rounded-full border px-2 ${appointmentFilter === option.value ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
+                      <Text
+                        className={
+                          appointmentFilter === option.value
+                            ? 'text-xs font-bold text-primary'
+                            : 'text-xs font-semibold text-secondary'
+                        }>
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                {appointmentFilter === 'UNVIEWED' ? (
+                  <Text className="mt-2 text-xs text-muted-foreground">
+                    Lịch đang chờ duyệt hoặc đã xác nhận, chưa xem xong.
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+            <ErrorNotice message={error} />
+            {error ? <Button label="Thử lại" onPress={() => load()} disabled={loading} /> : null}
+            {showCalendar ? (
+              <AppointmentCalendar
+                state={calendarState}
+                onChange={setCalendarState}
+                rows={rows}
+                loading={loading}
+                owner={section!.startsWith('landlord-')}
+                onSelect={setEntry}
+              />
+            ) : (
+              <>
+                <Text className="mb-3 text-sm text-muted-foreground">
+                  {total} {isAppointments ? 'lịch hẹn' : 'mục'}
+                </Text>
+                {rows.map((row) => (
+                  <Pressable
+                    key={row.id}
+                    onPress={() => setEntry(row)}
+                    accessibilityRole="button"
+                    className="mb-3 rounded-2xl border border-border bg-surface p-4">
+                    <Text className="font-bold text-foreground">{row.title}</Text>
+                    <Text className="mt-2 text-xs text-primary">{statusLabel(row.status)}</Text>
+                    <Text className="mt-1 text-xs text-muted-foreground">{row.fields[0]?.[1]}</Text>
+                    {row.appointment ? (
+                      <Text className="mt-2 text-xs font-semibold text-secondary">
+                        {row.appointment.appointmentDate.split('-').reverse().join('/')} ·{' '}
+                        {row.appointment.startTime.slice(0, 5)}–
+                        {row.appointment.endTime.slice(0, 5)}
+                      </Text>
+                    ) : null}
+                  </Pressable>
+                ))}
+              </>
+            )}
+            {loading ? (
+              <ActivityIndicator className="my-6 text-primary" />
+            ) : !showCalendar && !rows.length && !error ? (
+              <Text className="py-10 text-center text-muted-foreground">
+                {isAppointments && listFilter === 'UNVIEWED'
+                  ? 'Không có lịch chưa xem.'
+                  : isAppointments && listFilter === 'COMPLETED'
+                    ? 'Chưa có lịch hoàn thành.'
+                    : 'Chưa có dữ liệu trong mục này.'}
+              </Text>
+            ) : null}
+            {hasMore ? (
+              <Button label="Tải thêm" onPress={() => load(page + 1)} disabled={loading} />
+            ) : null}
+          </>
+        )}
       </ScrollView>
-
       <BottomTabBar active="management" onSelect={onSelectTab} />
     </SafeAreaView>
   );
