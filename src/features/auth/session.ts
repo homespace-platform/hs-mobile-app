@@ -72,7 +72,10 @@ export const exchangeAuthorizationCode = async (code: string, codeVerifier: stri
 };
 
 export const loginWithPassword = async (username: string, password: string) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
   const response = await fetch(discovery.tokenEndpoint!, {
+    signal: controller.signal,
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -82,7 +85,15 @@ export const loginWithPassword = async (username: string, password: string) => {
       password,
       scope: authScopes.join(' '),
     }).toString(),
-  });
+  })
+    .catch(() => {
+      throw new Error(
+        controller.signal.aborted
+          ? 'Máy chủ đăng nhập phản hồi quá lâu. Vui lòng thử lại.'
+          : 'Không kết nối được máy chủ đăng nhập. Kiểm tra kết nối mạng và thử lại.'
+      );
+    })
+    .finally(() => clearTimeout(timeout));
 
   const payload = (await response.json().catch(() => null)) as {
     access_token?: string;

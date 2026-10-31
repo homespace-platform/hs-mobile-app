@@ -1,7 +1,7 @@
 import type { DiscoveryDocument } from 'expo-auth-session';
 import { makeRedirectUri } from 'expo-auth-session';
 
-import { keycloakConfig } from '@/config/env';
+import { apiTransportUrl, keycloakConfig } from '@/config/env';
 
 const oidcBaseUrl = `${keycloakConfig.baseUrl}/realms/${keycloakConfig.realm}/protocol/openid-connect`;
 
@@ -9,9 +9,9 @@ export const registrationEndpoint = `${oidcBaseUrl}/registrations`;
 
 export const discovery: DiscoveryDocument = {
   authorizationEndpoint: `${oidcBaseUrl}/auth`,
-  tokenEndpoint: `${oidcBaseUrl}/token`,
-  revocationEndpoint: `${oidcBaseUrl}/revoke`,
-  userInfoEndpoint: `${oidcBaseUrl}/userinfo`,
+  tokenEndpoint: apiTransportUrl(`${oidcBaseUrl}/token`),
+  revocationEndpoint: apiTransportUrl(`${oidcBaseUrl}/revoke`),
+  userInfoEndpoint: apiTransportUrl(`${oidcBaseUrl}/userinfo`),
   endSessionEndpoint: `${oidcBaseUrl}/logout`,
 };
 
