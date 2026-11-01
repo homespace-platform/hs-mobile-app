@@ -1,4 +1,7 @@
 import axiosClient from '@/lib/axios-client';
+import * as SecureStore from 'expo-secure-store';
+import { getAccessToken } from '@/features/auth/session';
+import { getUserProfileApi } from '@/services/userApi';
 import type { ApiResponse, PageResponse } from '@/types/api';
 
 export type ManagementSection =
@@ -54,6 +57,7 @@ export type ManagementEntry = {
   fields: [string, string][];
   actions: ActionOption[];
   appointment?: Appointment;
+  rentalRequest?: RentalRequest;
   payment?: Payment;
 };
 export type Appointment = {
@@ -75,6 +79,9 @@ export type Appointment = {
   proposedDate?: string | null;
   proposedStartTime?: string | null;
   proposedEndTime?: string | null;
+  cancelledBy?: 'RENTER' | 'OWNER' | 'SYSTEM' | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 export type RentalRequest = {
   id: string;
@@ -86,6 +93,8 @@ export type RentalRequest = {
   renterPhone: string;
   moveInDate: string;
   createdAt?: string | null;
+  acceptedAt?: string | null;
+  updatedAt?: string | null;
   leaseMonths: number;
   occupantCount: number;
   monthlyRentPrice: number;
@@ -261,6 +270,7 @@ export function rentalEntry(row: RentalRequest, owner: boolean): ManagementEntry
     listingId: row.listingId,
     status: row.status,
     date: row.createdAt,
+    rentalRequest: row,
     actions,
     fields: [
       ['Địa chỉ', row.listingAddress],
@@ -449,57 +459,196 @@ export async function getManagementPage(
 
 export async function getRentalRequestCounts(owner: boolean) {
   const endpoint = `/api/v1/rental-requests/${owner ? 'owner' : 'my-requests'}`;
-  return Promise.all(
-    RENTAL_REQUEST_STATUSES.map(async (status) => {
-      const response = await axiosClient.get<PageResponse<RentalRequest>>(endpoint, {
-        params: { page: 1, size: 1, status },
-      });
-      return { status, count: response.data.totalElements };
-    })
-  );
+  const counts = new Map<string, number>();
+  let page = 1;
+  let hasMore: boolean;
+  do {
+    const response = await axiosClient.get<PageResponse<RentalRequest>>(endpoint, {
+      params: { page, size: 50 },
+    });
+    for (const row of response.data.result)
+      counts.set(row.status, (counts.get(row.status) ?? 0) + 1);
+    hasMore = response.data.hasMore;
+    page++;
+  } while (hasMore);
+  return RENTAL_REQUEST_STATUSES.map((status) => ({ status, count: counts.get(status) ?? 0 }));
 }
 
 let managementAttentionCache: Partial<Record<ManagementSection, number>> | null = null;
 let managementAttentionCacheAt = 0;
+let managementAttentionCacheToken = '';
 let managementAttentionRequest: Promise<Partial<Record<ManagementSection, number>>> | null = null;
+let managementAttentionRequestToken = '';
+let managementAttentionUserId = '';
+// shortcut: Seen state is device-local until the API supports per-user read receipts.
+const seenNotices = new Map<string, string>();
 
-export async function getManagementAttentionCounts(forceRefresh = false) {
-  if (!forceRefresh && managementAttentionCache && Date.now() - managementAttentionCacheAt < 30_000)
-    return managementAttentionCache;
-  if (managementAttentionRequest) return managementAttentionRequest;
-  managementAttentionRequest = loadManagementAttentionCounts();
+function appointmentNoticeVersion(row: Appointment, owner: boolean) {
+  const incoming = owner
+    ? row.status === 'PENDING' ||
+      row.rescheduleRequested ||
+      (row.status === 'CANCELLED' && row.cancelledBy === 'RENTER')
+    : !row.rescheduleRequested &&
+      (['CONFIRMED', 'REJECTED', 'COMPLETED'].includes(row.status) ||
+        (row.status === 'CANCELLED' && row.cancelledBy === 'OWNER'));
+  return incoming ? (row.updatedAt ?? row.createdAt ?? row.status) : null;
+}
+
+function rentalNoticeVersion(row: RentalRequest, owner: boolean) {
+  if (owner) {
+    if (row.status === 'PENDING') return row.createdAt ?? row.status;
+    if (row.status === 'CANCELLED_BY_RENTER') return row.updatedAt ?? row.status;
+  } else {
+    if (row.status === 'ACCEPTED') return row.acceptedAt ?? row.updatedAt ?? row.status;
+    if (['REJECTED', 'CANCELLED_BY_OWNER'].includes(row.status)) return row.updatedAt ?? row.status;
+  }
+  return null;
+}
+
+function noticeSeenKey(userId: string, kind: 'appointment' | 'rental', id: string) {
+  return `homespace.${kind}Seen.${userId}.${id}`;
+}
+
+async function readNoticeSeen(key: string) {
+  if (seenNotices.has(key)) return seenNotices.get(key);
   try {
-    managementAttentionCache = await managementAttentionRequest;
-    managementAttentionCacheAt = Date.now();
-    return managementAttentionCache;
-  } finally {
-    managementAttentionRequest = null;
+    return await SecureStore.getItemAsync(key);
+  } catch {
+    return null;
   }
 }
 
-async function loadManagementAttentionCounts() {
+async function markNoticeSeen(key: string, version: string | null) {
+  if (!version) return false;
+  seenNotices.set(key, version);
+  managementAttentionCache = null;
+  managementAttentionRequest = null;
+  try {
+    await SecureStore.setItemAsync(key, version);
+  } catch {
+    // Keep the seen state for this session if secure storage is unavailable.
+  }
+  return true;
+}
+
+export async function markAppointmentNoticeSeen(row: Appointment, owner: boolean, userId: string) {
+  return userId
+    ? markNoticeSeen(
+        noticeSeenKey(userId, 'appointment', row.id),
+        appointmentNoticeVersion(row, owner)
+      )
+    : false;
+}
+
+export async function markRentalNoticeSeen(row: RentalRequest, owner: boolean, userId: string) {
+  return userId
+    ? markNoticeSeen(noticeSeenKey(userId, 'rental', row.id), rentalNoticeVersion(row, owner))
+    : false;
+}
+
+async function incomingAttentionCount<T extends { id: string }>(
+  endpoint: string,
+  userId: string,
+  kind: 'appointment' | 'rental',
+  versionOf: (row: T) => string | null
+) {
+  if (!userId) return 0;
+  let page = 1;
+  let count = 0;
+  let hasMore: boolean;
+  do {
+    const response = await axiosClient.get<PageResponse<T>>(endpoint, {
+      params: { page, size: 50 },
+    });
+    const incoming = response.data.result
+      .map((row) => ({ row, version: versionOf(row) }))
+      .filter((item): item is { row: T; version: string } => item.version !== null);
+    const seen = await Promise.all(
+      incoming.map((item) => readNoticeSeen(noticeSeenKey(userId, kind, item.row.id)))
+    );
+    count += incoming.filter((item, index) => seen[index] !== item.version).length;
+    hasMore = response.data.hasMore;
+    page++;
+  } while (hasMore);
+  return count;
+}
+
+export async function getManagementAttentionCounts(forceRefresh = false) {
+  const token = await getAccessToken();
+  if (!token) return {};
+  if (
+    !forceRefresh &&
+    managementAttentionCacheToken === token &&
+    managementAttentionCache &&
+    Date.now() - managementAttentionCacheAt < 30_000
+  )
+    return managementAttentionCache;
+  if (managementAttentionRequest && managementAttentionRequestToken === token)
+    return managementAttentionRequest;
+  const userId = await getUserProfileApi()
+    .then((profile) => profile.id)
+    .catch(() => '');
+  if (
+    !forceRefresh &&
+    managementAttentionUserId === userId &&
+    managementAttentionCache &&
+    Date.now() - managementAttentionCacheAt < 30_000
+  ) {
+    managementAttentionCacheToken = token;
+    return managementAttentionCache;
+  }
+  if (managementAttentionRequest && managementAttentionRequestToken === token)
+    return managementAttentionRequest;
+  const request = loadManagementAttentionCounts(userId);
+  managementAttentionRequest = request;
+  managementAttentionRequestToken = token;
+  try {
+    const counts = await request;
+    if (managementAttentionRequest === request) {
+      managementAttentionCache = counts;
+      managementAttentionCacheAt = Date.now();
+      managementAttentionCacheToken = token;
+      managementAttentionUserId = userId;
+    }
+    return counts;
+  } finally {
+    if (managementAttentionRequest === request) managementAttentionRequest = null;
+  }
+}
+
+async function loadManagementAttentionCounts(userId: string) {
   const counts: Partial<Record<ManagementSection, number>> = {};
-  const pendingCount = (endpoint: string) =>
-    axiosClient
-      .get<PageResponse<unknown>>(endpoint, { params: { page: 1, size: 1, status: 'PENDING' } })
-      .then((response) => response.data.totalElements)
-      .catch(() => 0);
-  const [tenantAppointments, landlordAppointments, tenantRequests, landlordRequests, listings] =
+  const [tenantAppointments, landlordAppointments, tenantRequests, landlordRequests] =
     await Promise.all([
-      pendingCount('/api/v1/appointments/my-bookings'),
-      pendingCount('/api/v1/appointments/owner'),
-      pendingCount('/api/v1/rental-requests/my-requests'),
-      pendingCount('/api/v1/rental-requests/owner'),
-      axiosClient
-        .get<ApiResponse<Record<string, number>>>('/api/v1/listings/me/counts')
-        .then((response) => response.data.result?.PENDING_REVIEW ?? 0)
-        .catch(() => 0),
+      incomingAttentionCount<Appointment>(
+        '/api/v1/appointments/my-bookings',
+        userId,
+        'appointment',
+        (row) => appointmentNoticeVersion(row, false)
+      ).catch(() => 0),
+      incomingAttentionCount<Appointment>(
+        '/api/v1/appointments/owner',
+        userId,
+        'appointment',
+        (row) => appointmentNoticeVersion(row, true)
+      ).catch(() => 0),
+      incomingAttentionCount<RentalRequest>(
+        '/api/v1/rental-requests/my-requests',
+        userId,
+        'rental',
+        (row) => rentalNoticeVersion(row, false)
+      ).catch(() => 0),
+      incomingAttentionCount<RentalRequest>(
+        '/api/v1/rental-requests/owner',
+        userId,
+        'rental',
+        (row) => rentalNoticeVersion(row, true)
+      ).catch(() => 0),
     ]);
   counts['tenant-appointments'] = tenantAppointments;
   counts['landlord-appointments'] = landlordAppointments;
   counts['tenant-requests'] = tenantRequests;
   counts['landlord-requests'] = landlordRequests;
-  counts['landlord-properties'] = listings;
   return counts;
 }
 

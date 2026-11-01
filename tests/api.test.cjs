@@ -22,8 +22,12 @@ function load(file, dependencies = {}, globals = {}) {
     URLSearchParams,
     ...globals,
     require(name) {
-      assert.ok(name in dependencies, `Unexpected dependency ${name}`);
-      return dependencies[name];
+      if (name in dependencies) return dependencies[name];
+      if (name === 'expo-secure-store')
+        return { getItemAsync: async () => null, setItemAsync: async () => {} };
+      if (name === '@/services/userApi') return { getUserProfileApi: async () => ({ id: 'user' }) };
+      if (name === '@/features/auth/session') return { getAccessToken: async () => 'token' };
+      assert.fail(`Unexpected dependency ${name}`);
     },
   });
   return module.exports;
@@ -99,7 +103,7 @@ test('each management menu calls its real endpoint and preserves pagination', as
   }
 });
 
-test('rental request tabs count each status and fetch only the selected status', async () => {
+test('rental request tabs count all statuses with paginated requests and fetch the selected status', async () => {
   for (const [section, endpoint] of [
     ['tenant-requests', '/api/v1/rental-requests/my-requests'],
     ['landlord-requests', '/api/v1/rental-requests/owner'],
@@ -110,26 +114,102 @@ test('rental request tabs count each status and fetch only the selected status',
         calls.push({ path, params: options.params });
         return {
           data: {
-            result: [],
-            hasMore: false,
-            totalElements: options.params.status === 'ACCEPTED' ? 2 : 0,
+            result: options.params.status
+              ? []
+              : options.params.page === 1
+                ? [{ status: 'ACCEPTED' }, { status: 'PENDING' }]
+                : [{ status: 'ACCEPTED' }],
+            hasMore: !options.params.status && options.params.page === 1,
+            totalElements: 3,
           },
         };
       },
     };
     const api = load('services/managementApi.ts', { '@/lib/axios-client': client });
     const counts = await api.getRentalRequestCounts(section.startsWith('landlord-'));
-    assert.equal(calls.length, api.RENTAL_REQUEST_STATUSES.length);
-    assert.ok(calls.every((call) => call.path === endpoint && call.params.size === 1));
+    assert.equal(calls.length, 2);
+    assert.ok(calls.every((call) => call.path === endpoint && call.params.size === 50));
+    assert.deepEqual(
+      calls.map((call) => call.params.page),
+      [1, 2]
+    );
     assert.deepEqual(
       Array.from(counts, (item) => item.status),
       Array.from(api.RENTAL_REQUEST_STATUSES)
     );
-    assert.equal(counts.find((item) => item.status === 'PENDING').count, 0);
-    assert.equal(counts.find((item) => item.count > 0).status, 'ACCEPTED');
+    assert.equal(counts.find((item) => item.status === 'PENDING').count, 1);
+    assert.equal(counts.find((item) => item.status === 'ACCEPTED').count, 2);
     await api.getManagementPage(section, 2, 'user', 'ALL', 'ACCEPTED');
     assert.deepEqual({ ...calls.at(-1).params }, { page: 2, size: 12, status: 'ACCEPTED' });
   }
+});
+
+test('management badges reuse fresh counts across tabs and reload for another account', async () => {
+  let token = 'account-a';
+  let userId = 'user-a';
+  let profileCalls = 0;
+  let attentionCalls = 0;
+  const api = load('services/managementApi.ts', {
+    '@/lib/axios-client': {
+      async get() {
+        attentionCalls++;
+        return { data: { result: [], hasMore: false } };
+      },
+    },
+    '@/features/auth/session': { getAccessToken: async () => token },
+    '@/services/userApi': {
+      getUserProfileApi: async () => {
+        profileCalls++;
+        return { id: userId };
+      },
+    },
+  });
+  await api.getManagementAttentionCounts();
+  await api.getManagementAttentionCounts();
+  assert.equal(profileCalls, 1);
+  assert.equal(attentionCalls, 4);
+  token = 'account-b';
+  userId = 'user-b';
+  await api.getManagementAttentionCounts();
+  assert.equal(profileCalls, 2);
+  assert.equal(attentionCalls, 8);
+});
+
+test('concurrent profile readers share one request and recent profile visits use cached data', async () => {
+  let resolveProfile;
+  let calls = 0;
+  let token = 'account-a';
+  const user = load('services/userApi.ts', {
+    '@/features/auth/session': { getAccessToken: async () => token },
+    '@/lib/axios-client': {
+      get: () => {
+        calls++;
+        return new Promise((resolve) => {
+          resolveProfile = resolve;
+        });
+      },
+    },
+  });
+  const first = user.getUserProfileApi();
+  const second = user.getUserProfileApi();
+  await new Promise(setImmediate);
+  assert.equal(calls, 1);
+  resolveProfile({ data: { result: { id: 'user' } } });
+  assert.equal((await first).id, 'user');
+  assert.equal((await second).id, 'user');
+  assert.equal((await user.getUserProfileApi()).id, 'user');
+  assert.equal(calls, 1);
+  const third = user.getUserProfileApi(true);
+  await new Promise(setImmediate);
+  assert.equal(calls, 2);
+  resolveProfile({ data: { result: { id: 'user' } } });
+  await third;
+  token = 'account-b';
+  const fourth = user.getUserProfileApi();
+  await new Promise(setImmediate);
+  assert.equal(calls, 3);
+  resolveProfile({ data: { result: { id: 'other-user' } } });
+  assert.equal((await fourth).id, 'other-user');
 });
 
 test('payment menus distinguish rent and refunds by actor and direction', async () => {

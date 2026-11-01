@@ -33,6 +33,8 @@ import {
   getRentalRequestCounts,
   getAppointmentCalendar,
   getManagementAttentionCounts,
+  markAppointmentNoticeSeen,
+  markRentalNoticeSeen,
   performManagementAction,
   paymentEntry,
   refreshManagementEntry,
@@ -528,7 +530,6 @@ export default function ManagementScreen({
     (attentionCounts['tenant-appointments'] ?? 0) > 0 ||
     (attentionCounts['tenant-requests'] ?? 0) > 0;
   const landlordHasAttention =
-    (attentionCounts['landlord-properties'] ?? 0) > 0 ||
     (attentionCounts['landlord-appointments'] ?? 0) > 0 ||
     (attentionCounts['landlord-requests'] ?? 0) > 0;
   const statusOptions = Array.from(new Set(rows.map((row) => row.status))).sort((a, b) =>
@@ -554,7 +555,22 @@ export default function ManagementScreen({
   const invalidateRequests = useCallback(() => {
     requestId.current++;
   }, []);
+  function openEntry(row: ManagementEntry) {
+    setEntry(row);
+    if (!userId) return;
+    const owner = section?.startsWith('landlord-') ?? false;
+    const seen = row.appointment
+      ? markAppointmentNoticeSeen(row.appointment, owner, userId)
+      : row.rentalRequest
+        ? markRentalNoticeSeen(row.rentalRequest, owner, userId)
+        : null;
+    if (seen)
+      void seen.then((changed) => {
+        if (changed) setAttentionRefresh((current) => current + 1);
+      });
+  }
   useEffect(() => {
+    if (section) return;
     let active = true;
     void getManagementAttentionCounts(attentionRefresh > 0).then((counts) => {
       if (active) setAttentionCounts(counts);
@@ -562,7 +578,7 @@ export default function ManagementScreen({
     return () => {
       active = false;
     };
-  }, [attentionRefresh]);
+  }, [attentionRefresh, section]);
   useEffect(() => {
     if (!section?.endsWith('-requests')) return;
     let active = true;
@@ -927,7 +943,7 @@ export default function ManagementScreen({
                 rows={rows}
                 loading={loading}
                 owner={section!.startsWith('landlord-')}
-                onSelect={setEntry}
+                onSelect={openEntry}
               />
             ) : (
               <>
@@ -939,7 +955,7 @@ export default function ManagementScreen({
                 {visibleRows.map((row) => (
                   <Pressable
                     key={row.id}
-                    onPress={() => setEntry(row)}
+                    onPress={() => openEntry(row)}
                     accessibilityRole="button"
                     className={`mb-3 rounded-2xl border bg-surface p-4 ${isRequests ? `border-l-4 ${requestTone(row.status).border}` : isAppointments ? `border-l-4 ${appointmentTone(row.status).border}` : 'border-border'}`}>
                     <View className="flex-row items-start gap-3">
