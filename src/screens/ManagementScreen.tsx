@@ -7,6 +7,7 @@ import {
   RefreshControl,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -78,6 +79,15 @@ function requestTone(status: string) {
   if (status === 'COMPLETED') return REQUEST_TONES.primary;
   if (status === 'REJECTED') return REQUEST_TONES.danger;
   return REQUEST_TONES.neutral;
+}
+
+function normalizeSearch(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLocaleLowerCase('vi');
 }
 
 function EntryDetail({
@@ -393,6 +403,8 @@ export default function ManagementScreen({
   const [requestCountsVersion, setRequestCountsVersion] = useState(0);
   const [appointmentView, setAppointmentView] = useState<'calendar' | 'list'>('calendar');
   const [appointmentFilter, setAppointmentFilter] = useState<AppointmentListFilter>('ALL');
+  const [listQuery, setListQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [calendarState, setCalendarState] = useState<CalendarState>(() => ({
     view: 'month',
     anchor: new Date(),
@@ -405,6 +417,21 @@ export default function ManagementScreen({
     requestCounts?.section === section ? requestCounts.items.filter((item) => item.count > 0) : [];
   const showCalendar = isAppointments && appointmentView === 'calendar';
   const listFilter = isAppointments && !showCalendar ? appointmentFilter : 'ALL';
+  const statusOptions = Array.from(new Set(rows.map((row) => row.status))).sort((a, b) =>
+    statusLabel(a).localeCompare(statusLabel(b), 'vi')
+  );
+  const normalizedQuery = normalizeSearch(listQuery.trim());
+  const visibleRows = rows.filter((row) => {
+    if (statusFilter && row.status !== statusFilter) return false;
+    if (!normalizedQuery) return true;
+    return normalizeSearch(
+      [
+        row.title,
+        statusLabel(row.status),
+        ...row.fields.flatMap(([label, value]) => [label, value]),
+      ].join(' ')
+    ).includes(normalizedQuery);
+  });
   const requestId = useRef(0);
   const invalidateRequests = useCallback(() => {
     requestId.current++;
@@ -478,6 +505,8 @@ export default function ManagementScreen({
   );
   useEffect(() => {
     setRows([]);
+    setListQuery('');
+    setStatusFilter(null);
     setHasMore(false);
     setTotal(0);
     void load();
@@ -671,6 +700,54 @@ export default function ManagementScreen({
                 })}
               </ScrollView>
             ) : null}
+            {!showCalendar ? (
+              <>
+                <View className="mb-3 min-h-12 flex-row items-center rounded-xl border border-border bg-surface px-3">
+                  <Icon name="search-outline" size={19} className="text-subtle" />
+                  <TextInput
+                    value={listQuery}
+                    onChangeText={setListQuery}
+                    placeholder="Tìm theo tên, mã, địa chỉ hoặc trạng thái"
+                    returnKeyType="search"
+                    accessibilityLabel="Tìm kiếm trong danh sách quản lý"
+                    className="ml-2 min-h-12 flex-1 py-2 text-sm text-foreground placeholder:text-subtle"
+                  />
+                  {listQuery ? (
+                    <Pressable
+                      onPress={() => setListQuery('')}
+                      accessibilityRole="button"
+                      accessibilityLabel="Xóa nội dung tìm kiếm"
+                      className="min-h-10 min-w-10 items-center justify-center">
+                      <Icon name="close-circle" size={19} className="text-subtle" />
+                    </Pressable>
+                  ) : null}
+                </View>
+                {!isRequests && !isAppointments && statusOptions.length > 1 ? (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    className="mb-4"
+                    accessibilityRole="tablist">
+                    {[null, ...statusOptions].map((status) => {
+                      const selected = statusFilter === status;
+                      return (
+                        <Pressable
+                          key={status ?? 'ALL'}
+                          accessibilityRole="tab"
+                          accessibilityState={{ selected }}
+                          onPress={() => setStatusFilter(status)}
+                          className={`mr-2 min-h-11 flex-row items-center gap-2 rounded-full border px-4 ${selected ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
+                          <Text
+                            className={`text-sm font-semibold ${selected ? 'text-primary' : 'text-secondary'}`}>
+                            {status ? statusLabel(status) : 'Tất cả'}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                ) : null}
+              </>
+            ) : null}
             <ErrorNotice message={isRequests ? requestCountsError : null} />
             {isRequests && requestCountsError ? (
               <Button
@@ -691,12 +768,12 @@ export default function ManagementScreen({
               />
             ) : (
               <>
-                {!isRequests ? (
-                  <Text className="mb-3 text-sm text-muted-foreground">
-                    {total} {isAppointments ? 'lịch hẹn' : 'mục'}
-                  </Text>
-                ) : null}
-                {rows.map((row) => (
+                <Text className="mb-3 text-sm text-muted-foreground">
+                  {visibleRows.length}
+                  {listQuery || statusFilter ? ` / ${total}` : ''}{' '}
+                  {isRequests ? 'yêu cầu' : isAppointments ? 'lịch hẹn' : 'mục'}
+                </Text>
+                {visibleRows.map((row) => (
                   <Pressable
                     key={row.id}
                     onPress={() => setEntry(row)}
@@ -739,17 +816,24 @@ export default function ManagementScreen({
             )}
             {loading || (isRequests && requestCountsLoading) ? (
               <ActivityIndicator className="my-6 text-primary" />
-            ) : !showCalendar && !rows.length && !error && !(isRequests && requestCountsError) ? (
+            ) : !showCalendar &&
+              !visibleRows.length &&
+              !error &&
+              !(isRequests && requestCountsError) ? (
               <Text className="py-10 text-center text-muted-foreground">
-                {isRequests
-                  ? requestStatus
-                    ? `Chưa có yêu cầu ${statusLabel(requestStatus).toLowerCase()}.`
-                    : 'Chưa có yêu cầu thuê nào.'
-                  : isAppointments && listFilter === 'UNVIEWED'
-                    ? 'Không có lịch chưa xem.'
-                    : isAppointments && listFilter === 'COMPLETED'
-                      ? 'Chưa có lịch hoàn thành.'
-                      : 'Chưa có dữ liệu trong mục này.'}
+                {listQuery || statusFilter
+                  ? hasMore
+                    ? 'Chưa tìm thấy mục phù hợp trong phần đã tải. Hãy tải thêm để tìm tiếp.'
+                    : 'Không tìm thấy mục phù hợp với bộ lọc.'
+                  : isRequests
+                    ? requestStatus
+                      ? `Chưa có yêu cầu ${statusLabel(requestStatus).toLowerCase()}.`
+                      : 'Chưa có yêu cầu thuê nào.'
+                    : isAppointments && listFilter === 'UNVIEWED'
+                      ? 'Không có lịch chưa xem.'
+                      : isAppointments && listFilter === 'COMPLETED'
+                        ? 'Chưa có lịch hoàn thành.'
+                        : 'Chưa có dữ liệu trong mục này.'}
               </Text>
             ) : null}
             {hasMore ? (

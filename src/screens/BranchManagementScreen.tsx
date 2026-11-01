@@ -51,6 +51,15 @@ const paidMethods = new Set([
   'PER_VEHICLE_MONTH',
 ]);
 
+function normalizeSearch(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLocaleLowerCase('vi');
+}
+
 function Options({
   label,
   options,
@@ -89,6 +98,10 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
   const scrollRef = useRef<ScrollView>(null);
   const [mode, setMode] = useState<'list' | 'detail' | 'form'>('list');
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchQuery, setBranchQuery] = useState('');
+  const [branchCompleteness, setBranchCompleteness] = useState<'all' | 'complete' | 'incomplete'>(
+    'all'
+  );
   const [selected, setSelected] = useState<Branch | null>(null);
   const [form, setForm] = useState<BranchFormState>(() => branchForm());
   const [step, setStep] = useState(0);
@@ -108,6 +121,23 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
     form.charges.INTERNET.method === 'NOT_APPLICABLE' && 'Internet / WiFi',
     form.charges.SERVICE_OR_GARBAGE.method === 'NOT_APPLICABLE' && 'phí rác & vệ sinh',
   ].filter(Boolean);
+  const filteredBranches = branches.filter((branch) => {
+    if (branchCompleteness === 'complete' && branch.isComplete === false) return false;
+    if (branchCompleteness === 'incomplete' && branch.isComplete !== false) return false;
+    const query = normalizeSearch(branchQuery.trim());
+    return (
+      !query ||
+      normalizeSearch(
+        [
+          branch.name,
+          branch.code,
+          CATEGORY_NAMES[branch.category],
+          branch.display,
+          branch.addressNote,
+        ].join(' ')
+      ).includes(query)
+    );
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -391,6 +421,63 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
               <Icon name="add-circle-outline" size={22} className="text-on-brand" />
               <Text className="ml-2 font-bold text-on-brand">Thêm chi nhánh</Text>
             </Pressable>
+            <View className="mb-3 min-h-12 flex-row items-center rounded-xl border border-border bg-surface px-3">
+              <Icon name="search-outline" size={19} className="text-subtle" />
+              <TextInput
+                value={branchQuery}
+                onChangeText={setBranchQuery}
+                placeholder="Tìm tên, mã, loại hoặc địa chỉ"
+                placeholderTextColor="#8A929F"
+                returnKeyType="search"
+                accessibilityLabel="Tìm kiếm chi nhánh"
+                className="ml-2 min-h-12 flex-1 py-2 text-sm text-foreground"
+              />
+              {branchQuery ? (
+                <Pressable
+                  onPress={() => setBranchQuery('')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Xóa nội dung tìm kiếm"
+                  className="min-h-10 min-w-10 items-center justify-center">
+                  <Icon name="close-circle" size={19} className="text-subtle" />
+                </Pressable>
+              ) : null}
+            </View>
+            <View className="mb-4 flex-row gap-2" accessibilityRole="tablist">
+              {(
+                [
+                  ['all', 'Tất cả', branches.length],
+                  [
+                    'complete',
+                    'Đủ biểu phí',
+                    branches.filter((branch) => branch.isComplete !== false).length,
+                  ],
+                  [
+                    'incomplete',
+                    'Thiếu biểu phí',
+                    branches.filter((branch) => branch.isComplete === false).length,
+                  ],
+                ] as const
+              ).map(([value, label, count]) => {
+                const selected = branchCompleteness === value;
+                return (
+                  <Pressable
+                    key={value}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected }}
+                    onPress={() => setBranchCompleteness(value)}
+                    className={`min-h-11 flex-1 flex-row items-center justify-center gap-1 rounded-full border px-2 ${selected ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
+                    <Text
+                      className={`text-xs font-semibold ${selected ? 'text-primary' : 'text-secondary'}`}>
+                      {label}
+                    </Text>
+                    <Text
+                      className={`text-xs font-bold ${selected ? 'text-primary' : 'text-muted-foreground'}`}>
+                      {count}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
             {loading ? (
               <ActivityIndicator className="mt-8 text-primary" />
             ) : !error && branches.length === 0 ? (
@@ -401,8 +488,12 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
                   Tạo chi nhánh để dùng chung địa chỉ và biểu phí cho nhiều tin đăng.
                 </Text>
               </View>
+            ) : filteredBranches.length === 0 ? (
+              <Text className="py-10 text-center text-muted-foreground">
+                Không tìm thấy chi nhánh phù hợp.
+              </Text>
             ) : (
-              branches.map((branch) => (
+              filteredBranches.map((branch) => (
                 <Pressable
                   key={branch.id}
                   onPress={() => void openBranch(branch)}
