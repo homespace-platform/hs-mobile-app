@@ -245,28 +245,30 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
               </Text>
               <View className="mt-3 flex-row flex-wrap gap-2">
                 {item.defaultForIncomingPayments ? (
-                  <Text className="rounded-full bg-success-soft px-3 py-1 text-xs font-semibold text-success">
-                    Nhận thanh toán mặc định
-                  </Text>
+                  <View className="min-h-8 justify-center rounded-full bg-success-soft px-3">
+                    <Text className="text-xs font-semibold text-success">
+                      Nhận thanh toán mặc định
+                    </Text>
+                  </View>
                 ) : (
                   <Pressable
                     disabled={busy}
                     onPress={() => void setDefault(item.id, 'incoming')}
-                    className="rounded-full bg-muted px-3 py-1">
+                    className="min-h-8 justify-center rounded-full bg-muted px-3">
                     <Text className="text-xs font-semibold text-secondary">
                       Đặt nhận tiền mặc định
                     </Text>
                   </Pressable>
                 )}
                 {item.defaultForRefunds ? (
-                  <Text className="rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary">
-                    Hoàn cọc mặc định
-                  </Text>
+                  <View className="min-h-8 justify-center rounded-full bg-primary-soft px-3">
+                    <Text className="text-xs font-semibold text-primary">Hoàn cọc mặc định</Text>
+                  </View>
                 ) : (
                   <Pressable
                     disabled={busy}
                     onPress={() => void setDefault(item.id, 'refund')}
-                    className="rounded-full bg-muted px-3 py-1">
+                    className="min-h-8 justify-center rounded-full bg-muted px-3">
                     <Text className="text-xs font-semibold text-secondary">
                       Đặt hoàn cọc mặc định
                     </Text>
@@ -425,7 +427,7 @@ function SwipeAccountCard({
       </Pressable>
       <Animated.View
         {...pan.panHandlers}
-        style={{ transform: [{ translateX: offset }] }}
+        style={{ transform: [{ translateX: offset }], paddingBottom: 24 }}
         className="rounded-2xl border border-border bg-surface p-4">
         <Pressable onLongPress={onLongPress} delayLongPress={400}>
           {children}
