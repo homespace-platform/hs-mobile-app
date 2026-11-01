@@ -450,7 +450,25 @@ export async function getRentalRequestCounts(owner: boolean) {
   );
 }
 
-export async function getManagementAttentionCounts() {
+let managementAttentionCache: Partial<Record<ManagementSection, number>> | null = null;
+let managementAttentionCacheAt = 0;
+let managementAttentionRequest: Promise<Partial<Record<ManagementSection, number>>> | null = null;
+
+export async function getManagementAttentionCounts(forceRefresh = false) {
+  if (!forceRefresh && managementAttentionCache && Date.now() - managementAttentionCacheAt < 30_000)
+    return managementAttentionCache;
+  if (managementAttentionRequest) return managementAttentionRequest;
+  managementAttentionRequest = loadManagementAttentionCounts();
+  try {
+    managementAttentionCache = await managementAttentionRequest;
+    managementAttentionCacheAt = Date.now();
+    return managementAttentionCache;
+  } finally {
+    managementAttentionRequest = null;
+  }
+}
+
+async function loadManagementAttentionCounts() {
   const counts: Partial<Record<ManagementSection, number>> = {};
   const pendingCount = (endpoint: string) =>
     axiosClient

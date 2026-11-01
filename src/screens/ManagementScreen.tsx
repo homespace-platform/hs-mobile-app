@@ -466,7 +466,7 @@ export default function ManagementScreen({
   }, []);
   useEffect(() => {
     let active = true;
-    void getManagementAttentionCounts().then((counts) => {
+    void getManagementAttentionCounts(attentionRefresh > 0).then((counts) => {
       if (active) setAttentionCounts(counts);
     });
     return () => {
@@ -908,7 +908,11 @@ export default function ManagementScreen({
           </>
         )}
       </ScrollView>
-      <BottomTabBar active="management" onSelect={onSelectTab} />
+      <BottomTabBar
+        active="management"
+        onSelect={onSelectTab}
+        attentionVersion={attentionRefresh}
+      />
     </SafeAreaView>
   );
 }
