@@ -13,9 +13,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import Icon from '@/components/Icon';
+import DatePeriodFilter from '@/components/DatePeriodFilter';
 import { useDialog } from '@/components/AppDialog';
 import { Button, ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
 import { apiError } from '@/lib/api-error';
+import { getDatePeriodRange, toLocalDateKey, type DatePeriod } from '@/lib/date-period';
 import {
   BRANCH_CATEGORIES,
   CHARGE_FIELDS,
@@ -99,6 +101,8 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
   const [mode, setMode] = useState<'list' | 'detail' | 'form'>('list');
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchQuery, setBranchQuery] = useState('');
+  const [datePeriod, setDatePeriod] = useState<DatePeriod>('ALL');
+  const [dateAnchor, setDateAnchor] = useState(() => new Date());
   const [branchCompleteness, setBranchCompleteness] = useState<'all' | 'complete' | 'incomplete'>(
     'all'
   );
@@ -124,6 +128,9 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
   const filteredBranches = branches.filter((branch) => {
     if (branchCompleteness === 'complete' && branch.isComplete === false) return false;
     if (branchCompleteness === 'incomplete' && branch.isComplete !== false) return false;
+    const range = getDatePeriodRange(dateAnchor, datePeriod);
+    const branchDate = toLocalDateKey(branch.createdAt);
+    if (range && (!branchDate || branchDate < range.start || branchDate > range.end)) return false;
     const query = normalizeSearch(branchQuery.trim());
     return (
       !query ||
@@ -426,7 +433,7 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
               <TextInput
                 value={branchQuery}
                 onChangeText={setBranchQuery}
-                placeholder="Tìm tên, mã, loại hoặc địa chỉ"
+                placeholder="Tìm tên, loại hoặc địa chỉ"
                 placeholderTextColor="#8A929F"
                 returnKeyType="search"
                 accessibilityLabel="Tìm kiếm chi nhánh"
@@ -442,6 +449,12 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
                 </Pressable>
               ) : null}
             </View>
+            <DatePeriodFilter
+              period={datePeriod}
+              anchor={dateAnchor}
+              onPeriodChange={setDatePeriod}
+              onAnchorChange={setDateAnchor}
+            />
             <View className="mb-4 flex-row gap-2" accessibilityRole="tablist">
               {(
                 [

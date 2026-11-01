@@ -32,6 +32,7 @@ export type Branch = {
   activeListingsCount?: number;
   isComplete?: boolean;
   missingCharges?: string[];
+  createdAt?: string | null;
 };
 export type BranchInput = Pick<Branch, 'name' | 'category' | 'refId'> & {
   code?: string;

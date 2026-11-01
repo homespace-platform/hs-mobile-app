@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 
 import Icon from '@/components/Icon';
+import DatePeriodFilter from '@/components/DatePeriodFilter';
 import { useDialog } from '@/components/AppDialog';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import TabHeader from '@/components/TabHeader';
@@ -23,6 +24,7 @@ import AppointmentCalendar, { type CalendarState } from '@/components/Appointmen
 import ListingDraftScreen from '@/screens/ListingDraftScreen';
 import BranchManagementScreen from '@/screens/BranchManagementScreen';
 import { dateKey } from '@/lib/appointment-calendar';
+import { getDatePeriodRange, toLocalDateKey, type DatePeriod } from '@/lib/date-period';
 import { apiError } from '@/lib/api-error';
 import { getUserProfileApi } from '@/services/userApi';
 import {
@@ -405,6 +407,8 @@ export default function ManagementScreen({
   const [appointmentFilter, setAppointmentFilter] = useState<AppointmentListFilter>('ALL');
   const [listQuery, setListQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [datePeriod, setDatePeriod] = useState<DatePeriod>('ALL');
+  const [dateAnchor, setDateAnchor] = useState(() => new Date());
   const [calendarState, setCalendarState] = useState<CalendarState>(() => ({
     view: 'month',
     anchor: new Date(),
@@ -420,9 +424,13 @@ export default function ManagementScreen({
   const statusOptions = Array.from(new Set(rows.map((row) => row.status))).sort((a, b) =>
     statusLabel(a).localeCompare(statusLabel(b), 'vi')
   );
+  const dateRange = getDatePeriodRange(dateAnchor, datePeriod);
   const normalizedQuery = normalizeSearch(listQuery.trim());
   const visibleRows = rows.filter((row) => {
     if (statusFilter && row.status !== statusFilter) return false;
+    const rowDate = toLocalDateKey(row.date);
+    if (dateRange && (!rowDate || rowDate < dateRange.start || rowDate > dateRange.end))
+      return false;
     if (!normalizedQuery) return true;
     return normalizeSearch(
       [
@@ -507,6 +515,7 @@ export default function ManagementScreen({
     setRows([]);
     setListQuery('');
     setStatusFilter(null);
+    setDatePeriod('ALL');
     setHasMore(false);
     setTotal(0);
     void load();
@@ -707,7 +716,7 @@ export default function ManagementScreen({
                   <TextInput
                     value={listQuery}
                     onChangeText={setListQuery}
-                    placeholder="Tìm theo tên, mã, địa chỉ hoặc trạng thái"
+                    placeholder="Tìm theo tên, địa chỉ hoặc trạng thái"
                     returnKeyType="search"
                     accessibilityLabel="Tìm kiếm trong danh sách quản lý"
                     className="ml-2 min-h-12 flex-1 py-2 text-sm text-foreground placeholder:text-subtle"
@@ -722,6 +731,12 @@ export default function ManagementScreen({
                     </Pressable>
                   ) : null}
                 </View>
+                <DatePeriodFilter
+                  period={datePeriod}
+                  anchor={dateAnchor}
+                  onPeriodChange={setDatePeriod}
+                  onAnchorChange={setDateAnchor}
+                />
                 {!isRequests && !isAppointments && statusOptions.length > 1 ? (
                   <ScrollView
                     horizontal
@@ -770,7 +785,7 @@ export default function ManagementScreen({
               <>
                 <Text className="mb-3 text-sm text-muted-foreground">
                   {visibleRows.length}
-                  {listQuery || statusFilter ? ` / ${total}` : ''}{' '}
+                  {listQuery || statusFilter || datePeriod !== 'ALL' ? ` / ${total}` : ''}{' '}
                   {isRequests ? 'yêu cầu' : isAppointments ? 'lịch hẹn' : 'mục'}
                 </Text>
                 {visibleRows.map((row) => (
@@ -821,7 +836,7 @@ export default function ManagementScreen({
               !error &&
               !(isRequests && requestCountsError) ? (
               <Text className="py-10 text-center text-muted-foreground">
-                {listQuery || statusFilter
+                {listQuery || statusFilter || datePeriod !== 'ALL'
                   ? hasMore
                     ? 'Chưa tìm thấy mục phù hợp trong phần đã tải. Hãy tải thêm để tìm tiếp.'
                     : 'Không tìm thấy mục phù hợp với bộ lọc.'

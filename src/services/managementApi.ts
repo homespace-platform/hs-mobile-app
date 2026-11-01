@@ -48,6 +48,7 @@ export type ManagementEntry = {
   id: string;
   title: string;
   status: string;
+  date?: string | null;
   listingId?: string;
   fields: [string, string][];
   actions: ActionOption[];
@@ -83,6 +84,7 @@ export type RentalRequest = {
   renterName: string;
   renterPhone: string;
   moveInDate: string;
+  createdAt?: string | null;
   leaseMonths: number;
   occupantCount: number;
   monthlyRentPrice: number;
@@ -104,6 +106,7 @@ export type Payment = {
   totalAmount: number;
   transferReference: string;
   dueAt?: string;
+  createdAt?: string | null;
   qrImageUrl?: string;
   payeeBankAccountSnapshot?: BankAccount;
   payeeAccount?: BankAccount;
@@ -121,6 +124,7 @@ type OwnListing = {
   statusReason?: string | null;
   branchName?: string | null;
   expiresAt?: string | null;
+  createdAt?: string | null;
 };
 type Branch = {
   id: string;
@@ -131,6 +135,7 @@ type Branch = {
   totalUnits?: number;
   activeListingsCount?: number;
   description?: string;
+  createdAt?: string | null;
 };
 type Contract = {
   id: string;
@@ -207,6 +212,7 @@ export function appointmentEntry(row: Appointment, owner: boolean): ManagementEn
     title: row.listingTitle,
     listingId: row.listingId,
     status: row.status,
+    date: row.appointmentDate,
     appointment: row,
     actions,
     fields: [
@@ -246,6 +252,7 @@ export function rentalEntry(row: RentalRequest, owner: boolean): ManagementEntry
     title: row.listingTitle,
     listingId: row.listingId,
     status: row.status,
+    date: row.createdAt,
     actions,
     fields: [
       ['Địa chỉ', row.listingAddress],
@@ -280,6 +287,7 @@ export function paymentEntry(row: Payment, userId: string): ManagementEntry {
     title: `${money(row.totalAmount)} · ${row.transferReference}`,
     listingId: row.listingId,
     status: row.status,
+    date: row.createdAt,
     actions,
     payment: row,
     fields: [
@@ -301,6 +309,7 @@ function listingEntry(row: OwnListing): ManagementEntry {
     title: row.title,
     listingId: row.id,
     status: row.status,
+    date: row.createdAt,
     fields: [
       ['Địa chỉ', row.fullAddress || '—'],
       ['Giá thuê', money(row.priceAmount)],
@@ -325,6 +334,7 @@ function branchEntry(row: Branch): ManagementEntry {
     id: row.id,
     title: row.name,
     status: row.category,
+    date: row.createdAt,
     actions: [],
     fields: [
       ['Địa chỉ', row.display || row.address || '—'],
@@ -340,6 +350,7 @@ function contractEntry(row: Contract): ManagementEntry {
     title: row.contractNumber || row.id,
     listingId: row.listingId,
     status: row.status,
+    date: row.createdAt,
     actions: [],
     fields: [
       ['Mã hợp đồng', row.contractNumber],
