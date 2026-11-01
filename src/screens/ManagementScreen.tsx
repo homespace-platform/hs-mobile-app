@@ -32,6 +32,7 @@ import {
   getManagementPage,
   getRentalRequestCounts,
   getAppointmentCalendar,
+  getManagementAttentionCounts,
   performManagementAction,
   refreshManagementEntry,
   reportPaymentTransfer,
@@ -386,6 +387,10 @@ export default function ManagementScreen({
   const [entry, setEntry] = useState<ManagementEntry | null>(null);
   const [creatingListing, setCreatingListing] = useState(false);
   const [rows, setRows] = useState<ManagementEntry[]>([]);
+  const [attentionCounts, setAttentionCounts] = useState<
+    Partial<Record<ManagementSection, number>>
+  >({});
+  const [attentionRefresh, setAttentionRefresh] = useState(0);
   const [userId, setUserId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -421,6 +426,13 @@ export default function ManagementScreen({
     requestCounts?.section === section ? requestCounts.items.filter((item) => item.count > 0) : [];
   const showCalendar = isAppointments && appointmentView === 'calendar';
   const listFilter = isAppointments && !showCalendar ? appointmentFilter : 'ALL';
+  const tenantHasAttention =
+    (attentionCounts['tenant-appointments'] ?? 0) > 0 ||
+    (attentionCounts['tenant-requests'] ?? 0) > 0;
+  const landlordHasAttention =
+    (attentionCounts['landlord-properties'] ?? 0) > 0 ||
+    (attentionCounts['landlord-appointments'] ?? 0) > 0 ||
+    (attentionCounts['landlord-requests'] ?? 0) > 0;
   const statusOptions = Array.from(new Set(rows.map((row) => row.status))).sort((a, b) =>
     statusLabel(a).localeCompare(statusLabel(b), 'vi')
   );
@@ -444,6 +456,15 @@ export default function ManagementScreen({
   const invalidateRequests = useCallback(() => {
     requestId.current++;
   }, []);
+  useEffect(() => {
+    let active = true;
+    void getManagementAttentionCounts().then((counts) => {
+      if (active) setAttentionCounts(counts);
+    });
+    return () => {
+      active = false;
+    };
+  }, [attentionRefresh]);
   useEffect(() => {
     if (!section?.endsWith('-requests')) return;
     let active = true;
@@ -530,6 +551,7 @@ export default function ManagementScreen({
         onBack={() => setCreatingListing(false)}
         onSaved={() => {
           setCreatingListing(false);
+          setAttentionRefresh((current) => current + 1);
           void load();
         }}
       />
@@ -546,6 +568,7 @@ export default function ManagementScreen({
         onBack={() => setEntry(null)}
         onChanged={() => {
           setEntry(null);
+          setAttentionRefresh((current) => current + 1);
           if (isRequests) setRequestCountsVersion((current) => current + 1);
           else void load();
         }}
@@ -569,34 +592,44 @@ export default function ManagementScreen({
           section ? (
             <RefreshControl
               refreshing={loading || (isRequests && requestCountsLoading)}
-              onRefresh={() =>
-                isRequests ? setRequestCountsVersion((current) => current + 1) : void load()
-              }
+              onRefresh={() => {
+                setAttentionRefresh((current) => current + 1);
+                if (isRequests) setRequestCountsVersion((current) => current + 1);
+                else void load();
+              }}
             />
           ) : undefined
         }>
         {!section ? (
           <>
             <View className="flex-row gap-2">
-              {(['tenant', 'landlord'] as const).map((value) => (
-                <Pressable
-                  key={value}
-                  onPress={() => setRole(value)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: value === role }}
-                  className={
-                    value === role
-                      ? 'min-h-12 flex-1 items-center justify-center rounded-xl border border-primary bg-primary-soft'
-                      : 'min-h-12 flex-1 items-center justify-center rounded-xl border border-border bg-surface'
-                  }>
-                  <Text
+              {(['tenant', 'landlord'] as const).map((value) => {
+                const hasAttention = value === 'tenant' ? tenantHasAttention : landlordHasAttention;
+                return (
+                  <Pressable
+                    key={value}
+                    onPress={() => setRole(value)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: value === role }}
                     className={
-                      value === role ? 'font-bold text-primary' : 'font-bold text-secondary'
+                      value === role
+                        ? 'min-h-12 flex-1 items-center justify-center rounded-xl border border-primary bg-primary-soft'
+                        : 'min-h-12 flex-1 items-center justify-center rounded-xl border border-border bg-surface'
                     }>
-                    {value === 'tenant' ? 'Người thuê' : 'Cho thuê'}
-                  </Text>
-                </Pressable>
-              ))}
+                    <View className="flex-row items-center">
+                      <Text
+                        className={
+                          value === role ? 'font-bold text-primary' : 'font-bold text-secondary'
+                        }>
+                        {value === 'tenant' ? 'Người thuê' : 'Cho thuê'}
+                      </Text>
+                      {hasAttention ? (
+                        <View className="ml-2 h-2.5 w-2.5 rounded-full bg-danger" />
+                      ) : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
             </View>
             {MENUS[role].map((item) => (
               <Pressable
@@ -606,6 +639,9 @@ export default function ManagementScreen({
                 className="mt-3 flex-row items-center rounded-2xl border border-border bg-surface p-4">
                 <Icon name={item.icon} size={25} className="text-primary" />
                 <Text className="ml-3 flex-1 font-bold text-foreground">{item.title}</Text>
+                {(attentionCounts[item.section] ?? 0) > 0 ? (
+                  <View className="mr-2 h-2.5 w-2.5 rounded-full bg-danger" />
+                ) : null}
                 <Icon name="chevron-forward" size={20} className="text-subtle" />
               </Pressable>
             ))}

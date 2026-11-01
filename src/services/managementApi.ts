@@ -450,6 +450,32 @@ export async function getRentalRequestCounts(owner: boolean) {
   );
 }
 
+export async function getManagementAttentionCounts() {
+  const counts: Partial<Record<ManagementSection, number>> = {};
+  const pendingCount = (endpoint: string) =>
+    axiosClient
+      .get<PageResponse<unknown>>(endpoint, { params: { page: 1, size: 1, status: 'PENDING' } })
+      .then((response) => response.data.totalElements)
+      .catch(() => 0);
+  const [tenantAppointments, landlordAppointments, tenantRequests, landlordRequests, listings] =
+    await Promise.all([
+      pendingCount('/api/v1/appointments/my-bookings'),
+      pendingCount('/api/v1/appointments/owner'),
+      pendingCount('/api/v1/rental-requests/my-requests'),
+      pendingCount('/api/v1/rental-requests/owner'),
+      axiosClient
+        .get<ApiResponse<Record<string, number>>>('/api/v1/listings/me/counts')
+        .then((response) => response.data.result?.PENDING_REVIEW ?? 0)
+        .catch(() => 0),
+    ]);
+  counts['tenant-appointments'] = tenantAppointments;
+  counts['landlord-appointments'] = landlordAppointments;
+  counts['tenant-requests'] = tenantRequests;
+  counts['landlord-requests'] = landlordRequests;
+  counts['landlord-properties'] = listings;
+  return counts;
+}
+
 export async function getAppointmentCalendar(owner: boolean) {
   return getAppointmentsByStatuses(owner, ['CONFIRMED', 'COMPLETED']);
 }
