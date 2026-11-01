@@ -485,7 +485,16 @@ export default function ManagementScreen({
   const title =
     [...MENUS.tenant, ...MENUS.landlord].find((item) => item.section === section)?.title ||
     'Quản lý';
-  if (creatingListing) return <ListingDraftScreen onBack={() => setCreatingListing(false)} />;
+  if (creatingListing)
+    return (
+      <ListingDraftScreen
+        onBack={() => setCreatingListing(false)}
+        onSaved={() => {
+          setCreatingListing(false);
+          void load();
+        }}
+      />
+    );
   if (section === 'landlord-branches')
     return <BranchManagementScreen onBack={onExit ?? (() => setSection(null))} />;
   if (entry && section)

@@ -19,7 +19,13 @@ export type LocalFile = { uri: string; fileName: string; contentType: string; si
 export async function uploadFile(
   file: LocalFile,
   metadata: {
-    purpose: 'CHAT_ATTACHMENT' | 'USER_AVATAR' | 'PAYMENT_PROOF' | 'BRANCH_COVER_IMAGE';
+    purpose:
+      | 'CHAT_ATTACHMENT'
+      | 'USER_AVATAR'
+      | 'PAYMENT_PROOF'
+      | 'BRANCH_COVER_IMAGE'
+      | 'LISTING_IMAGE'
+      | 'LISTING_VIDEO';
     visibility: 'AUTHENTICATED' | 'PUBLIC' | 'PRIVATE';
     referenceType: string;
     referenceId: string;
@@ -28,9 +34,11 @@ export async function uploadFile(
   const maxMb =
     metadata.purpose === 'USER_AVATAR'
       ? 5
-      : metadata.purpose === 'PAYMENT_PROOF' || metadata.purpose === 'BRANCH_COVER_IMAGE'
-        ? 15
-        : 25;
+      : metadata.purpose === 'LISTING_VIDEO'
+        ? 500
+        : metadata.purpose === 'PAYMENT_PROOF' || metadata.purpose === 'BRANCH_COVER_IMAGE'
+          ? 15
+          : 25;
   if (
     !Number.isFinite(file.sizeBytes) ||
     file.sizeBytes <= 0 ||
@@ -43,10 +51,17 @@ export async function uploadFile(
   )
     throw new Error('Chứng từ phải là ảnh JPG/PNG/WebP hoặc PDF.');
   if (
-    (metadata.purpose === 'USER_AVATAR' || metadata.purpose === 'BRANCH_COVER_IMAGE') &&
+    (metadata.purpose === 'USER_AVATAR' ||
+      metadata.purpose === 'BRANCH_COVER_IMAGE' ||
+      metadata.purpose === 'LISTING_IMAGE') &&
     !['image/jpeg', 'image/png', 'image/webp'].includes(file.contentType)
   )
     throw new Error('Ảnh phải là JPG/PNG/WebP.');
+  if (
+    metadata.purpose === 'LISTING_VIDEO' &&
+    !['video/mp4', 'video/webm', 'video/quicktime'].includes(file.contentType)
+  )
+    throw new Error('Video phải là MP4, WebM hoặc MOV.');
   const upload = await axiosClient.post<ApiResponse<UploadResponse>>('/api/v1/storage/uploads', {
     fileName: file.fileName,
     contentType: file.contentType,

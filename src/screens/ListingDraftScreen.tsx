@@ -1,23 +1,44 @@
 import { useEffect, useRef, useState } from 'react';
-import { Image, Keyboard, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  Keyboard,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import Icon from '@/components/Icon';
 import { useDialog } from '@/components/AppDialog';
-import { Field, ScreenHeader } from '@/components/Screen';
+import { ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
 import BookingDatePicker from '@/components/BookingDatePicker';
 import { dateKey } from '@/lib/appointment-calendar';
-import { matchesProvince } from '@/lib/location-search';
+import { apiError } from '@/lib/api-error';
+import { buildListingPayload, type ListingMedia } from '@/lib/listing-create';
 import {
-  AMENITIES,
   DETAIL_FIELDS,
   LISTING_CATEGORIES,
   LISTING_STEPS,
   type DetailField,
   type ListingCategory,
 } from '@/lib/listing-draft';
-import { getManagementPage, type ManagementEntry } from '@/services/managementApi';
-import provinces from '@/data/provinces.json';
+import {
+  getBranches,
+  searchBranchAddress,
+  type Branch,
+  type AddressSuggestion,
+} from '@/services/branchApi';
+import {
+  getListingCatalog,
+  upsertListing,
+  type ListingCatalog,
+  type ListingSubmissionAction,
+} from '@/services/listingCreateApi';
+import { uploadFile } from '@/services/storageApi';
+import { getUserProfileApi } from '@/services/userApi';
 
 const DAYS = [
   ['MONDAY', 'T2'],
@@ -81,9 +102,24 @@ function SectionTitle({ title, note }: { title: string; note?: string }) {
   );
 }
 
-export default function ListingDraftScreen({ onBack }: { onBack: () => void }) {
+type PickedMedia = {
+  uri: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  storageObjectId?: string;
+};
+
+export default function ListingDraftScreen({
+  onBack,
+  onSaved,
+}: {
+  onBack: () => void;
+  onSaved: () => void;
+}) {
   const showDialog = useDialog();
   const scrollRef = useRef<ScrollView>(null);
+  const submitLock = useRef(false);
   const [step, setStep] = useState(0);
   const [category, setCategory] = useState<ListingCategory>('apartment');
   const [basic, setBasic] = useState({
@@ -91,14 +127,21 @@ export default function ListingDraftScreen({ onBack }: { onBack: () => void }) {
     branchId: '',
     availableDate: dateKey(new Date()),
   });
-  const [branches, setBranches] = useState<ManagementEntry[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [branchOpen, setBranchOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
-  const [location, setLocation] = useState({ provinceCode: '', ward: '', street: '', note: '' });
-  const [provinceOpen, setProvinceOpen] = useState(false);
-  const [provinceQuery, setProvinceQuery] = useState('');
-  const [images, setImages] = useState<{ uri: string; name: string }[]>([]);
-  const [videos, setVideos] = useState<{ uri: string; name: string }[]>([]);
+  const [location, setLocation] = useState({ refId: '', display: '', note: '' });
+  const [addressQuery, setAddressQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [addressLoading, setAddressLoading] = useState(false);
+  const [images, setImages] = useState<PickedMedia[]>([]);
+  const [videos, setVideos] = useState<PickedMedia[]>([]);
+  const [catalog, setCatalog] = useState<ListingCatalog | null>(null);
+  const [catalogError, setCatalogError] = useState('');
+  const [catalogRefresh, setCatalogRefresh] = useState(0);
+  const [policyValues, setPolicyValues] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [details, setDetails] = useState<Record<ListingCategory, Record<string, string>>>(() => ({
     apartment: {},
     house: {},
@@ -122,46 +165,89 @@ export default function ListingDraftScreen({ onBack }: { onBack: () => void }) {
   const [days, setDays] = useState<string[]>([]);
   const [slots, setSlots] = useState<string[]>([]);
   const [description, setDescription] = useState('');
-  const [policy, setPolicy] = useState('');
-
   useEffect(() => {
-    getManagementPage('landlord-branches', 1, '')
-      .then((result) => setBranches(result.items))
-      .catch(() => undefined);
+    getBranches()
+      .then(setBranches)
+      .catch((cause) => setError(apiError(cause)));
   }, []);
+  useEffect(() => {
+    let active = true;
+    setCatalog(null);
+    setCatalogError('');
+    void getListingCatalog(category)
+      .then((result) => {
+        if (active) setCatalog(result);
+      })
+      .catch((cause) => {
+        if (active) setCatalogError(apiError(cause));
+      });
+    return () => {
+      active = false;
+    };
+  }, [category, catalogRefresh]);
+  useEffect(() => {
+    if (basic.branchId || addressQuery.trim().length < 3 || addressQuery === location.display) {
+      setSuggestions([]);
+      setAddressLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      setAddressLoading(true);
+      void searchBranchAddress(addressQuery.trim(), controller.signal)
+        .then(setSuggestions)
+        .catch((cause) => {
+          if (!controller.signal.aborted) setError(apiError(cause));
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setAddressLoading(false);
+        });
+    }, 350);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [basic.branchId, addressQuery, location.display]);
 
   const categoryLabel = LISTING_CATEGORIES.find((item) => item.key === category)!.label;
-  const province = provinces.find((item) => item.code === location.provinceCode);
   const selectedBranch = branches.find((item) => item.id === basic.branchId);
   const requiredDetails = DETAIL_FIELDS[category].main.filter((field) => field.required);
   const missing = [
     [basic.title.trim().length < 15 && 'Tiêu đề (ít nhất 15 ký tự)'],
-    [
-      !location.provinceCode && 'Tỉnh/thành',
-      !location.ward.trim() && 'Phường/xã',
-      !location.street.trim() && 'Số nhà, đường',
-      !images.length && 'Ít nhất 1 ảnh',
-    ],
+    [!basic.branchId && !location.refId && 'Địa chỉ Vietmap', !images.length && 'Ít nhất 1 ảnh'],
     [
       ...requiredDetails.map(
         (field) =>
           (!details[category][field.key]?.trim() ||
-            (field.number && !(Number(details[category][field.key]) > 0))) &&
+            (field.number &&
+              !(Number(details[category][field.key]) >= (field.key === 'floor' ? 0 : 1)))) &&
           field.label
       ),
       details[category].furnishing &&
         details[category].furnishing !== 'Bàn giao thô' &&
         !assets.length &&
         'Trang thiết bị bàn giao',
-      assets.some((row) => !row.name.trim() || !(Number(row.quantity) >= 1)) &&
-        'Kiểm tra danh sách tài sản',
+      assets.some(
+        (row) => !row.name.trim() || !(Number(row.quantity) >= 1) || Number(row.quantity) > 999
+      ) && 'Kiểm tra danh sách tài sản',
     ],
     [
       (!pricing.priceMonthly?.trim() || !(Number(pricing.priceMonthly) > 0)) && 'Giá thuê',
       (!pricing.minimumLeaseMonths?.trim() || Number(pricing.minimumLeaseMonths) < 1) &&
         'Thời hạn thuê tối thiểu',
       pricing.depositType !== 'Không cọc' && !(Number(pricing.depositValue) > 0) && 'Tiền cọc',
-      customFees.some((row) => !row.name.trim() || !row.amount.trim()) && 'Kiểm tra khoản phí khác',
+      !basic.branchId && (!pricing.electricityType || !pricing.waterType) && 'Cách tính điện, nước',
+      !basic.branchId &&
+        ['electricity', 'water', 'management', 'internet', 'garbage', 'motorbike', 'car'].some(
+          (key) =>
+            pricing[`${key}Type`] &&
+            !['Đã bao gồm', 'Không có', 'Tự trả'].includes(pricing[`${key}Type`]) &&
+            !(Number(pricing[`${key}Price`]) > 0)
+        ) &&
+        'Đơn giá dịch vụ',
+      !basic.branchId &&
+        customFees.some((row) => !row.name.trim() || !row.amount.trim()) &&
+        'Kiểm tra khoản phí khác',
     ],
     [
       !days.length && 'Ngày xem nhà',
@@ -169,20 +255,25 @@ export default function ListingDraftScreen({ onBack }: { onBack: () => void }) {
       description.trim().length < 30 && 'Mô tả (ít nhất 30 ký tự)',
     ],
   ].map((items) => items.filter(Boolean) as string[]);
+  const missingPolicies = (catalog?.policies ?? []).filter(
+    (item) => item.required && !policyValues[item.code]?.trim()
+  );
+  if (missingPolicies.length) missing[3].push(`${missingPolicies.length} chính sách bắt buộc`);
 
   function goTo(next: number) {
+    if (submitLock.current) return;
     Keyboard.dismiss();
     setStep(next);
     scrollRef.current?.scrollTo({ y: 0, animated: true });
   }
   function exit() {
+    if (submitLock.current) return;
     const touched = Boolean(
       category !== 'apartment' ||
       basic.title ||
       basic.branchId ||
-      location.provinceCode ||
-      location.ward ||
-      location.street ||
+      location.refId ||
+      addressQuery ||
       location.note ||
       images.length ||
       videos.length ||
@@ -194,17 +285,13 @@ export default function ListingDraftScreen({ onBack }: { onBack: () => void }) {
       days.length ||
       slots.length ||
       description ||
-      policy
+      Object.keys(policyValues).length
     );
     if (!touched) return onBack();
-    showDialog(
-      'Rời bản xem trước?',
-      'Thông tin đã nhập chỉ được giữ trong màn hình này và sẽ mất khi thoát.',
-      [
-        { text: 'Tiếp tục chỉnh sửa', style: 'cancel' },
-        { text: 'Rời biểu mẫu', style: 'destructive', onPress: onBack },
-      ]
-    );
+    showDialog('Rời biểu mẫu?', 'Thông tin chưa lưu sẽ mất khi thoát.', [
+      { text: 'Tiếp tục chỉnh sửa', style: 'cancel' },
+      { text: 'Rời biểu mẫu', style: 'destructive', onPress: onBack },
+    ]);
   }
   function setDetail(key: string, value: string) {
     setDetails((current) => ({ ...current, [category]: { ...current[category], [key]: value } }));
@@ -213,7 +300,9 @@ export default function ListingDraftScreen({ onBack }: { onBack: () => void }) {
     setPricing((current) => ({ ...current, [key]: value }));
   }
   function chooseCategory(next: ListingCategory) {
+    if (next === category) return;
     setCategory(next);
+    setPolicyValues({});
     setMoreOpen(false);
     setPricing((current) => ({
       ...current,
@@ -259,10 +348,28 @@ export default function ListingDraftScreen({ onBack }: { onBack: () => void }) {
         quality: 0.85,
       });
       if (result.canceled) return;
-      const picked = result.assets.slice(0, limit - current.length).map((asset) => ({
-        uri: asset.uri,
-        name: asset.fileName || (kind === 'images' ? 'Ảnh' : 'Video'),
-      }));
+      const picked = result.assets.slice(0, limit - current.length).map((asset) => {
+        if (!asset.fileSize) throw new Error('Không đọc được dung lượng tệp. Vui lòng chọn lại.');
+        const mimeType = asset.mimeType || (kind === 'images' ? 'image/jpeg' : 'video/mp4');
+        if (
+          kind === 'images' &&
+          (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType) ||
+            asset.fileSize > 25 * 1024 * 1024)
+        )
+          throw new Error('Ảnh phải là JPG/PNG/WebP và tối đa 25 MB.');
+        if (
+          kind === 'videos' &&
+          (!['video/mp4', 'video/webm', 'video/quicktime'].includes(mimeType) ||
+            asset.fileSize > 500 * 1024 * 1024)
+        )
+          throw new Error('Video phải là MP4/WebM/MOV và tối đa 500 MB.');
+        return {
+          uri: asset.uri,
+          name: asset.fileName || (kind === 'images' ? 'Ảnh.jpg' : 'Video.mp4'),
+          mimeType,
+          sizeBytes: asset.fileSize,
+        };
+      });
       if (kind === 'images') setImages((items) => [...items, ...picked]);
       else setVideos((items) => [...items, ...picked]);
     } catch (error) {
@@ -270,6 +377,109 @@ export default function ListingDraftScreen({ onBack }: { onBack: () => void }) {
         'Không thể chọn tệp',
         error instanceof Error ? error.message : 'Vui lòng thử lại.'
       );
+    }
+  }
+
+  function formData(media: ListingMedia[]) {
+    return {
+      category,
+      title: basic.title,
+      branchId: basic.branchId,
+      availableDate: basic.availableDate,
+      addressRefId: selectedBranch?.refId || location.refId,
+      addressNote: location.note,
+      details: details[category],
+      amenities: amenities[category],
+      assets,
+      pricing,
+      customFees,
+      days,
+      slots,
+      description,
+      policyValues,
+      catalog,
+      media,
+    };
+  }
+  async function submit(action: ListingSubmissionAction) {
+    if (submitLock.current) return;
+    setError(null);
+    if (selectedBranch?.isComplete === false) {
+      setError(
+        `Biểu phí chi nhánh còn thiếu: ${selectedBranch.missingCharges?.join(', ') || 'vui lòng cập nhật chi nhánh'}.`
+      );
+      return;
+    }
+    const stagedMedia: ListingMedia[] = [
+      ...images.map((item) => ({
+        storageObjectId: item.storageObjectId || 'pending',
+        mediaType: 'IMAGE' as const,
+      })),
+      ...videos.map((item) => ({
+        storageObjectId: item.storageObjectId || 'pending',
+        mediaType: 'VIDEO' as const,
+      })),
+    ];
+    try {
+      buildListingPayload(formData(stagedMedia), action);
+    } catch (cause) {
+      setError(apiError(cause));
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
+    submitLock.current = true;
+    setBusy(true);
+    try {
+      const profile = await getUserProfileApi();
+      if (!profile.kycVerified)
+        throw new Error('Bạn cần xác minh danh tính trong Hồ sơ trước khi đăng tin.');
+      const uploadedMedia: ListingMedia[] = [];
+      for (const [kind, items] of [
+        ['IMAGE', images],
+        ['VIDEO', videos],
+      ] as const) {
+        for (const item of items) {
+          let storageObjectId = item.storageObjectId;
+          if (!storageObjectId) {
+            const stored = await uploadFile(
+              {
+                uri: item.uri,
+                fileName: item.name,
+                contentType: item.mimeType,
+                sizeBytes: item.sizeBytes,
+              },
+              {
+                purpose: kind === 'IMAGE' ? 'LISTING_IMAGE' : 'LISTING_VIDEO',
+                visibility: 'PUBLIC',
+                referenceType: 'LISTING',
+                referenceId: 'listing',
+              }
+            );
+            storageObjectId = stored.id;
+            const setter = kind === 'IMAGE' ? setImages : setVideos;
+            setter((current) =>
+              current.map((row) => (row.uri === item.uri ? { ...row, storageObjectId } : row))
+            );
+          }
+          uploadedMedia.push({ storageObjectId, mediaType: kind });
+        }
+      }
+      await upsertListing(buildListingPayload(formData(uploadedMedia), action));
+      onSaved();
+      showDialog(
+        action === 'SAVE_DRAFT' ? 'Đã lưu tin nháp' : 'Đã gửi tin chờ duyệt',
+        action === 'SAVE_DRAFT'
+          ? 'Bạn có thể tiếp tục quản lý tin trong danh sách.'
+          : 'Tin đăng đang chờ quản trị viên duyệt.',
+        undefined,
+        'success'
+      );
+    } catch (cause) {
+      setError(apiError(cause));
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    } finally {
+      submitLock.current = false;
+      setBusy(false);
     }
   }
 
@@ -327,9 +537,10 @@ export default function ListingDraftScreen({ onBack }: { onBack: () => void }) {
         contentContainerClassName="px-5 pb-10 pt-5">
         <View className="mb-5 rounded-2xl border border-warning bg-warning-soft p-3">
           <Text className="text-xs leading-5 text-warning">
-            Bản xem trước giao diện. Chưa lưu nháp hoặc gửi tin lên hệ thống.
+            Kiểm tra kỹ thông tin trước khi lưu. Ảnh và video sẽ được tải lên khi bạn gửi biểu mẫu.
           </Text>
         </View>
+        <ErrorNotice message={error} />
 
         {step === 0 ? (
           <>
@@ -389,7 +600,7 @@ export default function ListingDraftScreen({ onBack }: { onBack: () => void }) {
               accessibilityState={{ expanded: branchOpen }}
               className="mt-2 min-h-12 flex-row items-center rounded-xl border border-border bg-surface px-4">
               <Text className="flex-1 text-sm text-foreground">
-                {selectedBranch?.title || 'Bất động sản độc lập'}
+                {selectedBranch?.name || 'Bất động sản độc lập'}
               </Text>
               <Icon
                 name={branchOpen ? 'chevron-up' : 'chevron-down'}
@@ -399,17 +610,28 @@ export default function ListingDraftScreen({ onBack }: { onBack: () => void }) {
             </Pressable>
             {branchOpen ? (
               <View className="mt-2 overflow-hidden rounded-xl border border-border bg-surface">
-                {[
-                  { id: '', title: 'Bất động sản độc lập', status: '' },
-                  ...branches.filter((branch) =>
-                    LISTING_CATEGORIES.some((item) => item.key === branch.status?.toLowerCase())
-                  ),
-                ].map((branch) => (
+                <Pressable
+                  onPress={() => {
+                    setBasic((current) => ({ ...current, branchId: '' }));
+                    setLocation({ refId: '', display: '', note: '' });
+                    setAddressQuery('');
+                    setBranchOpen(false);
+                  }}
+                  className="min-h-11 justify-center px-4">
+                  <Text className="text-sm text-foreground">Bất động sản độc lập</Text>
+                </Pressable>
+                {branches.map((branch) => (
                   <Pressable
                     key={branch.id}
                     onPress={() => {
                       setBasic((current) => ({ ...current, branchId: branch.id }));
-                      const branchCategory = branch.status?.toLowerCase();
+                      setLocation({
+                        refId: branch.refId,
+                        display: branch.display,
+                        note: branch.addressNote || '',
+                      });
+                      setAddressQuery(branch.display);
+                      const branchCategory = branch.category.toLowerCase();
                       if (
                         branchCategory === 'apartment' ||
                         branchCategory === 'house' ||
@@ -419,10 +641,17 @@ export default function ListingDraftScreen({ onBack }: { onBack: () => void }) {
                       setBranchOpen(false);
                     }}
                     className="min-h-11 justify-center border-t border-border px-4">
-                    <Text className="text-sm text-foreground">{branch.title}</Text>
+                    <Text className="text-sm text-foreground">
+                      {branch.name} · {branch.display}
+                    </Text>
                   </Pressable>
                 ))}
               </View>
+            ) : null}
+            {selectedBranch?.isComplete === false ? (
+              <Text className="mt-2 text-xs text-warning">
+                Biểu phí chi nhánh chưa hoàn thiện. Cần cập nhật trước khi đăng tin.
+              </Text>
             ) : null}
             <Text className="mt-5 text-sm font-semibold text-secondary">
               Có thể vào ở từ ngày *
@@ -464,76 +693,63 @@ export default function ListingDraftScreen({ onBack }: { onBack: () => void }) {
               title="Địa chỉ căn nhà"
               note="Vị trí chính xác giúp người thuê tìm thấy tin đăng dễ hơn."
             />
-            <Text className="mt-3 text-sm font-semibold text-secondary">Tỉnh / thành phố *</Text>
-            <Pressable
-              onPress={() => setProvinceOpen((current) => !current)}
-              accessibilityRole="button"
-              className="mt-2 min-h-12 flex-row items-center rounded-xl border border-border bg-surface px-4">
-              <Icon name="location-outline" size={19} className="text-primary" />
-              <Text className="ml-2 flex-1 text-sm text-foreground">
-                {province?.name || 'Chọn tỉnh/thành'}
-              </Text>
-              <Icon
-                name={provinceOpen ? 'chevron-up' : 'chevron-down'}
-                size={18}
-                className="text-secondary"
-              />
-            </Pressable>
-            {provinceOpen ? (
-              <View className="mt-2 overflow-hidden rounded-xl border border-border bg-surface">
+            {selectedBranch ? (
+              <View className="mt-3 rounded-xl border border-primary-border bg-primary-soft p-4">
+                <Text className="font-semibold text-foreground">Địa chỉ theo chi nhánh</Text>
+                <Text className="mt-1 text-sm text-secondary">{selectedBranch.display}</Text>
+              </View>
+            ) : (
+              <>
+                <Text className="mt-3 text-sm font-semibold text-secondary">
+                  Tìm địa chỉ Vietmap *
+                </Text>
                 <TextInput
-                  value={provinceQuery}
-                  onChangeText={setProvinceQuery}
-                  placeholder="Tìm tỉnh/thành"
-                  className="m-3 min-h-11 rounded-xl bg-muted px-3 text-foreground placeholder:text-subtle"
+                  value={addressQuery}
+                  onChangeText={(text) => {
+                    setAddressQuery(text);
+                    setLocation((current) => ({ ...current, refId: '', display: '' }));
+                    setError(null);
+                  }}
+                  placeholder="Nhập số nhà, đường, phường..."
+                  className="mt-2 min-h-12 rounded-xl border border-border bg-surface px-4 text-foreground placeholder:text-subtle"
                 />
-                <ScrollView
-                  nestedScrollEnabled
-                  keyboardShouldPersistTaps="handled"
-                  className="max-h-52">
-                  {provinces
-                    .filter((item) => matchesProvince(item.name, provinceQuery))
-                    .map((item) => (
+                {addressLoading ? <ActivityIndicator className="mt-3 text-primary" /> : null}
+                {suggestions.length ? (
+                  <View className="mt-2 overflow-hidden rounded-xl border border-border bg-surface">
+                    {suggestions.map((item) => (
                       <Pressable
-                        key={item.code}
+                        key={item.refId}
                         onPress={() => {
-                          setLocation((current) => ({ ...current, provinceCode: item.code }));
-                          setProvinceOpen(false);
-                          setProvinceQuery('');
+                          setLocation((current) => ({
+                            ...current,
+                            refId: item.refId,
+                            display: item.display,
+                          }));
+                          setAddressQuery(item.display);
+                          setSuggestions([]);
+                          Keyboard.dismiss();
                         }}
-                        className="min-h-11 justify-center border-t border-border px-4">
-                        <Text className="text-sm text-foreground">{item.name}</Text>
+                        className="min-h-12 justify-center border-t border-border px-4 py-2">
+                        <Text className="text-sm text-foreground">{item.display}</Text>
                       </Pressable>
                     ))}
-                </ScrollView>
-              </View>
+                  </View>
+                ) : null}
+                {location.refId ? (
+                  <Text className="mt-2 text-xs font-semibold text-success">
+                    Đã chọn: {location.display}
+                  </Text>
+                ) : null}
+              </>
+            )}
+            {!selectedBranch ? (
+              <Field
+                label="Ghi chú vị trí"
+                value={location.note}
+                onChangeText={(note) => setLocation((current) => ({ ...current, note }))}
+                placeholder="Tầng, lối vào hoặc mốc gần nhà"
+              />
             ) : null}
-            <Field
-              label="Phường / xã *"
-              value={location.ward}
-              onChangeText={(ward) => setLocation((current) => ({ ...current, ward }))}
-              placeholder="Nhập phường/xã"
-            />
-            <Field
-              label="Số nhà, tên đường *"
-              value={location.street}
-              onChangeText={(street) => setLocation((current) => ({ ...current, street }))}
-              placeholder="Ví dụ: 80/68 Dương Quảng Hàm"
-            />
-            <Field
-              label="Ghi chú vị trí"
-              value={location.note}
-              onChangeText={(note) => setLocation((current) => ({ ...current, note }))}
-              placeholder="Tầng, lối vào hoặc mốc gần nhà"
-            />
-            <View className="mt-5 rounded-2xl border border-dashed border-primary-border bg-primary-soft p-4">
-              <Icon name="map-outline" size={25} className="text-primary" />
-              <Text className="mt-2 font-bold text-foreground">Ghim vị trí trên bản đồ</Text>
-              <Text className="mt-1 text-xs leading-5 text-muted-foreground">
-                Bản đồ và tọa độ sẽ được nối ở giai đoạn API. Địa chỉ bạn nhập vẫn được giữ khi
-                chuyển bước.
-              </Text>
-            </View>
             <View className="mt-7">
               <SectionTitle
                 title={`Hình ảnh (${images.length}/6)`}
@@ -627,17 +843,17 @@ export default function ListingDraftScreen({ onBack }: { onBack: () => void }) {
               <SectionTitle title="Tiện ích" note="Chọn những tiện ích có thật tại bất động sản." />
             </View>
             <View className="flex-row flex-wrap gap-2">
-              {AMENITIES[category].map((item) => {
-                const selected = amenities[category].includes(item);
+              {(catalog?.amenities ?? []).map((item) => {
+                const selected = amenities[category].includes(item.code);
                 return (
                   <Pressable
-                    key={item}
+                    key={item.code}
                     onPress={() =>
                       setAmenities((current) => ({
                         ...current,
                         [category]: selected
-                          ? current[category].filter((x) => x !== item)
-                          : [...current[category], item],
+                          ? current[category].filter((x) => x !== item.code)
+                          : [...current[category], item.code],
                       }))
                     }
                     accessibilityRole="button"
@@ -645,12 +861,24 @@ export default function ListingDraftScreen({ onBack }: { onBack: () => void }) {
                     className={`min-h-11 justify-center rounded-full border px-3 ${selected ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
                     <Text
                       className={`text-sm ${selected ? 'font-bold text-primary' : 'text-secondary'}`}>
-                      {item}
+                      {item.name}
                     </Text>
                   </Pressable>
                 );
               })}
             </View>
+            {!catalog && !catalogError ? <ActivityIndicator className="mt-3 text-primary" /> : null}
+            {catalogError ? (
+              <ErrorNotice message={`Không tải được tiện ích: ${catalogError}`} />
+            ) : null}
+            {catalogError ? (
+              <Pressable
+                onPress={() => setCatalogRefresh((current) => current + 1)}
+                accessibilityRole="button"
+                className="mt-2 min-h-11 items-center justify-center rounded-xl border border-primary-border bg-primary-soft">
+                <Text className="font-semibold text-primary">Tải lại danh mục</Text>
+              </Pressable>
+            ) : null}
             <View className="mt-7">
               <SectionTitle
                 title="Trang thiết bị bàn giao"
@@ -765,121 +993,199 @@ export default function ListingDraftScreen({ onBack }: { onBack: () => void }) {
               value={pricing.paymentCycle}
               onChange={(value) => setPrice('paymentCycle', value)}
             />
-            <View className="mt-8">
+            {selectedBranch ? (
+              <View className="mt-8 rounded-2xl border border-primary-border bg-primary-soft p-4">
+                <Text className="font-bold text-foreground">Biểu phí theo chi nhánh</Text>
+                <Text className="mt-1 text-sm leading-5 text-secondary">
+                  Các khoản phí của “{selectedBranch.name}” sẽ được dùng cho tin này. Bạn có thể sửa
+                  biểu phí trong Quản lý chi nhánh.
+                </Text>
+              </View>
+            ) : (
+              <>
+                <View className="mt-8">
+                  <SectionTitle
+                    title="Chi phí hàng tháng"
+                    note="Chỉ nhập giá riêng cho khoản không bao gồm trong tiền thuê."
+                  />
+                </View>
+                {[
+                  ['electricity', 'Điện *', ['Theo kWh', 'Đã bao gồm']],
+                  ['water', 'Nước *', ['Theo m³', 'Theo người', 'Theo phòng', 'Đã bao gồm']],
+                  ...(category === 'apartment'
+                    ? [
+                        [
+                          'management',
+                          'Phí quản lý',
+                          ['Theo tháng', 'Theo m²', 'Đã bao gồm', 'Không có'],
+                        ],
+                      ]
+                    : []),
+                  ['internet', 'Internet', ['Theo tháng', 'Đã bao gồm', 'Tự trả']],
+                  ['garbage', 'Rác', ['Theo tháng', 'Đã bao gồm', 'Không có']],
+                  ['motorbike', 'Gửi xe máy', ['Theo xe', 'Đã bao gồm', 'Không có']],
+                  ['car', 'Gửi ô tô', ['Theo xe', 'Đã bao gồm', 'Không có']],
+                ].map(([key, label, options]) => (
+                  <View
+                    key={key as string}
+                    className="mt-2 rounded-2xl border border-border bg-surface p-3">
+                    <Choice
+                      label={label as string}
+                      options={options as string[]}
+                      value={pricing[`${key}Type`] ?? ''}
+                      onChange={(value) => setPrice(`${key}Type`, value)}
+                    />
+                    {pricing[`${key}Type`] &&
+                    !['Đã bao gồm', 'Không có', 'Tự trả'].includes(pricing[`${key}Type`]) ? (
+                      <Field
+                        label={`Đơn giá ${String(label).toLowerCase()}`}
+                        value={pricing[`${key}Price`] ?? ''}
+                        keyboardType="number-pad"
+                        onChangeText={(value) => setPrice(`${key}Price`, value.replace(/\D/g, ''))}
+                        placeholder="Nhập số tiền"
+                      />
+                    ) : null}
+                  </View>
+                ))}
+                <View className="mt-7">
+                  <SectionTitle
+                    title="Khoản phí khác"
+                    note="Có thể thêm các khoản thu riêng không nằm trong danh sách trên."
+                  />
+                </View>
+                {customFees.map((fee, index) => (
+                  <View
+                    key={index}
+                    className="mt-3 rounded-2xl border border-border bg-surface p-3">
+                    <Field
+                      label="Tên khoản phí"
+                      value={fee.name}
+                      onChangeText={(name) =>
+                        setCustomFees((current) =>
+                          current.map((row, i) => (i === index ? { ...row, name } : row))
+                        )
+                      }
+                      placeholder="Ví dụ: Phí vệ sinh"
+                    />
+                    <Field
+                      label="Số tiền (VNĐ)"
+                      value={fee.amount}
+                      keyboardType="number-pad"
+                      onChangeText={(amount) =>
+                        setCustomFees((current) =>
+                          current.map((row, i) =>
+                            i === index ? { ...row, amount: amount.replace(/\D/g, '') } : row
+                          )
+                        )
+                      }
+                    />
+                    <Field
+                      label="Đơn vị"
+                      value={fee.unit}
+                      onChangeText={(unit) =>
+                        setCustomFees((current) =>
+                          current.map((row, i) => (i === index ? { ...row, unit } : row))
+                        )
+                      }
+                      placeholder="Ví dụ: tháng"
+                    />
+                    <Pressable
+                      onPress={() =>
+                        setCustomFees((current) => current.filter((_, i) => i !== index))
+                      }
+                      className="mt-3 min-h-10 justify-center self-end px-2">
+                      <Text className="font-semibold text-danger">Xóa khoản phí</Text>
+                    </Pressable>
+                  </View>
+                ))}
+                <Pressable
+                  onPress={() =>
+                    setCustomFees((current) => [
+                      ...current,
+                      { name: '', amount: '', unit: 'tháng' },
+                    ])
+                  }
+                  accessibilityRole="button"
+                  className="mt-3 min-h-12 flex-row items-center justify-center rounded-xl border border-primary-border bg-primary-soft">
+                  <Icon name="add" size={19} className="text-primary" />
+                  <Text className="ml-1 font-semibold text-primary">Thêm khoản phí</Text>
+                </Pressable>
+              </>
+            )}
+            <View className="mt-7">
               <SectionTitle
-                title="Chi phí hàng tháng"
-                note="Chỉ nhập giá riêng cho khoản không bao gồm trong tiền thuê."
+                title="Chính sách & nội quy thuê"
+                note="Các mục bắt buộc cần được điền trước khi gửi duyệt."
               />
             </View>
-            {[
-              ['electricity', 'Điện', ['Theo kWh', 'Đã bao gồm']],
-              ['water', 'Nước', ['Theo m³', 'Theo người', 'Theo phòng', 'Đã bao gồm']],
-              ...(category === 'apartment'
-                ? [
-                    [
-                      'management',
-                      'Phí quản lý',
-                      ['Theo tháng', 'Theo m²', 'Đã bao gồm', 'Không có'],
-                    ],
-                  ]
-                : []),
-              ['internet', 'Internet', ['Theo tháng', 'Đã bao gồm', 'Tự trả']],
-              ['garbage', 'Rác', ['Theo tháng', 'Đã bao gồm', 'Không có']],
-              ['motorbike', 'Gửi xe máy', ['Theo xe', 'Đã bao gồm', 'Không có']],
-              ['car', 'Gửi ô tô', ['Theo xe', 'Đã bao gồm', 'Không có']],
-            ].map(([key, label, options]) => (
+            {catalogError ? (
+              <ErrorNotice message={`Không tải được danh mục chính sách: ${catalogError}`} />
+            ) : null}
+            {catalogError ? (
+              <Pressable
+                onPress={() => setCatalogRefresh((current) => current + 1)}
+                accessibilityRole="button"
+                className="mt-2 min-h-11 items-center justify-center rounded-xl border border-primary-border bg-primary-soft">
+                <Text className="font-semibold text-primary">Tải lại danh mục</Text>
+              </Pressable>
+            ) : null}
+            {!catalog && !catalogError ? <ActivityIndicator className="mt-3 text-primary" /> : null}
+            {catalog?.policies.map((definition) => (
               <View
-                key={key as string}
-                className="mt-2 rounded-2xl border border-border bg-surface p-3">
-                <Choice
-                  label={label as string}
-                  options={options as string[]}
-                  value={pricing[`${key}Type`] ?? ''}
-                  onChange={(value) => setPrice(`${key}Type`, value)}
-                />
-                {pricing[`${key}Type`] &&
-                !['Đã bao gồm', 'Không có', 'Tự trả'].includes(pricing[`${key}Type`]) ? (
+                key={definition.code}
+                className="mt-3 rounded-2xl border border-border bg-surface p-3">
+                {definition.valueType === 'PERMISSION' ? (
+                  <View>
+                    <Text className="text-sm font-semibold text-secondary">
+                      {definition.label}
+                      {definition.required ? ' *' : ''}
+                    </Text>
+                    <View className="mt-2 flex-row flex-wrap gap-2">
+                      {(definition.choices?.length
+                        ? definition.choices
+                        : [
+                            { value: 'ALLOWED', label: 'Cho phép' },
+                            { value: 'NOT_ALLOWED', label: 'Không cho phép' },
+                            { value: 'APPROVAL_REQUIRED', label: 'Cần chấp thuận' },
+                          ]
+                      ).map((choice) => (
+                        <Pressable
+                          key={choice.value}
+                          onPress={() =>
+                            setPolicyValues((current) => ({
+                              ...current,
+                              [definition.code]: choice.value,
+                            }))
+                          }
+                          accessibilityRole="button"
+                          accessibilityState={{
+                            selected: policyValues[definition.code] === choice.value,
+                          }}
+                          className={`min-h-11 justify-center rounded-xl border px-3 py-2 ${policyValues[definition.code] === choice.value ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
+                          <Text
+                            className={`text-sm ${policyValues[definition.code] === choice.value ? 'font-bold text-primary' : 'text-secondary'}`}>
+                            {choice.label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                ) : (
                   <Field
-                    label={`Đơn giá ${String(label).toLowerCase()}`}
-                    value={pricing[`${key}Price`] ?? ''}
-                    keyboardType="number-pad"
-                    onChangeText={(value) => setPrice(`${key}Price`, value.replace(/\D/g, ''))}
-                    placeholder="Nhập số tiền"
+                    label={`${definition.label}${definition.required ? ' *' : ''}${definition.unitLabel ? ` (${definition.unitLabel})` : ''}`}
+                    value={policyValues[definition.code] ?? ''}
+                    onChangeText={(value) =>
+                      setPolicyValues((current) => ({ ...current, [definition.code]: value }))
+                    }
+                    keyboardType={definition.valueType === 'INTEGER' ? 'number-pad' : 'default'}
+                    placeholder={definition.helpText || 'Nhập thông tin'}
                   />
+                )}
+                {definition.helpText && definition.valueType === 'PERMISSION' ? (
+                  <Text className="mt-2 text-xs text-muted-foreground">{definition.helpText}</Text>
                 ) : null}
               </View>
             ))}
-            <View className="mt-7">
-              <SectionTitle
-                title="Khoản phí khác"
-                note="Có thể thêm các khoản thu riêng không nằm trong danh sách trên."
-              />
-            </View>
-            {customFees.map((fee, index) => (
-              <View key={index} className="mt-3 rounded-2xl border border-border bg-surface p-3">
-                <Field
-                  label="Tên khoản phí"
-                  value={fee.name}
-                  onChangeText={(name) =>
-                    setCustomFees((current) =>
-                      current.map((row, i) => (i === index ? { ...row, name } : row))
-                    )
-                  }
-                  placeholder="Ví dụ: Phí vệ sinh"
-                />
-                <Field
-                  label="Số tiền (VNĐ)"
-                  value={fee.amount}
-                  keyboardType="number-pad"
-                  onChangeText={(amount) =>
-                    setCustomFees((current) =>
-                      current.map((row, i) =>
-                        i === index ? { ...row, amount: amount.replace(/\D/g, '') } : row
-                      )
-                    )
-                  }
-                />
-                <Field
-                  label="Đơn vị"
-                  value={fee.unit}
-                  onChangeText={(unit) =>
-                    setCustomFees((current) =>
-                      current.map((row, i) => (i === index ? { ...row, unit } : row))
-                    )
-                  }
-                  placeholder="Ví dụ: tháng"
-                />
-                <Pressable
-                  onPress={() => setCustomFees((current) => current.filter((_, i) => i !== index))}
-                  className="mt-3 min-h-10 justify-center self-end px-2">
-                  <Text className="font-semibold text-danger">Xóa khoản phí</Text>
-                </Pressable>
-              </View>
-            ))}
-            <Pressable
-              onPress={() =>
-                setCustomFees((current) => [...current, { name: '', amount: '', unit: 'tháng' }])
-              }
-              accessibilityRole="button"
-              className="mt-3 min-h-12 flex-row items-center justify-center rounded-xl border border-primary-border bg-primary-soft">
-              <Icon name="add" size={19} className="text-primary" />
-              <Text className="ml-1 font-semibold text-primary">Thêm khoản phí</Text>
-            </Pressable>
-            <View className="mt-7">
-              <SectionTitle
-                title="Chính sách & nội quy"
-                note="Ghi rõ những quy định người thuê cần biết."
-              />
-            </View>
-            <Field
-              label="Nội quy bổ sung"
-              value={policy}
-              onChangeText={setPolicy}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-              placeholder="Ví dụ: Giờ giấc, vật nuôi, sử dụng khu chung..."
-            />
           </>
         ) : null}
 
@@ -950,7 +1256,7 @@ export default function ListingDraftScreen({ onBack }: { onBack: () => void }) {
             {LISTING_STEPS.slice(0, 5).map((label, index) => {
               const summary = [
                 `${categoryLabel} · ${basic.title || 'Chưa có tiêu đề'}`,
-                `${province?.name || 'Chưa chọn tỉnh/thành'} · ${images.length} ảnh · ${videos.length} video`,
+                `${selectedBranch?.display || location.display || 'Chưa chọn địa chỉ'} · ${images.length} ảnh · ${videos.length} video`,
                 `${requiredDetails.filter((field) => details[category][field.key]?.trim()).length}/${requiredDetails.length} trường bắt buộc · ${amenities[category].length} tiện ích`,
                 `${pricing.priceMonthly ? Number(pricing.priceMonthly).toLocaleString('vi-VN') + ' đ' : 'Chưa có giá thuê'} · ${pricing.depositType}`,
                 `${days.length} ngày · ${slots.length} buổi · ${description ? 'Đã có mô tả' : 'Chưa có mô tả'}`,
@@ -989,33 +1295,63 @@ export default function ListingDraftScreen({ onBack }: { onBack: () => void }) {
               );
             })}
             <View className="mt-6 rounded-2xl border border-primary-border bg-primary-soft p-4">
-              <Text className="font-bold text-foreground">Bước tiếp theo khi nối API</Text>
+              <Text className="font-bold text-foreground">Hoàn tất tin đăng</Text>
               <Text className="mt-2 text-sm leading-5 text-secondary">
-                Lưu nháp, kiểm tra dữ liệu và gửi duyệt sẽ được bật sau khi phần giao diện được
-                chốt. Hiện chưa có tin nào được tạo.
+                Cả lưu nháp và gửi duyệt đều cần đủ thông tin cơ bản, địa chỉ, ảnh, giá và mô tả.
+                Gửi duyệt cần thêm các chính sách bắt buộc.
               </Text>
             </View>
           </>
         ) : null}
       </ScrollView>
 
-      <View className="flex-row gap-3 border-t border-border bg-surface px-5 pb-3 pt-3">
-        <Pressable
-          onPress={() => (step ? goTo(step - 1) : exit())}
-          accessibilityRole="button"
-          className="min-h-12 flex-1 items-center justify-center rounded-xl border border-border bg-surface">
-          <Text className="font-bold text-secondary">{step ? 'Quay lại' : 'Thoát'}</Text>
-        </Pressable>
-        <Pressable
-          disabled={step === 5}
-          onPress={() => goTo(step + 1)}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: step === 5 }}
-          className={`min-h-12 flex-[2] items-center justify-center rounded-xl ${step === 5 ? 'bg-disabled' : 'bg-brand'}`}>
-          <Text className={`font-bold ${step === 5 ? 'text-on-disabled' : 'text-on-brand'}`}>
-            {step === 5 ? 'Gửi duyệt (chưa khả dụng)' : 'Tiếp tục'}
-          </Text>
-        </Pressable>
+      <View className="border-t border-border bg-surface px-5 pb-3 pt-3">
+        {step === 5 ? (
+          <View className="gap-2">
+            <Pressable
+              onPress={() => goTo(4)}
+              disabled={busy}
+              accessibilityRole="button"
+              className="min-h-10 items-center justify-center">
+              <Text className="font-semibold text-secondary">Quay lại chỉnh sửa</Text>
+            </Pressable>
+            <View className="flex-row gap-3">
+              <Pressable
+                onPress={() => void submit('SAVE_DRAFT')}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: busy }}
+                className="min-h-12 flex-1 items-center justify-center rounded-xl border border-primary bg-primary-soft">
+                <Text className="font-bold text-primary">Lưu nháp</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void submit('SUBMIT_FOR_REVIEW')}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: busy }}
+                className={`min-h-12 flex-1 items-center justify-center rounded-xl ${busy ? 'bg-disabled' : 'bg-brand'}`}>
+                <Text className={`font-bold ${busy ? 'text-on-disabled' : 'text-on-brand'}`}>
+                  {busy ? 'Đang xử lý...' : 'Gửi duyệt'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <View className="flex-row gap-3">
+            <Pressable
+              onPress={() => (step ? goTo(step - 1) : exit())}
+              accessibilityRole="button"
+              className="min-h-12 flex-1 items-center justify-center rounded-xl border border-border bg-surface">
+              <Text className="font-bold text-secondary">{step ? 'Quay lại' : 'Thoát'}</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => goTo(step + 1)}
+              accessibilityRole="button"
+              className="min-h-12 flex-[2] items-center justify-center rounded-xl bg-brand">
+              <Text className="font-bold text-on-brand">Tiếp tục</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );

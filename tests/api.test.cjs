@@ -252,6 +252,91 @@ test('listing draft has six steps and distinct required fields for each property
   assert.ok(draft.DETAIL_FIELDS.room.main.some((field) => field.key === 'roomCode'));
 });
 
+test('listing form maps each property type and required policies to the upsert payload', () => {
+  const { buildListingPayload } = load('lib/listing-create.ts', {
+    '@/lib/listing-draft': load('lib/listing-draft.ts'),
+  });
+  const base = {
+    category: 'apartment',
+    title: 'Căn hộ gần trường đại học',
+    branchId: '',
+    availableDate: '2099-12-31',
+    addressRefId: 'vm:address-1',
+    addressNote: 'Lối sau',
+    details: { projectName: 'Tòa A', areaM2: '45', floor: '3', furnishing: 'Bàn giao thô' },
+    amenities: ['WIFI'],
+    assets: [],
+    pricing: {
+      priceMonthly: '5000000',
+      priceUnit: 'VNĐ / tháng',
+      depositType: 'Không cọc',
+      minimumLeaseMonths: '6',
+      electricityType: 'Đã bao gồm',
+      waterType: 'Đã bao gồm',
+    },
+    customFees: [],
+    days: ['MONDAY'],
+    slots: ['MORNING'],
+    description: 'Căn hộ thoáng mát và gần trường đại học, có bảo vệ.',
+    policyValues: { PETS: 'NOT_ALLOWED' },
+    catalog: {
+      amenities: [{ code: 'WIFI', name: 'WiFi' }],
+      furnishings: [],
+      policies: [{ code: 'PETS', label: 'Vật nuôi', valueType: 'PERMISSION', required: true }],
+    },
+    media: [{ storageObjectId: 'image-1', mediaType: 'IMAGE' }],
+  };
+  const apartment = buildListingPayload(base, 'SUBMIT_FOR_REVIEW');
+  assert.equal(apartment.category, 'APARTMENT');
+  assert.equal(apartment.apartmentDetail.floorNumber, 3);
+  assert.equal(apartment.houseDetail, null);
+  assert.equal(apartment.addressSource.address.refId, 'vm:address-1');
+  assert.equal(apartment.media[0].cover, true);
+  assert.equal(apartment.policies[0].value, 'NOT_ALLOWED');
+  assert.equal(apartment.charges[0].billingMethod, 'INCLUDED');
+  const house = buildListingPayload(
+    {
+      ...base,
+      category: 'house',
+      details: { totalUsableAreaM2: '70', totalFloors: '2', furnishing: 'Bàn giao thô' },
+    },
+    'SAVE_DRAFT'
+  );
+  assert.equal(house.houseDetail.totalFloors, 2);
+  assert.equal(house.houseDetail.hasGarage, null);
+  const room = buildListingPayload(
+    {
+      ...base,
+      category: 'room',
+      details: {
+        areaM2: '24',
+        roomCode: 'P101',
+        maxOccupants: '2',
+        toiletType: 'Riêng',
+        furnishing: 'Bàn giao thô',
+      },
+    },
+    'SAVE_DRAFT'
+  );
+  assert.equal(room.roomDetail.roomCode, 'P101');
+  assert.equal(room.roomDetail.balconyType, null);
+  assert.throws(
+    () => buildListingPayload({ ...base, policyValues: {} }, 'SUBMIT_FOR_REVIEW'),
+    /Vật nuôi/
+  );
+});
+
+test('listing creation calls catalog and upsert endpoints', async () => {
+  const { client, calls } = mockApi({ result: { id: 'listing-1' } });
+  const api = load('services/listingCreateApi.ts', { '@/lib/axios-client': client });
+  await api.getListingCatalog('room');
+  await api.upsertListing({ submissionAction: 'SAVE_DRAFT' });
+  assert.equal(calls[0].args[0], '/api/v1/public/listing-catalog');
+  assert.equal(calls[0].args[1].params.category, 'ROOM');
+  assert.equal(calls[1].args[0], '/api/v1/listings/upsert');
+  assert.equal(calls[1].args[1].submissionAction, 'SAVE_DRAFT');
+});
+
 test('branch form preserves existing data and builds complete valid charges', () => {
   const { branchForm, buildBranchInput } = load('lib/branch-form.ts');
   const form = branchForm({

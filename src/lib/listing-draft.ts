@@ -36,7 +36,7 @@ export const DETAIL_FIELDS: Record<ListingCategory, { main: DetailField[]; more:
         { key: 'floor', label: 'Tầng căn hộ', required: true, number: true },
         { key: 'bedrooms', label: 'Phòng ngủ', number: true },
         { key: 'bathrooms', label: 'Phòng tắm / WC', number: true },
-        { key: 'furnishing', label: 'Tình trạng nội thất', options: furnishing },
+        { key: 'furnishing', label: 'Tình trạng nội thất', required: true, options: furnishing },
       ],
       more: [
         { key: 'buildingBlock', label: 'Block / tòa' },
@@ -62,7 +62,7 @@ export const DETAIL_FIELDS: Record<ListingCategory, { main: DetailField[]; more:
         { key: 'totalFloors', label: 'Tổng số tầng', required: true, number: true },
         { key: 'bedrooms', label: 'Phòng ngủ', number: true },
         { key: 'bathrooms', label: 'Phòng tắm / WC', number: true },
-        { key: 'furnishing', label: 'Tình trạng nội thất', options: furnishing },
+        { key: 'furnishing', label: 'Tình trạng nội thất', required: true, options: furnishing },
       ],
       more: [
         { key: 'landAreaM2', label: 'Diện tích đất (m²)', number: true },
@@ -85,9 +85,14 @@ export const DETAIL_FIELDS: Record<ListingCategory, { main: DetailField[]; more:
         { key: 'roomCode', label: 'Mã / tên phòng', required: true },
         { key: 'areaM2', label: 'Diện tích phòng (m²)', required: true, number: true },
         { key: 'maxOccupants', label: 'Số người ở tối đa', required: true, number: true },
-        { key: 'toiletType', label: 'Nhà vệ sinh', options: ['Riêng', 'Dùng chung'] },
+        {
+          key: 'toiletType',
+          label: 'Nhà vệ sinh',
+          required: true,
+          options: ['Riêng', 'Dùng chung'],
+        },
         { key: 'kitchenType', label: 'Khu bếp', options: ['Riêng', 'Dùng chung', 'Không có'] },
-        { key: 'furnishing', label: 'Tình trạng nội thất', options: furnishing },
+        { key: 'furnishing', label: 'Tình trạng nội thất', required: true, options: furnishing },
       ],
       more: [
         { key: 'roomFloor', label: 'Tầng của phòng', number: true },
@@ -99,22 +104,11 @@ export const DETAIL_FIELDS: Record<ListingCategory, { main: DetailField[]; more:
         { key: 'electricityMeter', label: 'Đồng hồ điện', options: ['Riêng', 'Dùng chung'] },
         { key: 'waterMeter', label: 'Đồng hồ nước', options: ['Riêng', 'Dùng chung'] },
         { key: 'maxVehicles', label: 'Số xe tối đa', number: true },
-        { key: 'parkingPolicy', label: 'Quy định gửi xe' },
+        {
+          key: 'parkingPolicy',
+          label: 'Quy định gửi xe',
+          options: ['Không có', 'Miễn phí', 'Có phí'],
+        },
       ],
     },
   };
-
-export const AMENITIES: Record<ListingCategory, readonly string[]> = {
-  apartment: [
-    'WiFi',
-    'Máy lạnh',
-    'Thang máy',
-    'Bảo vệ',
-    'Camera',
-    'Hồ bơi',
-    'Phòng gym',
-    'Chỗ để xe',
-  ],
-  house: ['WiFi', 'Máy lạnh', 'Máy nước nóng', 'Gara', 'Camera', 'Sân thượng', 'Chỗ để xe'],
-  room: ['WiFi', 'Máy lạnh', 'Máy nước nóng', 'Thang máy', 'Camera', 'Chỗ để xe'],
-};
