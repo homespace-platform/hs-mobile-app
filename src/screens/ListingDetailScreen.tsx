@@ -12,6 +12,7 @@ import { getUserProfileApi } from '@/services/userApi';
 import BookingForm from '@/components/BookingForm';
 import RentalRequestForm from '@/components/RentalRequestForm';
 import { Button } from '@/components/Screen';
+import ListingDraftScreen from '@/screens/ListingDraftScreen';
 import { apiError } from '@/lib/api-error';
 import { getMyRentalRequestByListing, type ActiveRentalRequest } from '@/services/bookingApi';
 import type { ManagementSection } from '@/services/managementApi';
@@ -119,7 +120,7 @@ export default function ListingDetailScreen({
   const [favoriteReady, setFavoriteReady] = useState(false);
   const [favoriteSaving, setFavoriteSaving] = useState(false);
   const [userId, setUserId] = useState('');
-  const [form, setForm] = useState<'booking' | 'rental' | null>(null);
+  const [form, setForm] = useState<'booking' | 'rental' | 'edit' | null>(null);
   const [rentalRequest, setRentalRequest] = useState<ActiveRentalRequest | null>(null);
   const [rentalLoading, setRentalLoading] = useState(true);
   const [rentalError, setRentalError] = useState<string | null>(null);
@@ -222,6 +223,17 @@ export default function ListingDetailScreen({
         onSuccess={(request) => {
           setRentalRequest(request);
           setForm(null);
+        }}
+      />
+    );
+  if (form === 'edit')
+    return (
+      <ListingDraftScreen
+        listingId={listingId}
+        onBack={() => setForm(null)}
+        onSaved={() => {
+          setForm(null);
+          void load();
         }}
       />
     );
@@ -348,6 +360,11 @@ export default function ListingDetailScreen({
           <Text className="mt-4 text-2xl font-extrabold text-primary">
             {formatMoney(listing.pricing.amount)}/tháng
           </Text>
+          {own &&
+          ['APARTMENT', 'HOUSE', 'ROOM'].includes(listing.category) &&
+          !['RENTED', 'RENTED_EXTERNALLY', 'VIOLATION'].includes(listing.status) ? (
+            <Button label="Chỉnh sửa tin đăng" onPress={() => setForm('edit')} />
+          ) : null}
           {!own && userId && userId !== listing.ownerId ? (
             <>
               <Button label="Đặt lịch xem nhà" onPress={() => setForm('booking')} />

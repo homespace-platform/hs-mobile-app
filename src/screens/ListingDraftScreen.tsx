@@ -18,6 +18,7 @@ import BookingDatePicker from '@/components/BookingDatePicker';
 import { dateKey } from '@/lib/appointment-calendar';
 import { apiError } from '@/lib/api-error';
 import { buildListingPayload, type ListingMedia } from '@/lib/listing-create';
+import { mapListingForEdit } from '@/lib/listing-edit';
 import {
   DETAIL_FIELDS,
   LISTING_CATEGORIES,
@@ -39,6 +40,7 @@ import {
 } from '@/services/listingCreateApi';
 import { uploadFile } from '@/services/storageApi';
 import { getUserProfileApi } from '@/services/userApi';
+import { getAccessibleListing, type ListingDetail } from '@/services/listingApi';
 
 const DAYS = [
   ['MONDAY', 'T2'],
@@ -113,14 +115,18 @@ type PickedMedia = {
 export default function ListingDraftScreen({
   onBack,
   onSaved,
+  listingId,
 }: {
   onBack: () => void;
   onSaved: () => void;
+  listingId?: string;
 }) {
   const showDialog = useDialog();
   const scrollRef = useRef<ScrollView>(null);
   const submitLock = useRef(false);
   const [step, setStep] = useState(0);
+  const [original, setOriginal] = useState<ListingDetail | null>(null);
+  const [loadingListing, setLoadingListing] = useState(Boolean(listingId));
   const [category, setCategory] = useState<ListingCategory>('apartment');
   const [basic, setBasic] = useState({
     title: '',
@@ -153,7 +159,15 @@ export default function ListingDraftScreen({
     house: [],
     room: [],
   }));
-  const [assets, setAssets] = useState<{ name: string; quantity: string; condition: string }[]>([]);
+  const [assets, setAssets] = useState<
+    {
+      name: string;
+      quantity: string;
+      condition: string;
+      itemCode?: string | null;
+      conditionNote?: string | null;
+    }[]
+  >([]);
   const [pricing, setPricing] = useState<Record<string, string>>({
     priceUnit: 'VNĐ / tháng',
     depositType: 'Không cọc',
@@ -165,6 +179,42 @@ export default function ListingDraftScreen({
   const [days, setDays] = useState<string[]>([]);
   const [slots, setSlots] = useState<string[]>([]);
   const [description, setDescription] = useState('');
+  useEffect(() => {
+    if (!listingId) return;
+    let active = true;
+    void getAccessibleListing(listingId)
+      .then((listing) => {
+        if (!active) return;
+        if (['RENTED', 'RENTED_EXTERNALLY', 'VIOLATION'].includes(listing.status))
+          throw new Error('Tin đăng này hiện không thể chỉnh sửa.');
+        const draft = mapListingForEdit(listing);
+        setOriginal(listing);
+        setCategory(draft.category);
+        setBasic(draft.basic);
+        setLocation(draft.location);
+        setAddressQuery(draft.location.display);
+        setImages(draft.images);
+        setVideos(draft.videos);
+        setDetails((current) => ({ ...current, [draft.category]: draft.details }));
+        setAmenities((current) => ({ ...current, [draft.category]: draft.amenities }));
+        setAssets(draft.assets);
+        setPricing(draft.pricing);
+        setCustomFees(draft.customFees);
+        setDays(draft.days);
+        setSlots(draft.slots);
+        setDescription(draft.description);
+        setPolicyValues(draft.policyValues);
+      })
+      .catch((cause) => {
+        if (active) setError(apiError(cause));
+      })
+      .finally(() => {
+        if (active) setLoadingListing(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [listingId]);
   useEffect(() => {
     getBranches()
       .then(setBranches)
@@ -382,6 +432,8 @@ export default function ListingDraftScreen({
 
   function formData(media: ListingMedia[]) {
     return {
+      id: original?.id,
+      original: original ?? undefined,
       category,
       title: basic.title,
       branchId: basic.branchId,
@@ -467,7 +519,11 @@ export default function ListingDraftScreen({
       await upsertListing(buildListingPayload(formData(uploadedMedia), action));
       onSaved();
       showDialog(
-        action === 'SAVE_DRAFT' ? 'Đã lưu tin nháp' : 'Đã gửi tin chờ duyệt',
+        action === 'SAVE_DRAFT'
+          ? 'Đã lưu tin nháp'
+          : original
+            ? 'Đã cập nhật tin đăng'
+            : 'Đã gửi tin chờ duyệt',
         action === 'SAVE_DRAFT'
           ? 'Bạn có thể tiếp tục quản lý tin trong danh sách.'
           : 'Tin đăng đang chờ quản trị viên duyệt.',
@@ -483,9 +539,32 @@ export default function ListingDraftScreen({
     }
   }
 
+  if (listingId && !original) {
+    return (
+      <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
+        <ScreenHeader title="Chỉnh sửa tin đăng" onBack={onBack} />
+        {loadingListing ? (
+          <ActivityIndicator className="my-8 text-primary" />
+        ) : (
+          <View className="px-5">
+            <ErrorNotice message={error || 'Không tải được tin đăng.'} />
+            <Pressable
+              onPress={onBack}
+              className="mt-3 min-h-12 items-center justify-center rounded-xl bg-brand">
+              <Text className="font-bold text-on-brand">Quay lại</Text>
+            </Pressable>
+          </View>
+        )}
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <ScreenHeader title="Đăng tin cho thuê" onBack={() => (step ? goTo(step - 1) : exit())} />
+      <ScreenHeader
+        title={listingId ? 'Chỉnh sửa tin đăng' : 'Đăng tin cho thuê'}
+        onBack={() => (step ? goTo(step - 1) : exit())}
+      />
       <View className="border-b border-border bg-surface px-5 pb-4 pt-3">
         <View className="flex-row items-center justify-between">
           <Text className="text-xs font-bold uppercase tracking-widest text-primary">
@@ -537,7 +616,9 @@ export default function ListingDraftScreen({
         contentContainerClassName="px-5 pb-10 pt-5">
         <View className="mb-5 rounded-2xl border border-warning bg-warning-soft p-3">
           <Text className="text-xs leading-5 text-warning">
-            Kiểm tra kỹ thông tin trước khi lưu. Ảnh và video sẽ được tải lên khi bạn gửi biểu mẫu.
+            {original
+              ? 'Kiểm tra kỹ thông tin trước khi lưu. Tin đang hiển thị sẽ chuyển sang chờ duyệt lại khi gửi thay đổi.'
+              : 'Kiểm tra kỹ thông tin trước khi lưu. Ảnh và video sẽ được tải lên khi bạn gửi biểu mẫu.'}
           </Text>
         </View>
         <ErrorNotice message={error} />
@@ -1316,14 +1397,16 @@ export default function ListingDraftScreen({
               <Text className="font-semibold text-secondary">Quay lại chỉnh sửa</Text>
             </Pressable>
             <View className="flex-row gap-3">
-              <Pressable
-                onPress={() => void submit('SAVE_DRAFT')}
-                disabled={busy}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: busy }}
-                className="min-h-12 flex-1 items-center justify-center rounded-xl border border-primary bg-primary-soft">
-                <Text className="font-bold text-primary">Lưu nháp</Text>
-              </Pressable>
+              {!original || original.status === 'DRAFT' ? (
+                <Pressable
+                  onPress={() => void submit('SAVE_DRAFT')}
+                  disabled={busy}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: busy }}
+                  className="min-h-12 flex-1 items-center justify-center rounded-xl border border-primary bg-primary-soft">
+                  <Text className="font-bold text-primary">Lưu nháp</Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 onPress={() => void submit('SUBMIT_FOR_REVIEW')}
                 disabled={busy}
@@ -1331,7 +1414,7 @@ export default function ListingDraftScreen({
                 accessibilityState={{ disabled: busy }}
                 className={`min-h-12 flex-1 items-center justify-center rounded-xl ${busy ? 'bg-disabled' : 'bg-brand'}`}>
                 <Text className={`font-bold ${busy ? 'text-on-disabled' : 'text-on-brand'}`}>
-                  {busy ? 'Đang xử lý...' : 'Gửi duyệt'}
+                  {busy ? 'Đang xử lý...' : original ? 'Lưu và gửi duyệt' : 'Gửi duyệt'}
                 </Text>
               </Pressable>
             </View>

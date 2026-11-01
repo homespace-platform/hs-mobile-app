@@ -1,11 +1,14 @@
 import { DETAIL_FIELDS, type ListingCategory } from '@/lib/listing-draft';
 import type { ListingCatalog, ListingSubmissionAction } from '@/services/listingCreateApi';
+import type { ListingDetail } from '@/services/listingApi';
 
 export type ListingMedia = {
   storageObjectId: string;
   mediaType: 'IMAGE' | 'VIDEO';
 };
 export type ListingForm = {
+  id?: string;
+  original?: ListingDetail;
   category: ListingCategory;
   title: string;
   branchId: string;
@@ -14,7 +17,13 @@ export type ListingForm = {
   addressNote: string;
   details: Record<string, string>;
   amenities: string[];
-  assets: { name: string; quantity: string; condition: string }[];
+  assets: {
+    name: string;
+    quantity: string;
+    condition: string;
+    itemCode?: string | null;
+    conditionNote?: string | null;
+  }[];
   pricing: Record<string, string>;
   customFees: { name: string; amount: string; unit: string }[];
   days: string[];
@@ -90,7 +99,7 @@ export function buildListingPayload(form: ListingForm, action: ListingSubmission
     .map((definition) => ({
       code: definition.code,
       value: form.policyValues[definition.code].trim(),
-      note: '',
+      note: form.original?.policies?.find((policy) => policy.code === definition.code)?.note ?? '',
     }));
   if (action === 'SUBMIT_FOR_REVIEW') {
     if (!form.catalog?.policies?.length)
@@ -300,7 +309,7 @@ export function buildListingPayload(form: ListingForm, action: ListingSubmission
                   : 'FREE',
           };
   return {
-    id: null,
+    id: form.id ?? null,
     branchId: form.branchId || null,
     submissionAction: action,
     title: form.title.trim(),
@@ -308,7 +317,10 @@ export function buildListingPayload(form: ListingForm, action: ListingSubmission
     category,
     availableFrom: form.availableDate,
     areaM2,
+    maxMotorbikeCount: form.original?.maxMotorbikeCount ?? null,
+    maxCarCount: form.original?.maxCarCount ?? null,
     pricing: {
+      ...form.original?.pricing,
       amount: number(p.priceMonthly),
       currency: 'VND',
       unit:
@@ -329,16 +341,20 @@ export function buildListingPayload(form: ListingForm, action: ListingSubmission
       paymentCycle: 'MONTHLY',
       minimumLeaseMonths: number(p.minimumLeaseMonths),
       managementFeeIncluded: form.category === 'apartment' && p.managementType === 'Đã bao gồm',
+      vatIncluded: form.original?.pricing.vatIncluded ?? null,
     },
-    apartmentDetail: form.category === 'apartment' ? detail : null,
-    houseDetail: form.category === 'house' ? detail : null,
-    roomDetail: form.category === 'room' ? detail : null,
+    apartmentDetail:
+      form.category === 'apartment' ? { ...form.original?.apartmentDetail, ...detail } : null,
+    houseDetail: form.category === 'house' ? { ...form.original?.houseDetail, ...detail } : null,
+    roomDetail: form.category === 'room' ? { ...form.original?.roomDetail, ...detail } : null,
     amenityCodes: form.amenities.filter((item) => catalogCodes.has(item)),
     customAmenities: form.amenities.filter((item) => !catalogCodes.has(item)),
     furnishings: form.assets.map((asset) => ({
+      itemCode: asset.itemCode ?? null,
       assetName: asset.name.trim(),
       quantity: number(asset.quantity),
       handoverCondition: condition(asset.condition),
+      conditionNote: asset.conditionNote ?? null,
     })),
     charges,
     addressSource: {

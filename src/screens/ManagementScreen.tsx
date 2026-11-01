@@ -108,6 +108,7 @@ function EntryDetail({
   onBack,
   onChanged,
   onOpenListing,
+  onEditListing,
 }: {
   section: ManagementSection;
   initialEntry: ManagementEntry;
@@ -115,6 +116,7 @@ function EntryDetail({
   onBack: () => void;
   onChanged: () => void;
   onOpenListing: (id: string, own?: boolean, section?: ManagementSection) => void;
+  onEditListing: (id: string) => void;
 }) {
   const showDialog = useDialog();
   const [entry, setEntry] = useState(initialEntry);
@@ -241,8 +243,15 @@ function EntryDetail({
           <Button
             label="Xem tin đăng liên quan"
             disabled={busy}
-            onPress={() => onOpenListing(entry.listingId!, true, section)}
+            onPress={() =>
+              onOpenListing(entry.listingId!, section.startsWith('landlord-'), section)
+            }
           />
+        ) : null}
+        {section === 'landlord-properties' &&
+        ['APARTMENT', 'HOUSE', 'ROOM'].includes(entry.category ?? '') &&
+        !['RENTED', 'RENTED_EXTERNALLY', 'VIOLATION'].includes(entry.status) ? (
+          <Button label="Chỉnh sửa tin đăng" onPress={() => onEditListing(entry.id)} />
         ) : null}
         {section.endsWith('-contracts') ? (
           <View className="mt-5">
@@ -394,6 +403,7 @@ export default function ManagementScreen({
   const [section, setSection] = useState<ManagementSection | null>(initialSection ?? null);
   const [entry, setEntry] = useState<ManagementEntry | null>(null);
   const [creatingListing, setCreatingListing] = useState(false);
+  const [editingListingId, setEditingListingId] = useState<string | null>(null);
   const [rows, setRows] = useState<ManagementEntry[]>([]);
   const [attentionCounts, setAttentionCounts] = useState<
     Partial<Record<ManagementSection, number>>
@@ -564,6 +574,19 @@ export default function ManagementScreen({
         }}
       />
     );
+  if (editingListingId)
+    return (
+      <ListingDraftScreen
+        listingId={editingListingId}
+        onBack={() => setEditingListingId(null)}
+        onSaved={() => {
+          setEditingListingId(null);
+          setEntry(null);
+          setAttentionRefresh((current) => current + 1);
+          void load();
+        }}
+      />
+    );
   if (section === 'landlord-branches')
     return <BranchManagementScreen onBack={onExit ?? (() => setSection(null))} />;
   if (entry && section)
@@ -581,6 +604,7 @@ export default function ManagementScreen({
           else void load();
         }}
         onOpenListing={onOpenListing}
+        onEditListing={setEditingListingId}
       />
     );
   return (

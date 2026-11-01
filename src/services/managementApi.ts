@@ -48,6 +48,7 @@ export type ManagementEntry = {
   id: string;
   title: string;
   status: string;
+  category?: string;
   date?: string | null;
   listingId?: string;
   fields: [string, string][];
@@ -121,6 +122,7 @@ type OwnListing = {
   priceAmount: number;
   areaM2: number;
   status: string;
+  category: string;
   statusReason?: string | null;
   branchName?: string | null;
   expiresAt?: string | null;
@@ -309,6 +311,7 @@ function listingEntry(row: OwnListing): ManagementEntry {
     title: row.title,
     listingId: row.id,
     status: row.status,
+    category: row.category,
     date: row.createdAt,
     fields: [
       ['Địa chỉ', row.fullAddress || '—'],

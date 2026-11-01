@@ -35,6 +35,7 @@ type DetailValues = Record<string, string | number | boolean | null | undefined>
 export type ListingDetail = {
   id: string;
   ownerId: string;
+  branchId?: string | null;
   title: string;
   description: string;
   category: string;
@@ -43,6 +44,8 @@ export type ListingDetail = {
   status: string;
   availableFrom: string;
   areaM2: number;
+  maxMotorbikeCount?: number | null;
+  maxCarCount?: number | null;
   pricing: {
     amount: number;
     currency: string;
@@ -63,6 +66,14 @@ export type ListingDetail = {
   roomDetail?: DetailValues | null;
   amenities: { code: string; name: string }[];
   customAmenities: string[];
+  furnishings?: {
+    itemCode?: string | null;
+    assetName: string;
+    quantity: number;
+    handoverCondition: string;
+    conditionNote?: string | null;
+  }[];
+  policies?: { code: string; value: string; note?: string | null }[];
   charges: {
     chargeType: string;
     billingMethod: string;
@@ -73,6 +84,9 @@ export type ListingDetail = {
   }[];
   address?: {
     fullAddress?: string;
+    refId?: string | null;
+    display?: string | null;
+    addressNote?: string | null;
     provinceName: string;
     wardName: string;
     streetLine: string;
@@ -85,10 +99,13 @@ export type ListingDetail = {
   } | null;
   media: {
     id: string;
+    storageObjectId?: string | null;
     mediaType: string;
     sortOrder: number;
     cover: boolean;
     url?: string | null;
+    contentType?: string | null;
+    sizeBytes?: number;
   }[];
   viewingDays?: string[];
   viewingSlots?: string[];
