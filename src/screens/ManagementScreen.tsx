@@ -34,7 +34,9 @@ import {
   getAppointmentCalendar,
   getManagementAttentionCounts,
   performManagementAction,
+  paymentEntry,
   refreshManagementEntry,
+  refreshRentalOnboarding,
   reportPaymentTransfer,
   statusLabel,
   money,
@@ -42,6 +44,8 @@ import {
   type ManagementAction,
   type ManagementEntry,
   type ManagementSection,
+  type Payment,
+  type RentalOnboarding,
   type AppointmentListFilter,
   type RentalRequestStatus,
 } from '@/services/managementApi';
@@ -109,6 +113,7 @@ function EntryDetail({
   onChanged,
   onOpenListing,
   onEditListing,
+  transferBlocked = false,
 }: {
   section: ManagementSection;
   initialEntry: ManagementEntry;
@@ -117,10 +122,13 @@ function EntryDetail({
   onChanged: () => void;
   onOpenListing: (id: string, own?: boolean, section?: ManagementSection) => void;
   onEditListing: (id: string) => void;
+  transferBlocked?: boolean;
 }) {
   const showDialog = useDialog();
   const [entry, setEntry] = useState(initialEntry);
   const [documents, setDocuments] = useState<ContractDocument[]>([]);
+  const [onboarding, setOnboarding] = useState<RentalOnboarding | null>(null);
+  const [activePayment, setActivePayment] = useState<Payment | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -132,7 +140,21 @@ function EntryDetail({
     setLoading(true);
     setError(null);
     try {
-      setEntry(await refreshManagementEntry(section, initialEntry, userId));
+      const [updatedEntry, updatedOnboarding] = await Promise.all([
+        refreshManagementEntry(section, initialEntry, userId),
+        section.endsWith('-requests') &&
+        [
+          'ACCEPTED',
+          'COMPLETED',
+          'CANCELLED_BY_RENTER',
+          'CANCELLED_BY_SYSTEM',
+          'CANCELLED_BY_OWNER',
+        ].includes(initialEntry.status)
+          ? refreshRentalOnboarding(initialEntry.id)
+          : Promise.resolve(null),
+      ]);
+      setEntry(updatedEntry);
+      setOnboarding(updatedOnboarding);
       if (section.endsWith('-contracts')) setDocuments(await getContractDocuments(initialEntry.id));
     } catch (e) {
       setError(apiError(e));
@@ -218,6 +240,26 @@ function EntryDetail({
         onSuccess={onChanged}
       />
     );
+  if (activePayment)
+    return (
+      <EntryDetail
+        key={activePayment.id}
+        section={section.startsWith('landlord-') ? 'landlord-payments' : 'tenant-payments'}
+        initialEntry={paymentEntry(activePayment, userId)}
+        userId={userId}
+        onBack={() => {
+          setActivePayment(null);
+          void load();
+        }}
+        onChanged={() => {
+          setActivePayment(null);
+          void load();
+        }}
+        onOpenListing={onOpenListing}
+        onEditListing={onEditListing}
+        transferBlocked={Boolean(onboarding?.cancellationRequestedAt)}
+      />
+    );
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <ScreenHeader title="Chi tiết" onBack={onBack} />
@@ -239,6 +281,39 @@ function EntryDetail({
             </Text>
           </View>
         ))}
+        {section.endsWith('-requests') && onboarding ? (
+          <View className="mt-5 rounded-2xl border border-border bg-surface p-4">
+            <Text className="text-base font-bold text-foreground">Thanh toán trước khi ký</Text>
+            <Text className="mt-2 text-sm leading-5 text-secondary">{onboarding.message}</Text>
+            {onboarding.payments.map((payment) => (
+              <View key={payment.id} className="mt-4 rounded-xl border border-border p-3">
+                <Text className="font-bold text-foreground">
+                  {payment.type === 'RESERVATION_DEPOSIT'
+                    ? 'Tiền cọc giữ chỗ'
+                    : payment.type === 'INITIAL_PAYMENT_REFUND'
+                      ? 'Hoàn tiền sau hủy'
+                      : 'Tiền thuê tháng đầu / cọc'}
+                </Text>
+                <Text className="mt-1 text-lg font-bold text-primary">
+                  {money(payment.totalAmount)}
+                </Text>
+                <Text className="mt-1 text-sm text-secondary">{statusLabel(payment.status)}</Text>
+                {payment.totalAmount > 0 ? (
+                  <Button
+                    label={
+                      payment.payerId === userId && payment.status === 'AWAITING_TRANSFER'
+                        ? 'Xem QR / Gửi chứng từ'
+                        : payment.status === 'TRANSFER_REPORTED' && payment.payeeId === userId
+                          ? 'Xem chứng từ / Xác nhận tiền'
+                          : 'Xem thanh toán'
+                    }
+                    onPress={() => setActivePayment(payment)}
+                  />
+                ) : null}
+              </View>
+            ))}
+          </View>
+        ) : null}
         {entry.listingId ? (
           <Button
             label="Xem tin đăng liên quan"
@@ -295,8 +370,13 @@ function EntryDetail({
         ))}
         {!loading &&
         !error &&
+        !transferBlocked &&
         entry.payment?.payerId === userId &&
-        ['AWAITING_TRANSFER', 'REJECTED', 'OVERDUE'].includes(entry.status) ? (
+        (entry.status === 'AWAITING_TRANSFER' ||
+          (entry.payment.type === 'INITIAL_PAYMENT_REFUND' && entry.status === 'REJECTED')) &&
+        (entry.payment.type === 'INITIAL_PAYMENT_REFUND' ||
+          !entry.payment.dueAt ||
+          new Date(entry.payment.dueAt).getTime() > Date.now()) ? (
           <View className="mt-5 rounded-2xl border border-border bg-surface p-4">
             <Text className="font-bold text-foreground">Báo chuyển khoản</Text>
             <Text className="mt-2 text-sm leading-5 text-muted-foreground">

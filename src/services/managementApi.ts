@@ -114,6 +114,12 @@ export type Payment = {
   rejectedReason?: string;
   evidences?: { storageObjectId: string; note?: string }[];
 };
+export type RentalOnboarding = {
+  stage: string;
+  message: string;
+  cancellationRequestedAt?: string;
+  payments: Payment[];
+};
 type BankAccount = { bankName: string; accountNumber: string; accountHolderName: string };
 type OwnListing = {
   id: string;
@@ -543,6 +549,13 @@ export async function refreshManagementEntry(
     return rentalEntry(response.data.result, section.startsWith('landlord-'));
   }
   return entry;
+}
+
+export async function refreshRentalOnboarding(requestId: string) {
+  const response = await axiosClient.post<ApiResponse<RentalOnboarding>>(
+    `/api/v1/rental-requests/${encodeURIComponent(requestId)}/onboarding/refresh`
+  );
+  return response.data.result;
 }
 
 export async function performManagementAction(
