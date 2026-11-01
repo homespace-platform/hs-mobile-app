@@ -18,6 +18,7 @@ import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import { Button, ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
 import BookingForm from '@/components/BookingForm';
 import AppointmentCalendar, { type CalendarState } from '@/components/AppointmentCalendar';
+import ListingDraftScreen from '@/screens/ListingDraftScreen';
 import { dateKey } from '@/lib/appointment-calendar';
 import { apiError } from '@/lib/api-error';
 import { getUserProfileApi } from '@/services/userApi';
@@ -369,6 +370,7 @@ export default function ManagementScreen({
   );
   const [section, setSection] = useState<ManagementSection | null>(initialSection ?? null);
   const [entry, setEntry] = useState<ManagementEntry | null>(null);
+  const [creatingListing, setCreatingListing] = useState(false);
   const [rows, setRows] = useState<ManagementEntry[]>([]);
   const [userId, setUserId] = useState('');
   const [loading, setLoading] = useState(false);
@@ -482,6 +484,7 @@ export default function ManagementScreen({
   const title =
     [...MENUS.tenant, ...MENUS.landlord].find((item) => item.section === section)?.title ||
     'Quản lý';
+  if (creatingListing) return <ListingDraftScreen onBack={() => setCreatingListing(false)} />;
   if (entry && section)
     return (
       <EntryDetail
@@ -559,6 +562,15 @@ export default function ManagementScreen({
           </>
         ) : (
           <>
+            {section === 'landlord-properties' ? (
+              <Pressable
+                onPress={() => setCreatingListing(true)}
+                accessibilityRole="button"
+                className="mb-5 min-h-14 flex-row items-center justify-center rounded-2xl bg-brand px-4">
+                <Icon name="add-circle-outline" size={22} className="text-on-brand" />
+                <Text className="ml-2 font-bold text-on-brand">Đăng tin mới</Text>
+              </Pressable>
+            ) : null}
             {isAppointments ? (
               <View className="mb-4 flex-row gap-2" accessibilityRole="tablist">
                 {(['calendar', 'list'] as const).map((mode) => (

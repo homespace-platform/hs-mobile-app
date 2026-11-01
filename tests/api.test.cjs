@@ -231,6 +231,27 @@ test('province search accepts names typed without Vietnamese accents', () => {
   assert.equal(matchesProvince('Tỉnh An Giang', 'da nang'), false);
 });
 
+test('listing draft has six steps and distinct required fields for each property type', () => {
+  const draft = load('lib/listing-draft.ts');
+  assert.equal(draft.LISTING_STEPS.length, 6);
+  assert.deepEqual(
+    Array.from(draft.LISTING_CATEGORIES, (item) => item.key),
+    ['apartment', 'house', 'room']
+  );
+  for (const category of draft.LISTING_CATEGORIES) {
+    const fields = draft.DETAIL_FIELDS[category.key];
+    assert.ok(fields.main.some((field) => field.required));
+    assert.ok(fields.more.length > 0);
+    assert.equal(
+      new Set([...fields.main, ...fields.more].map((field) => field.key)).size,
+      fields.main.length + fields.more.length
+    );
+  }
+  assert.ok(draft.DETAIL_FIELDS.apartment.main.some((field) => field.key === 'projectName'));
+  assert.ok(draft.DETAIL_FIELDS.house.main.some((field) => field.key === 'totalUsableAreaM2'));
+  assert.ok(draft.DETAIL_FIELDS.room.main.some((field) => field.key === 'roomCode'));
+});
+
 test('public search requires the current Vietmap city ID; favorites use server boolean', async () => {
   const { client, calls } = mockApi({ result: { isFavorite: false }, hasMore: false });
   const listing = load('services/listingApi.ts', { '@/lib/axios-client': client });
