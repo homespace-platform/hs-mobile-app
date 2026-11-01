@@ -29,6 +29,24 @@ export async function createBankAccount(input: BankAccountInput) {
   return (await axiosClient.post<ApiResponse<BankAccount>>('/api/v1/bank-accounts', input)).data
     .result;
 }
+export async function getBankAccount(id: string) {
+  return (
+    await axiosClient.get<ApiResponse<BankAccount>>(
+      `/api/v1/bank-accounts/${encodeURIComponent(id)}/reveal`
+    )
+  ).data.result;
+}
+export async function updateBankAccount(id: string, input: BankAccountInput) {
+  return (
+    await axiosClient.put<ApiResponse<BankAccount>>(
+      `/api/v1/bank-accounts/${encodeURIComponent(id)}`,
+      input
+    )
+  ).data.result;
+}
+export async function deleteBankAccount(id: string) {
+  await axiosClient.delete(`/api/v1/bank-accounts/${encodeURIComponent(id)}`);
+}
 export async function setBankAccountDefaults(
   id: string,
   input: { defaultForIncomingPayments?: boolean; defaultForRefunds?: boolean }

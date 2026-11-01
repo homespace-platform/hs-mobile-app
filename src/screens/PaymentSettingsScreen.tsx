@@ -1,5 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Animated,
+  PanResponder,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
 import { useDialog } from '@/components/AppDialog';
@@ -8,8 +17,12 @@ import { apiError } from '@/lib/api-error';
 import { VIETNAMESE_BANKS } from '@/data/banks';
 import {
   createBankAccount,
+  deleteBankAccount,
+  getBankAccount,
   getBankAccounts,
   setBankAccountDefaults,
+  updateBankAccount,
+  type BankAccountInput,
   type BankAccount,
 } from '@/services/bankAccountApi';
 
@@ -20,6 +33,11 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingDefaults, setEditingDefaults] = useState<{
+    defaultForIncomingPayments: boolean;
+    defaultForRefunds: boolean;
+  } | null>(null);
   const [bankQuery, setBankQuery] = useState('');
   const [bankOpen, setBankOpen] = useState(false);
   const [bank, setBank] = useState(VIETNAMESE_BANKS[0]);
@@ -41,6 +59,17 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
     void load();
   }, [load]);
 
+  function closeForm() {
+    setFormOpen(false);
+    setEditingId(null);
+    setEditingDefaults(null);
+    setAccountNumber('');
+    setHolder('');
+    setBank(VIETNAMESE_BANKS[0]);
+    setBankQuery('');
+    setBankOpen(false);
+  }
+
   async function save() {
     if (!accountNumber.trim() || !holder.trim()) {
       setError('Vui lòng nhập số tài khoản và tên chủ tài khoản.');
@@ -49,21 +78,21 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
     setBusy(true);
     setError(null);
     try {
-      await createBankAccount({
+      const input: BankAccountInput = {
         bankBin: bank.bin,
         bankCode: bank.code,
         bankName: bank.name,
         accountNumber: accountNumber.trim(),
         accountHolderName: holder.trim().toUpperCase(),
-        defaultForIncomingPayments: true,
-        defaultForRefunds: true,
-      });
-      setAccountNumber('');
-      setHolder('');
-      setFormOpen(false);
+        defaultForIncomingPayments: editingDefaults?.defaultForIncomingPayments ?? true,
+        defaultForRefunds: editingDefaults?.defaultForRefunds ?? true,
+      };
+      if (editingId) await updateBankAccount(editingId, input);
+      else await createBankAccount(input);
+      closeForm();
       await load();
       showDialog(
-        'Đã thêm tài khoản',
+        editingId ? 'Đã cập nhật tài khoản' : 'Đã thêm tài khoản',
         'Tài khoản sẽ được dùng để nhận tiền thuê và hoàn cọc.',
         undefined,
         'success'
@@ -73,6 +102,80 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
     } finally {
       setBusy(false);
     }
+  }
+
+  async function viewAccount(item: BankAccount) {
+    try {
+      const account = await getBankAccount(item.id);
+      showDialog(
+        'Thông tin tài khoản',
+        `${account.bankName}\n${account.accountHolderName}\n${account.accountNumber}`
+      );
+    } catch (cause) {
+      setError(apiError(cause));
+    }
+  }
+
+  async function editAccount(item: BankAccount) {
+    setBusy(true);
+    setError(null);
+    try {
+      const account = await getBankAccount(item.id);
+      setEditingId(account.id);
+      setEditingDefaults({
+        defaultForIncomingPayments: account.defaultForIncomingPayments,
+        defaultForRefunds: account.defaultForRefunds,
+      });
+      setBank(
+        VIETNAMESE_BANKS.find((entry) => entry.bin === account.bankBin) ?? {
+          bin: account.bankBin,
+          code: account.bankCode,
+          name: account.bankName,
+          shortName: account.bankCode,
+        }
+      );
+      setAccountNumber(account.accountNumber);
+      setHolder(account.accountHolderName);
+      setFormOpen(true);
+      setBankOpen(false);
+    } catch (cause) {
+      setError(apiError(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeAccount(item: BankAccount) {
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteBankAccount(item.id);
+      await load();
+    } catch (cause) {
+      setError(apiError(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function confirmRemove(item: BankAccount) {
+    showDialog('Xóa tài khoản?', `Xóa tài khoản ${item.bankCode} • ${item.accountNumber}?`, [
+      { text: 'Hủy', style: 'cancel' },
+      { text: 'Xóa', style: 'destructive', onPress: () => void removeAccount(item) },
+    ]);
+  }
+
+  function showAccountActions(item: BankAccount) {
+    showDialog(`Tài khoản ${item.bankCode}`, 'Chọn thao tác với tài khoản ngân hàng này.', [
+      { text: 'Xem số tài khoản', onPress: () => void viewAccount(item) },
+      { text: 'Chỉnh sửa', onPress: () => void editAccount(item) },
+      {
+        text: 'Xóa tài khoản',
+        style: 'destructive',
+        onPress: () => confirmRemove(item),
+      },
+      { text: 'Đóng', style: 'cancel' },
+    ]);
   }
 
   async function setDefault(id: string, kind: 'incoming' | 'refund') {
@@ -120,7 +223,11 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
           <ActivityIndicator className="my-8 text-primary" />
         ) : accounts.length ? (
           accounts.map((item) => (
-            <View key={item.id} className="mt-3 rounded-2xl border border-border bg-surface p-4">
+            <SwipeAccountCard
+              key={item.id}
+              busy={busy}
+              onDelete={() => confirmRemove(item)}
+              onLongPress={() => showAccountActions(item)}>
               <View className="flex-row items-center">
                 <View className="h-10 w-10 items-center justify-center rounded-xl bg-primary-soft">
                   <Text className="text-xs font-black text-primary">{item.bankCode}</Text>
@@ -166,7 +273,7 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
                   </Pressable>
                 )}
               </View>
-            </View>
+            </SwipeAccountCard>
           ))
         ) : !error ? (
           <View className="mt-3 rounded-2xl border border-dashed border-border p-6">
@@ -180,7 +287,9 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
         ) : null}
         {formOpen ? (
           <View className="mt-5 rounded-2xl border border-border bg-surface p-4">
-            <Text className="text-base font-bold text-foreground">Thêm tài khoản</Text>
+            <Text className="text-base font-bold text-foreground">
+              {editingId ? 'Chỉnh sửa tài khoản' : 'Thêm tài khoản'}
+            </Text>
             <Pressable
               onPress={() => setBankOpen((value) => !value)}
               className="mt-4 min-h-12 flex-row items-center rounded-xl border border-border px-3">
@@ -244,7 +353,7 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
             <View className="mt-4 flex-row gap-2">
               <Pressable
                 disabled={busy}
-                onPress={() => setFormOpen(false)}
+                onPress={closeForm}
                 className="min-h-12 flex-1 items-center justify-center rounded-xl border border-border">
                 <Text className="font-semibold text-secondary">Hủy</Text>
               </Pressable>
@@ -253,7 +362,7 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
                 onPress={() => void save()}
                 className="min-h-12 flex-1 items-center justify-center rounded-xl bg-brand">
                 <Text className="font-bold text-on-brand">
-                  {busy ? 'Đang lưu...' : 'Lưu tài khoản'}
+                  {busy ? 'Đang lưu...' : editingId ? 'Cập nhật' : 'Lưu tài khoản'}
                 </Text>
               </Pressable>
             </View>
@@ -261,5 +370,58 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
         ) : null}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function SwipeAccountCard({
+  children,
+  busy,
+  onDelete,
+  onLongPress,
+}: {
+  children: React.ReactNode;
+  busy: boolean;
+  onDelete: () => void;
+  onLongPress: () => void;
+}) {
+  const offset = useRef(new Animated.Value(0)).current;
+  const pan = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          Math.abs(gesture.dx) > 10 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
+        onPanResponderMove: (_, gesture) => offset.setValue(Math.max(-88, Math.min(0, gesture.dx))),
+        onPanResponderRelease: (_, gesture) => {
+          Animated.spring(offset, {
+            toValue: gesture.dx < -38 ? -88 : 0,
+            useNativeDriver: true,
+          }).start();
+        },
+        onPanResponderTerminate: () =>
+          Animated.spring(offset, { toValue: 0, useNativeDriver: true }).start(),
+      }),
+    [offset]
+  );
+
+  return (
+    <View className="mt-3 overflow-hidden rounded-2xl bg-danger-soft">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Xóa tài khoản ngân hàng"
+        disabled={busy}
+        onPress={onDelete}
+        className="absolute bottom-0 right-0 top-0 w-[88px] items-center justify-center bg-danger-soft">
+        <Icon name="trash-outline" size={22} className="text-danger" />
+        <Text className="mt-1 text-xs font-bold text-danger">Xóa</Text>
+      </Pressable>
+      <Animated.View
+        {...pan.panHandlers}
+        style={{ transform: [{ translateX: offset }] }}
+        className="rounded-2xl border border-border bg-surface p-4">
+        <Pressable onLongPress={onLongPress} delayLongPress={400}>
+          {children}
+        </Pressable>
+      </Animated.View>
+    </View>
   );
 }
