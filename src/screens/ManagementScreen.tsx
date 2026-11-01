@@ -84,6 +84,14 @@ function requestTone(status: string) {
   return REQUEST_TONES.neutral;
 }
 
+function appointmentTone(status: string) {
+  if (status === 'PENDING') return REQUEST_TONES.warning;
+  if (status === 'CONFIRMED') return REQUEST_TONES.primary;
+  if (status === 'COMPLETED') return REQUEST_TONES.success;
+  if (status === 'REJECTED' || status === 'CANCELLED') return REQUEST_TONES.danger;
+  return REQUEST_TONES.neutral;
+}
+
 function normalizeSearch(value: string) {
   return value
     .normalize('NFD')
@@ -829,7 +837,7 @@ export default function ManagementScreen({
                     key={row.id}
                     onPress={() => setEntry(row)}
                     accessibilityRole="button"
-                    className={`mb-3 rounded-2xl border bg-surface p-4 ${isRequests ? `border-l-4 ${requestTone(row.status).border}` : 'border-border'}`}>
+                    className={`mb-3 rounded-2xl border bg-surface p-4 ${isRequests ? `border-l-4 ${requestTone(row.status).border}` : isAppointments ? `border-l-4 ${appointmentTone(row.status).border}` : 'border-border'}`}>
                     <View className="flex-row items-start gap-3">
                       <Text className="flex-1 font-bold text-foreground">{row.title}</Text>
                       {isRequests ? (
@@ -840,10 +848,17 @@ export default function ManagementScreen({
                       className={
                         isRequests
                           ? `mt-3 self-start overflow-hidden rounded-full px-3 py-1 text-xs font-bold ${requestTone(row.status).fill} ${requestTone(row.status).text}`
-                          : 'mt-2 text-xs text-primary'
+                          : isAppointments
+                            ? `mt-3 self-start overflow-hidden rounded-full px-3 py-1 text-xs font-bold ${appointmentTone(row.status).fill} ${appointmentTone(row.status).text}`
+                            : 'mt-2 text-xs text-primary'
                       }>
                       {statusLabel(row.status)}
                     </Text>
+                    {row.appointment?.rescheduleRequested ? (
+                      <Text className="mt-2 self-start rounded-full bg-warning-soft px-3 py-1 text-xs font-bold text-warning">
+                        Có yêu cầu đổi lịch
+                      </Text>
+                    ) : null}
                     <Text
                       className={`${isRequests ? 'mt-2' : 'mt-1'} text-xs text-muted-foreground`}>
                       {row.fields[0]?.[1]}
