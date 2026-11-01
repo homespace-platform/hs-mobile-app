@@ -6,7 +6,7 @@ export default function TabHeader({
   right,
   children,
 }: {
-  title: string;
+  title?: string;
   right?: ReactNode;
   children?: ReactNode;
 }) {
@@ -18,12 +18,18 @@ export default function TabHeader({
         accessibilityLabel="HomeSpace"
         className="h-10 w-36"
       />
-      <View className="mt-2 min-h-8 flex-row items-center justify-between">
-        <Text accessibilityRole="header" className="text-2xl font-bold text-foreground">
-          {title}
-        </Text>
-        {right}
-      </View>
+      {title || right ? (
+        <View className="mt-2 min-h-8 flex-row items-center justify-between">
+          {title ? (
+            <Text accessibilityRole="header" className="text-2xl font-bold text-foreground">
+              {title}
+            </Text>
+          ) : (
+            <View />
+          )}
+          {right}
+        </View>
+      ) : null}
       {children}
     </View>
   );
