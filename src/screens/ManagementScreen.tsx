@@ -15,6 +15,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import Icon from '@/components/Icon';
 import { useDialog } from '@/components/AppDialog';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
+import TabHeader from '@/components/TabHeader';
 import { Button, ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
 import BookingForm from '@/components/BookingForm';
 import AppointmentCalendar, { type CalendarState } from '@/components/AppointmentCalendar';
@@ -518,12 +519,11 @@ export default function ManagementScreen({
       {section ? (
         <ScreenHeader title={title} onBack={onExit ?? (() => setSection(null))} />
       ) : (
-        <View className="bg-brand px-5 py-5">
-          <Text className="text-2xl font-bold text-on-brand">Quản lý</Text>
-          <Text className="mt-1 text-sm text-on-brand-muted">
+        <TabHeader title="Quản lý">
+          <Text className="mt-1 text-sm text-muted-foreground">
             Theo dõi thuê nhà và cho thuê trên HomeSpace
           </Text>
-        </View>
+        </TabHeader>
       )}
       <ScrollView
         contentContainerClassName="px-5 pb-8 pt-5"

@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
+import TabHeader from '@/components/TabHeader';
 import { useDialog } from '@/components/AppDialog';
 import {
   getNewsBySlug,
@@ -297,31 +298,26 @@ export default function NewsScreen({ onSelectTab }: { onSelectTab: (tab: MainTab
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
+      <TabHeader title="Tin tức & Thị trường">
+        <Text className="mt-1 text-sm leading-5 text-muted-foreground">
+          Cập nhật giá thuê, pháp lý và kinh nghiệm tìm nhà an toàn.
+        </Text>
+        <View className="mt-4 flex-row items-center rounded-2xl bg-muted px-4">
+          <Ionicons name="search-outline" size={19} className="text-subtle" />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Tìm kiếm bài viết..."
+            className="ml-2 flex-1 py-3 text-sm text-foreground selection:text-primary placeholder:text-subtle"
+          />
+        </View>
+      </TabHeader>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerClassName="pb-6"
         refreshControl={
           <RefreshControl refreshing={loading && page === 1} onRefresh={() => load()} />
         }>
-        <View className="bg-surface px-5 pb-5 pt-2">
-          <Text className="text-xs font-semibold uppercase tracking-widest text-primary">
-            HomeSpace
-          </Text>
-          <Text className="mt-1 text-2xl font-bold text-foreground">Tin tức & Thị trường</Text>
-          <Text className="mt-2 text-sm leading-5 text-muted-foreground">
-            Cập nhật giá thuê, pháp lý và kinh nghiệm tìm nhà an toàn.
-          </Text>
-          <View className="mt-4 flex-row items-center rounded-2xl bg-muted px-4">
-            <Ionicons name="search-outline" size={19} className="text-subtle" />
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Tìm kiếm bài viết..."
-              className="ml-2 flex-1 py-3 text-sm text-foreground selection:text-primary placeholder:text-subtle"
-            />
-          </View>
-        </View>
-
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-4 pl-5">
           {CATEGORIES.map((item) => {
             const active = item.value === category;

@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import Avatar from '@/components/Avatar';
+import TabHeader from '@/components/TabHeader';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import { matchesProvince } from '@/lib/location-search';
 import { getPublicListings, listingImage, type ListingSummary } from '@/services/listingApi';
@@ -165,20 +166,9 @@ export default function HomeScreen({
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => loadListings(true)} />
-        }
-        contentContainerClassName="pb-6"
-        showsVerticalScrollIndicator={false}>
-        <View className="flex-row items-center justify-between bg-surface px-5 pb-3 pt-2">
-          <View>
-            <Text className="text-xs font-semibold uppercase tracking-widest text-primary">
-              HomeSpace
-            </Text>
-            <Text className="mt-1 text-xl font-bold text-foreground">Tìm nơi gọi là nhà</Text>
-          </View>
+      <TabHeader
+        title="Trang chủ"
+        right={
           <Pressable
             onPress={() => onSelectTab?.('profile')}
             className="h-11 w-11 items-center justify-center overflow-hidden rounded-full border-2 border-primary-border bg-brand">
@@ -192,8 +182,15 @@ export default function HomeScreen({
               size={40}
             />
           </Pressable>
-        </View>
-
+        }
+      />
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => loadListings(true)} />
+        }
+        contentContainerClassName="pb-6"
+        showsVerticalScrollIndicator={false}>
         <View className="mx-5 mt-4 rounded-3xl bg-brand p-5">
           <Text className="text-2xl font-bold leading-8 text-on-brand">
             Không gian phù hợp đang chờ bạn

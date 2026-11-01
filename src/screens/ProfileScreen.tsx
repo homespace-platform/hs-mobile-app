@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import Avatar from '@/components/Avatar';
+import TabHeader from '@/components/TabHeader';
 import ThemeSelector from '@/components/ThemeSelector';
 import { useDialog } from '@/components/AppDialog';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
@@ -142,25 +143,21 @@ export default function ProfileScreen({
     );
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
+      <TabHeader
+        title="Hồ sơ"
+        right={
+          <Pressable
+            disabled={!profile}
+            onPress={() => setEditing(true)}
+            accessibilityRole="button"
+            className="flex-row items-center rounded-full bg-primary-soft px-4 py-2">
+            <Ionicons name="create-outline" size={15} className="text-primary" />
+            <Text className="ml-1.5 text-xs font-semibold text-primary">Chỉnh sửa</Text>
+          </Pressable>
+        }
+      />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8">
         <View className="bg-brand px-5 pb-8 pt-3">
-          <View className="flex-row items-center justify-between">
-            <View>
-              <Text className="text-xs font-semibold uppercase tracking-widest text-on-brand-muted">
-                HomeSpace
-              </Text>
-              <Text className="mt-1 text-2xl font-bold text-on-brand">Tài khoản</Text>
-            </View>
-            <Pressable
-              disabled={!profile}
-              onPress={() => setEditing(true)}
-              accessibilityRole="button"
-              className="flex-row items-center rounded-full bg-on-brand/15 px-4 py-2">
-              <Ionicons name="create-outline" size={15} className="text-on-brand" />
-              <Text className="ml-1.5 text-xs font-semibold text-on-brand">Chỉnh sửa</Text>
-            </Pressable>
-          </View>
-
           {loading ? (
             <View className="items-center py-10">
               <ActivityIndicator className="text-on-brand" />

@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import Avatar from '@/components/Avatar';
+import TabHeader from '@/components/TabHeader';
 import { useDialog } from '@/components/AppDialog';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import {
@@ -456,20 +457,15 @@ export default function MessagesScreen({
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <View className="border-b border-border bg-surface px-5 pb-4 pt-2">
-        <Image
-          source={require('../../assets/homespace-horizontal-logo.png')}
-          resizeMode="contain"
-          className="h-10 w-36"
-        />
-        <View className="mt-2 flex-row items-center justify-between">
-          <Text className="text-2xl font-bold text-foreground">Tin nhắn</Text>
+      <TabHeader
+        title="Tin nhắn"
+        right={
           <View className="h-9 min-w-9 items-center justify-center rounded-full bg-primary-soft px-2">
             <Text className="text-xs font-bold text-primary">
               {conversations.reduce((total, item) => total + item.unreadCount, 0)}
             </Text>
           </View>
-        </View>
+        }>
         <View className="mt-4 flex-row items-center rounded-2xl bg-muted px-4">
           <Ionicons name="search-outline" size={19} className="text-subtle" />
           <TextInput
@@ -479,7 +475,7 @@ export default function MessagesScreen({
             className="ml-2 flex-1 py-3 text-sm text-foreground selection:text-primary placeholder:text-subtle"
           />
         </View>
-      </View>
+      </TabHeader>
 
       <ScrollView
         className="flex-1"
