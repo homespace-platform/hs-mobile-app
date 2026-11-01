@@ -3,12 +3,12 @@ import Ionicons from '@/components/Icon';
 import { Pressable, Text, View } from 'react-native';
 import { getManagementAttentionCounts } from '@/services/managementApi';
 
-export type MainTab = 'home' | 'news' | 'management' | 'messages' | 'profile';
+export type MainTab = 'home' | 'search' | 'management' | 'messages' | 'profile';
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
 const TABS: { id: MainTab; icon: IconName; activeIcon: IconName; label: string }[] = [
   { id: 'home', icon: 'home-outline', activeIcon: 'home', label: 'Trang chủ' },
-  { id: 'news', icon: 'newspaper-outline', activeIcon: 'newspaper', label: 'Tin tức' },
+  { id: 'search', icon: 'search-outline', activeIcon: 'search', label: 'Tìm nhà' },
   { id: 'management', icon: 'grid-outline', activeIcon: 'grid', label: 'Quản lý' },
   { id: 'messages', icon: 'chatbubble-outline', activeIcon: 'chatbubble', label: 'Tin nhắn' },
   { id: 'profile', icon: 'person-outline', activeIcon: 'person', label: 'Hồ sơ' },

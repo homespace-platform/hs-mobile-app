@@ -434,10 +434,9 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
                 value={branchQuery}
                 onChangeText={setBranchQuery}
                 placeholder="Tìm tên, loại hoặc địa chỉ"
-                placeholderTextColor="#8A929F"
                 returnKeyType="search"
                 accessibilityLabel="Tìm kiếm chi nhánh"
-                className="ml-2 min-h-12 flex-1 py-2 text-sm text-foreground"
+                className="ml-2 min-h-12 flex-1 py-2 text-sm text-foreground placeholder:text-subtle"
               />
               {branchQuery ? (
                 <Pressable

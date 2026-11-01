@@ -16,15 +16,18 @@ import HomeScreen from '@/screens/HomeScreen';
 import ListingDetailScreen from '@/screens/ListingDetailScreen';
 import MessagesScreen from '@/screens/MessagesScreen';
 import NewsScreen from '@/screens/NewsScreen';
+import SearchScreen from '@/screens/SearchScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
 import ListingCollectionScreen from '@/screens/ListingCollectionScreen';
 import type { ManagementSection } from '@/services/managementApi';
 
 function SignedInApp() {
   const [screen, setScreen] = useState<
-    MainTab | 'detail' | 'conversation-detail' | 'favorites' | 'browse'
+    MainTab | 'detail' | 'conversation-detail' | 'favorites' | 'browse' | 'news'
   >('home');
-  const [returnScreen, setReturnScreen] = useState<MainTab | 'favorites' | 'browse'>('home');
+  const [returnScreen, setReturnScreen] = useState<MainTab | 'favorites' | 'browse' | 'news'>(
+    'home'
+  );
   const [ownListing, setOwnListing] = useState(false);
   const [managementSection, setManagementSection] = useState<ManagementSection | null>(null);
   const [managementOrigin, setManagementOrigin] = useState<'profile' | 'detail' | null>(null);
@@ -107,7 +110,11 @@ function SignedInApp() {
   }
 
   if (screen === 'news') {
-    return <NewsScreen onSelectTab={selectTab} />;
+    return <NewsScreen onBack={() => setScreen('home')} />;
+  }
+
+  if (screen === 'search') {
+    return <SearchScreen onSelectTab={selectTab} onOpenListing={openListing} />;
   }
 
   if (screen === 'management') {
@@ -140,7 +147,14 @@ function SignedInApp() {
     );
   }
 
-  return <HomeScreen onSelectTab={selectTab} onOpenListing={openListing} onBrowse={browse} />;
+  return (
+    <HomeScreen
+      onSelectTab={selectTab}
+      onOpenListing={openListing}
+      onBrowse={browse}
+      onOpenNews={() => setScreen('news')}
+    />
+  );
 }
 
 function SignedOutApp() {

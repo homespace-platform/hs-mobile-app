@@ -94,10 +94,12 @@ export default function HomeScreen({
   onSelectTab,
   onOpenListing,
   onBrowse,
+  onOpenNews,
 }: {
   onSelectTab?: (tab: MainTab) => void;
   onOpenListing?: (id: string) => void;
   onBrowse: (filters: Record<string, string | number>) => void;
+  onOpenNews: () => void;
 }) {
   const [listings, setListings] = useState<ListingSummary[]>([]);
   const [activeCategory, setActiveCategory] = useState<Category>(CATEGORIES[0]);
@@ -348,6 +350,24 @@ export default function HomeScreen({
               </Text>
             </View>
           )}
+        </View>
+
+        <View className="mt-8 px-5">
+          <Pressable
+            onPress={onOpenNews}
+            accessibilityRole="button"
+            className="flex-row items-center rounded-2xl border border-border bg-surface p-4">
+            <View className="h-12 w-12 items-center justify-center rounded-xl bg-primary-soft">
+              <Ionicons name="newspaper-outline" size={24} className="text-primary" />
+            </View>
+            <View className="ml-3 flex-1">
+              <Text className="text-base font-bold text-foreground">Tin tức & Thị trường</Text>
+              <Text className="mt-1 text-xs text-muted-foreground">
+                Giá thuê, pháp lý và kinh nghiệm tìm nhà
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} className="text-subtle" />
+          </Pressable>
         </View>
 
         <View className="mt-8 px-5">

@@ -96,11 +96,11 @@ export type ListingDetail = {
   viewCount?: number;
 };
 
-export async function getPublicListings(params: Record<string, string | number>) {
+export async function getPublicListings(params: Record<string, string | number | boolean>) {
   return (await getPublicListingsPage(params)).result ?? [];
 }
 
-export async function getPublicListingsPage(params: Record<string, string | number>) {
+export async function getPublicListingsPage(params: Record<string, string | number | boolean>) {
   if (!params.cityId) throw new Error('Vui lòng chọn tỉnh/thành trước khi tìm nhà.');
   return (
     await axiosClient.get<PageResponse<ListingSummary>>('/api/v1/public/listings', { params })

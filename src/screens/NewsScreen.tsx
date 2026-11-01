@@ -13,8 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
-import TabHeader from '@/components/TabHeader';
+import { ScreenHeader } from '@/components/Screen';
 import { useDialog } from '@/components/AppDialog';
 import {
   getNewsBySlug,
@@ -236,7 +235,7 @@ function ArticleDetail({ slug, onBack }: { slug: string; onBack: () => void }) {
   );
 }
 
-export default function NewsScreen({ onSelectTab }: { onSelectTab: (tab: MainTab) => void }) {
+export default function NewsScreen({ onBack }: { onBack: () => void }) {
   const [articles, setArticles] = useState<NewsSummary[]>([]);
   const [category, setCategory] = useState('ALL');
   const [search, setSearch] = useState('');
@@ -298,7 +297,8 @@ export default function NewsScreen({ onSelectTab }: { onSelectTab: (tab: MainTab
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <TabHeader title="Tin tức & Thị trường">
+      <ScreenHeader title="Tin tức & Thị trường" onBack={onBack} />
+      <View className="bg-surface px-5 pb-4">
         <Text className="mt-1 text-sm leading-5 text-muted-foreground">
           Cập nhật giá thuê, pháp lý và kinh nghiệm tìm nhà an toàn.
         </Text>
@@ -311,7 +311,7 @@ export default function NewsScreen({ onSelectTab }: { onSelectTab: (tab: MainTab
             className="ml-2 flex-1 py-3 text-sm text-foreground selection:text-primary placeholder:text-subtle"
           />
         </View>
-      </TabHeader>
+      </View>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerClassName="pb-6"
@@ -385,8 +385,6 @@ export default function NewsScreen({ onSelectTab }: { onSelectTab: (tab: MainTab
           ) : null}
         </View>
       </ScrollView>
-
-      <BottomTabBar active="news" onSelect={onSelectTab} />
     </SafeAreaView>
   );
 }
