@@ -410,7 +410,16 @@ function SwipeAccountCard({
         accessibilityLabel="Xóa tài khoản ngân hàng"
         disabled={busy}
         onPress={onDelete}
-        className="absolute bottom-0 right-0 top-0 w-[88px] items-center justify-center bg-danger-soft">
+        style={{
+          position: 'absolute',
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: 88,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+        className="bg-danger-soft">
         <Icon name="trash-outline" size={22} className="text-danger" />
         <Text className="mt-1 text-xs font-bold text-danger">Xóa</Text>
       </Pressable>
