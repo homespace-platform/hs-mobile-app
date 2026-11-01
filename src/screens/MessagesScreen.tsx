@@ -73,18 +73,25 @@ function MessageAttachment({
   contentType: string;
   mine: boolean;
 }) {
-  const [url, setUrl] = useState<string | null>(null);
+  const showDialog = useDialog();
+  const [opening, setOpening] = useState(false);
 
-  useEffect(() => {
-    getStorageViewUrl(storageId)
-      .then(setUrl)
-      .catch(() => undefined);
-  }, [storageId]);
+  async function open() {
+    if (opening) return;
+    setOpening(true);
+    try {
+      await Linking.openURL(await getStorageViewUrl(storageId));
+    } catch {
+      showDialog('Không mở được tệp', 'Vui lòng thử lại.');
+    } finally {
+      setOpening(false);
+    }
+  }
 
   return (
     <Pressable
-      disabled={!url}
-      onPress={() => url && void Linking.openURL(url)}
+      disabled={opening}
+      onPress={() => void open()}
       className={`mb-2 flex-row items-center rounded-xl px-2 py-1 ${mine ? 'bg-on-brand/15' : 'bg-primary-soft'}`}>
       <Ionicons
         name={contentType.startsWith('image/') ? 'image' : 'document'}
