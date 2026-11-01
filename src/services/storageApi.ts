@@ -19,14 +19,18 @@ export type LocalFile = { uri: string; fileName: string; contentType: string; si
 export async function uploadFile(
   file: LocalFile,
   metadata: {
-    purpose: 'CHAT_ATTACHMENT' | 'USER_AVATAR' | 'PAYMENT_PROOF';
+    purpose: 'CHAT_ATTACHMENT' | 'USER_AVATAR' | 'PAYMENT_PROOF' | 'BRANCH_COVER_IMAGE';
     visibility: 'AUTHENTICATED' | 'PUBLIC' | 'PRIVATE';
     referenceType: string;
     referenceId: string;
   }
 ): Promise<CompletedUpload> {
   const maxMb =
-    metadata.purpose === 'USER_AVATAR' ? 5 : metadata.purpose === 'PAYMENT_PROOF' ? 15 : 25;
+    metadata.purpose === 'USER_AVATAR'
+      ? 5
+      : metadata.purpose === 'PAYMENT_PROOF' || metadata.purpose === 'BRANCH_COVER_IMAGE'
+        ? 15
+        : 25;
   if (
     !Number.isFinite(file.sizeBytes) ||
     file.sizeBytes <= 0 ||
@@ -39,10 +43,10 @@ export async function uploadFile(
   )
     throw new Error('Chứng từ phải là ảnh JPG/PNG/WebP hoặc PDF.');
   if (
-    metadata.purpose === 'USER_AVATAR' &&
+    (metadata.purpose === 'USER_AVATAR' || metadata.purpose === 'BRANCH_COVER_IMAGE') &&
     !['image/jpeg', 'image/png', 'image/webp'].includes(file.contentType)
   )
-    throw new Error('Ảnh đại diện phải là JPG/PNG/WebP.');
+    throw new Error('Ảnh phải là JPG/PNG/WebP.');
   const upload = await axiosClient.post<ApiResponse<UploadResponse>>('/api/v1/storage/uploads', {
     fileName: file.fileName,
     contentType: file.contentType,

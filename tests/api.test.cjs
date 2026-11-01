@@ -252,6 +252,75 @@ test('listing draft has six steps and distinct required fields for each property
   assert.ok(draft.DETAIL_FIELDS.room.main.some((field) => field.key === 'roomCode'));
 });
 
+test('branch form preserves existing data and builds complete valid charges', () => {
+  const { branchForm, buildBranchInput } = load('lib/branch-form.ts');
+  const form = branchForm({
+    id: 'branch/1',
+    name: 'Dãy trọ A',
+    code: 'CN-A',
+    category: 'ROOM',
+    refId: 'vm:123',
+    display: '80 Dương Quảng Hàm',
+    coverImageId: 'cover-1',
+    motorbikeParkingCapacity: 5,
+    carParkingCapacity: 0,
+    buildingAmenityCodes: ['CAMERA'],
+    defaultCharges: [
+      { chargeType: 'ELECTRICITY', billingMethod: 'PER_KWH', amount: 4200 },
+      {
+        chargeType: 'OTHER',
+        billingMethod: 'PER_MONTH',
+        amount: 30000,
+        customName: 'Vệ sinh riêng',
+        unit: 'tháng',
+      },
+    ],
+  });
+  const payload = buildBranchInput(form);
+  assert.equal(payload.refId, 'vm:123');
+  assert.equal(payload.coverImageId, 'cover-1');
+  assert.equal(
+    payload.defaultCharges.find((charge) => charge.chargeType === 'ELECTRICITY').amount,
+    4200
+  );
+  assert.equal(
+    payload.defaultCharges.find((charge) => charge.chargeType === 'OTHER').customName,
+    'Vệ sinh riêng'
+  );
+  assert.equal(payload.defaultCharges.length, 6);
+  assert.equal(
+    payload.defaultCharges.some((charge) => charge.chargeType === 'INTERNET'),
+    false
+  );
+  assert.equal(payload.buildingAmenityCodes[0], 'CAMERA');
+  form.charges.MOTORBIKE_PARKING.method = 'PER_VEHICLE_MONTH';
+  form.motorbikeCapacity = '0';
+  assert.throws(() => buildBranchInput(form), /Sức chứa xe máy/);
+});
+
+test('branch management uses branch CRUD and Vietmap endpoints', async () => {
+  const { client, calls } = mockApi({ result: [] });
+  const api = load('services/branchApi.ts', { '@/lib/axios-client': client });
+  await api.getBranches();
+  await api.getBranch('a/b');
+  await api.saveBranch({ name: 'A', category: 'ROOM', refId: 'vm:1', defaultCharges: [] });
+  await api.saveBranch({ name: 'A', category: 'ROOM', refId: 'vm:1', defaultCharges: [] }, 'a/b');
+  await api.deleteBranch('a/b');
+  await api.searchBranchAddress('Dương Quảng Hàm');
+  assert.deepEqual(
+    calls.map((call) => `${call.method} ${call.args[0]}`),
+    [
+      'get /api/v1/branches',
+      'get /api/v1/branches/a%2Fb',
+      'post /api/v1/branches',
+      'put /api/v1/branches/a%2Fb',
+      'delete /api/v1/branches/a%2Fb',
+      'get /api/v1/locations/autocomplete',
+    ]
+  );
+  assert.equal(calls[5].args[1].params.text, 'Dương Quảng Hàm');
+});
+
 test('public search requires the current Vietmap city ID; favorites use server boolean', async () => {
   const { client, calls } = mockApi({ result: { isFavorite: false }, hasMore: false });
   const listing = load('services/listingApi.ts', { '@/lib/axios-client': client });

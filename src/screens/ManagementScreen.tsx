@@ -19,6 +19,7 @@ import { Button, ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
 import BookingForm from '@/components/BookingForm';
 import AppointmentCalendar, { type CalendarState } from '@/components/AppointmentCalendar';
 import ListingDraftScreen from '@/screens/ListingDraftScreen';
+import BranchManagementScreen from '@/screens/BranchManagementScreen';
 import { dateKey } from '@/lib/appointment-calendar';
 import { apiError } from '@/lib/api-error';
 import { getUserProfileApi } from '@/services/userApi';
@@ -436,7 +437,7 @@ export default function ManagementScreen({
   const load = useCallback(
     async (nextPage = 1) => {
       const ticket = ++requestId.current;
-      if (!section || (isRequests && !requestStatus)) return;
+      if (!section || section === 'landlord-branches' || (isRequests && !requestStatus)) return;
       setLoading(true);
       setError(null);
       try {
@@ -485,6 +486,8 @@ export default function ManagementScreen({
     [...MENUS.tenant, ...MENUS.landlord].find((item) => item.section === section)?.title ||
     'Quản lý';
   if (creatingListing) return <ListingDraftScreen onBack={() => setCreatingListing(false)} />;
+  if (section === 'landlord-branches')
+    return <BranchManagementScreen onBack={onExit ?? (() => setSection(null))} />;
   if (entry && section)
     return (
       <EntryDetail
