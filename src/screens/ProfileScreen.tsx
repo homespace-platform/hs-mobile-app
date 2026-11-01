@@ -14,6 +14,7 @@ import type { UserProfileResponse } from '@/types/api';
 import type { ManagementSection } from '@/services/managementApi';
 import ProfileEditScreen from '@/screens/ProfileEditScreen';
 import AccountSecurityScreen from '@/screens/AccountSecurityScreen';
+import PaymentSettingsScreen from '@/screens/PaymentSettingsScreen';
 import { apiError } from '@/lib/api-error';
 import { getReservationPolicy } from '@/services/bookingApi';
 
@@ -98,6 +99,7 @@ export default function ProfileScreen({
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [security, setSecurity] = useState(false);
+  const [paymentSettings, setPaymentSettings] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -136,6 +138,7 @@ export default function ProfileScreen({
         }}
       />
     );
+  if (paymentSettings) return <PaymentSettingsScreen onBack={() => setPaymentSettings(false)} />;
   const unavailable = (title: string) =>
     showDialog(
       title,
@@ -251,6 +254,11 @@ export default function ProfileScreen({
               icon="shield-checkmark-outline"
               label="Bảo mật & xác minh danh tính"
               onPress={() => setSecurity(true)}
+            />
+            <MenuItem
+              icon="card-outline"
+              label="Cài đặt thanh toán"
+              onPress={() => setPaymentSettings(true)}
             />
             <MenuItem
               icon="notifications-outline"
