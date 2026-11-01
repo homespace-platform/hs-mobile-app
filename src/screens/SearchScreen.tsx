@@ -136,6 +136,36 @@ const WARDS = Object.values(wardsCatalog) as {
   parent_code: string;
 }[];
 
+function FilterSection({
+  label,
+  summary,
+  children,
+}: {
+  label: string;
+  summary: string;
+  children: React.ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <View className="border-b border-border">
+      <Pressable
+        onPress={() => setExpanded((current) => !current)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        className="min-h-14 flex-row items-center py-3">
+        <View className="flex-1">
+          <Text className="font-bold text-foreground">{label}</Text>
+          <Text className="mt-0.5 text-xs text-muted-foreground" numberOfLines={1}>
+            {summary}
+          </Text>
+        </View>
+        <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={19} className="text-subtle" />
+      </Pressable>
+      {expanded ? <View className="pb-4">{children}</View> : null}
+    </View>
+  );
+}
+
 function OptionGroup({
   label,
   options,
@@ -148,8 +178,7 @@ function OptionGroup({
   onChange: (value: string) => void;
 }) {
   return (
-    <View className="mt-4">
-      <Text className="mb-2 text-sm font-bold text-foreground">{label}</Text>
+    <FilterSection label={label} summary={options.find(([key]) => key === value)?.[1] ?? 'Tất cả'}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -168,7 +197,7 @@ function OptionGroup({
           </Pressable>
         ))}
       </ScrollView>
-    </View>
+    </FilterSection>
   );
 }
 
@@ -330,129 +359,139 @@ export default function SearchScreen({
         contentContainerClassName="px-5 pb-10 pt-4"
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} />}>
         <View className="rounded-2xl border border-border bg-surface p-4">
-          <Text className="text-base font-bold text-foreground">Khu vực</Text>
-          <Pressable
-            onPress={() => setCityOpen(!cityOpen)}
-            accessibilityRole="button"
-            className="mt-3 min-h-12 flex-row items-center rounded-xl border border-border px-3">
-            <Icon name="location-outline" size={20} className="text-primary" />
-            <Text className="ml-2 flex-1 font-semibold text-foreground">{city.name}</Text>
-            <Icon
-              name={cityOpen ? 'chevron-up' : 'chevron-down'}
-              size={18}
-              className="text-subtle"
-            />
-          </Pressable>
-          {cityOpen ? (
-            <View className="mt-2 rounded-xl border border-border bg-surface p-2">
-              <TextInput
-                value={cityQuery}
-                onChangeText={setCityQuery}
-                placeholder="Tìm tỉnh/thành"
-                className="min-h-11 rounded-lg bg-muted px-3 text-foreground placeholder:text-subtle"
+          <FilterSection
+            label="Khu vực"
+            summary={`${city.name}${selectedWard ? ` · ${selectedWard.name_with_type}` : ''}`}>
+            <Pressable
+              onPress={() => setCityOpen(!cityOpen)}
+              accessibilityRole="button"
+              className="mt-3 min-h-12 flex-row items-center rounded-xl border border-border px-3">
+              <Icon name="location-outline" size={20} className="text-primary" />
+              <Text className="ml-2 flex-1 font-semibold text-foreground">{city.name}</Text>
+              <Icon
+                name={cityOpen ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                className="text-subtle"
               />
-              <ScrollView
-                nestedScrollEnabled
-                className="max-h-56"
-                keyboardShouldPersistTaps="handled">
-                {provinces
-                  .filter((item) => matchesProvince(item.name, cityQuery))
-                  .map((item) => (
-                    <Pressable
-                      key={item.code}
-                      onPress={() => {
-                        setCity(item);
-                        setWardId('');
-                        setWardQuery('');
-                        setCityOpen(false);
-                      }}
-                      className="min-h-11 justify-center border-b border-border px-3">
-                      <Text className="text-foreground">{item.name}</Text>
-                    </Pressable>
-                  ))}
-              </ScrollView>
-            </View>
-          ) : null}
-          <Pressable
-            onPress={() => setWardOpen(!wardOpen)}
-            accessibilityRole="button"
-            className="mt-2 min-h-12 flex-row items-center rounded-xl border border-border px-3">
-            <Text className="flex-1 text-sm text-foreground">
-              {selectedWard?.name_with_type ?? 'Tất cả phường/xã'}
-            </Text>
-            <Icon
-              name={wardOpen ? 'chevron-up' : 'chevron-down'}
-              size={18}
-              className="text-subtle"
-            />
-          </Pressable>
-          {wardOpen ? (
-            <View className="mt-2 rounded-xl border border-border bg-surface p-2">
-              <TextInput
-                value={wardQuery}
-                onChangeText={setWardQuery}
-                placeholder="Tìm phường/xã"
-                className="min-h-11 rounded-lg bg-muted px-3 text-foreground placeholder:text-subtle"
+            </Pressable>
+            {cityOpen ? (
+              <View className="mt-2 rounded-xl border border-border bg-surface p-2">
+                <TextInput
+                  value={cityQuery}
+                  onChangeText={setCityQuery}
+                  placeholder="Tìm tỉnh/thành"
+                  className="min-h-11 rounded-lg bg-muted px-3 text-foreground placeholder:text-subtle"
+                />
+                <ScrollView
+                  nestedScrollEnabled
+                  className="max-h-56"
+                  keyboardShouldPersistTaps="handled">
+                  {provinces
+                    .filter((item) => matchesProvince(item.name, cityQuery))
+                    .map((item) => (
+                      <Pressable
+                        key={item.code}
+                        onPress={() => {
+                          setCity(item);
+                          setWardId('');
+                          setWardQuery('');
+                          setCityOpen(false);
+                        }}
+                        className="min-h-11 justify-center border-b border-border px-3">
+                        <Text className="text-foreground">{item.name}</Text>
+                      </Pressable>
+                    ))}
+                </ScrollView>
+              </View>
+            ) : null}
+            <Pressable
+              onPress={() => setWardOpen(!wardOpen)}
+              accessibilityRole="button"
+              className="mt-2 min-h-12 flex-row items-center rounded-xl border border-border px-3">
+              <Text className="flex-1 text-sm text-foreground">
+                {selectedWard?.name_with_type ?? 'Tất cả phường/xã'}
+              </Text>
+              <Icon
+                name={wardOpen ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                className="text-subtle"
               />
-              <ScrollView
-                nestedScrollEnabled
-                className="max-h-56"
-                keyboardShouldPersistTaps="handled">
-                <Pressable
-                  onPress={() => {
-                    setWardId('');
-                    setWardOpen(false);
-                  }}
-                  className="min-h-11 justify-center border-b border-border px-3">
-                  <Text className="text-primary">Tất cả phường/xã</Text>
-                </Pressable>
-                {visibleWards.map((ward) => (
+            </Pressable>
+            {wardOpen ? (
+              <View className="mt-2 rounded-xl border border-border bg-surface p-2">
+                <TextInput
+                  value={wardQuery}
+                  onChangeText={setWardQuery}
+                  placeholder="Tìm phường/xã"
+                  className="min-h-11 rounded-lg bg-muted px-3 text-foreground placeholder:text-subtle"
+                />
+                <ScrollView
+                  nestedScrollEnabled
+                  className="max-h-56"
+                  keyboardShouldPersistTaps="handled">
                   <Pressable
-                    key={ward.code}
                     onPress={() => {
-                      setWardId(ward.code);
+                      setWardId('');
                       setWardOpen(false);
                     }}
                     className="min-h-11 justify-center border-b border-border px-3">
-                    <Text className="text-foreground">{ward.name_with_type}</Text>
+                    <Text className="text-primary">Tất cả phường/xã</Text>
                   </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          ) : null}
-          <TextInput
-            value={keyword}
-            onChangeText={setKeyword}
-            onSubmitEditing={apply}
-            returnKeyType="search"
-            placeholder="Tên nhà, địa chỉ, từ khóa..."
-            className="mt-3 min-h-12 rounded-xl border border-border px-3 text-foreground placeholder:text-subtle"
-          />
+                  {visibleWards.map((ward) => (
+                    <Pressable
+                      key={ward.code}
+                      onPress={() => {
+                        setWardId(ward.code);
+                        setWardOpen(false);
+                      }}
+                      className="min-h-11 justify-center border-b border-border px-3">
+                      <Text className="text-foreground">{ward.name_with_type}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+          </FilterSection>
+          <FilterSection label="Từ khóa" summary={keyword.trim() || 'Tên nhà, địa chỉ...'}>
+            <TextInput
+              value={keyword}
+              onChangeText={setKeyword}
+              onSubmitEditing={apply}
+              returnKeyType="search"
+              placeholder="Tên nhà, địa chỉ, từ khóa..."
+              className="mt-3 min-h-12 rounded-xl border border-border px-3 text-foreground placeholder:text-subtle"
+            />
+          </FilterSection>
           <OptionGroup
             label="Loại nhà"
             options={CATEGORIES}
             value={filters.category}
             onChange={(value) => setFilter('category', value)}
           />
-          <Text className="mt-4 text-sm font-bold text-foreground">
-            Giá thuê (triệu đồng/tháng)
-          </Text>
-          <View className="mt-2 flex-row gap-2">
-            <TextInput
-              value={filters.priceMin}
-              onChangeText={(value) => setFilter('priceMin', value)}
-              keyboardType="decimal-pad"
-              placeholder="Từ"
-              className="min-h-12 flex-1 rounded-xl border border-border px-3 text-foreground placeholder:text-subtle"
-            />
-            <TextInput
-              value={filters.priceMax}
-              onChangeText={(value) => setFilter('priceMax', value)}
-              keyboardType="decimal-pad"
-              placeholder="Đến"
-              className="min-h-12 flex-1 rounded-xl border border-border px-3 text-foreground placeholder:text-subtle"
-            />
-          </View>
+          <FilterSection
+            label="Giá thuê"
+            summary={
+              filters.priceMin || filters.priceMax
+                ? `${filters.priceMin || '0'} – ${filters.priceMax || '∞'} triệu/tháng`
+                : 'Tất cả mức giá'
+            }>
+            <View className="mt-2 flex-row gap-2">
+              <TextInput
+                value={filters.priceMin}
+                onChangeText={(value) => setFilter('priceMin', value)}
+                keyboardType="decimal-pad"
+                placeholder="Từ"
+                className="min-h-12 flex-1 rounded-xl border border-border px-3 text-foreground placeholder:text-subtle"
+              />
+              <TextInput
+                value={filters.priceMax}
+                onChangeText={(value) => setFilter('priceMax', value)}
+                keyboardType="decimal-pad"
+                placeholder="Đến"
+                className="min-h-12 flex-1 rounded-xl border border-border px-3 text-foreground placeholder:text-subtle"
+              />
+            </View>
+          </FilterSection>
           <OptionGroup
             label="Diện tích"
             options={AREAS}
@@ -527,12 +566,25 @@ export default function SearchScreen({
                 value={filters.legalStatus}
                 onChange={(value) => setFilter('legalStatus', value)}
               />
-              <View className="mt-4 flex-row flex-wrap">
-                {toggle('hasVideo', 'Có video')}
-                {toggle('hasMezzanine', 'Có gác lửng')}
-                {toggle('hasRooftop', 'Có sân thượng')}
-                {toggle('hasGarage', 'Có gara')}
-              </View>
+              <FilterSection
+                label="Tiện ích khác"
+                summary={
+                  [
+                    filters.hasVideo && 'Video',
+                    filters.hasMezzanine && 'Gác lửng',
+                    filters.hasRooftop && 'Sân thượng',
+                    filters.hasGarage && 'Gara',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || 'Chưa chọn'
+                }>
+                <View className="flex-row flex-wrap">
+                  {toggle('hasVideo', 'Có video')}
+                  {toggle('hasMezzanine', 'Có gác lửng')}
+                  {toggle('hasRooftop', 'Có sân thượng')}
+                  {toggle('hasGarage', 'Có gara')}
+                </View>
+              </FilterSection>
             </>
           ) : null}
           <OptionGroup
