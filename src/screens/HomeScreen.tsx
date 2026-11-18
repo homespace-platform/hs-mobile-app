@@ -11,13 +11,17 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { WebView } from 'react-native-webview';
 
 import Avatar from '@/components/Avatar';
+import HomeAiPanel from '@/components/HomeAiPanel';
 import TabHeader from '@/components/TabHeader';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import { matchesProvince } from '@/lib/location-search';
 import { getPublicListings, listingImage, type ListingSummary } from '@/services/listingApi';
 import { getUserProfileApi } from '@/services/userApi';
+import { getMembershipPlans, type MembershipPlan } from '@/services/membershipApi';
+import type { ManagementSection } from '@/services/managementApi';
 import type { UserProfileResponse } from '@/types/api';
 import provinces from '@/data/provinces.json';
 
@@ -95,11 +99,13 @@ export default function HomeScreen({
   onOpenListing,
   onBrowse,
   onOpenNews,
+  onOpenManagement,
 }: {
   onSelectTab?: (tab: MainTab) => void;
   onOpenListing?: (id: string) => void;
   onBrowse: (filters: Record<string, string | number>) => void;
   onOpenNews: () => void;
+  onOpenManagement: (section: ManagementSection) => void;
 }) {
   const [listings, setListings] = useState<ListingSummary[]>([]);
   const [activeCategory, setActiveCategory] = useState<Category>(CATEGORIES[0]);
@@ -107,7 +113,9 @@ export default function HomeScreen({
   const [submittedSearch, setSubmittedSearch] = useState('');
   const [areaExpanded, setAreaExpanded] = useState(false);
   const [areaQuery, setAreaQuery] = useState('');
+  const [priceCategory, setPriceCategory] = useState('APARTMENT');
   const [profile, setProfile] = useState<UserProfileResponse | null>(null);
+  const [membershipPlans, setMembershipPlans] = useState<MembershipPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -166,6 +174,12 @@ export default function HomeScreen({
       .catch(() => undefined);
   }, []);
 
+  useEffect(() => {
+    getMembershipPlans()
+      .then(setMembershipPlans)
+      .catch(() => undefined);
+  }, []);
+
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <TabHeader
@@ -211,6 +225,10 @@ export default function HomeScreen({
               className="ml-2 flex-1 py-3 text-sm text-foreground selection:text-primary placeholder:text-subtle"
             />
           </View>
+        </View>
+
+        <View className="mx-5">
+          <HomeAiPanel onOpenListing={onOpenListing} />
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-5 pl-5">
@@ -399,6 +417,98 @@ export default function HomeScreen({
               </View>
             </Pressable>
           </View>
+        </View>
+
+        <View className="mt-8 px-5">
+          <Text className="text-xl font-bold text-foreground">Tham khảo giá thuê nhà</Text>
+          <Text className="mt-1 text-sm leading-5 text-muted-foreground">
+            Xem tin đăng thực tế theo loại nhà tại {city.name}.
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-4">
+            {(
+              [
+                ['APARTMENT', 'Căn hộ'],
+                ['HOUSE', 'Nhà nguyên căn'],
+                ['ROOM', 'Phòng trọ'],
+              ] as const
+            ).map(([value, label]) => (
+              <Pressable
+                key={value}
+                onPress={() => setPriceCategory(value)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: priceCategory === value }}
+                className={`mr-2 rounded-full px-4 py-2 ${priceCategory === value ? 'bg-brand' : 'border border-border bg-surface'}`}>
+                <Text
+                  className={`text-sm font-semibold ${priceCategory === value ? 'text-on-brand' : 'text-secondary'}`}>
+                  {label}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+          <View className="mt-4 overflow-hidden rounded-2xl border border-border bg-surface">
+            <WebView
+              key={city.code}
+              source={{
+                uri: `https://www.google.com/maps?q=${encodeURIComponent(`${city.name}, Vietnam`)}&z=12&output=embed`,
+              }}
+              originWhitelist={['https://*']}
+              javaScriptEnabled
+              scrollEnabled={false}
+              style={{ height: 220 }}
+              accessibilityLabel={`Bản đồ khu vực ${city.name}`}
+            />
+          </View>
+          <Pressable
+            onPress={() => onBrowse({ cityId: city.code, category: priceCategory })}
+            accessibilityRole="button"
+            className="mt-4 min-h-12 items-center justify-center rounded-xl bg-brand">
+            <Text className="font-bold text-on-brand">Xem giá qua tin đăng</Text>
+          </Pressable>
+        </View>
+
+        <View className="mx-5 mt-8 rounded-3xl border border-primary-border bg-primary-soft p-5">
+          <View className="flex-row items-center gap-2">
+            <Ionicons name="business-outline" size={22} className="text-primary" />
+            <Text className="text-xs font-bold uppercase text-primary">Dành cho chủ nhà</Text>
+          </View>
+          <Text className="mt-3 text-xl font-bold text-foreground">
+            Đăng nhà cho thuê trên HomeSpace
+          </Text>
+          <Text className="mt-2 text-sm leading-5 text-secondary">
+            Tạo tin đăng, quản lý lịch xem và theo dõi yêu cầu thuê ngay trên điện thoại.
+          </Text>
+          {membershipPlans.length ? (
+            <View className="mt-4 gap-2">
+              {membershipPlans.map((plan) => (
+                <View
+                  key={plan.code}
+                  className="rounded-xl border border-primary-border bg-surface p-3">
+                  <Text className="font-bold text-foreground">
+                    {plan.code === 'FREE'
+                      ? 'Miễn phí'
+                      : plan.code === 'STARTER'
+                        ? 'Khởi đầu'
+                        : plan.code === 'PRO'
+                          ? 'Chuyên nghiệp'
+                          : plan.code === 'BUSINESS'
+                            ? 'Doanh nghiệp'
+                            : plan.code}
+                  </Text>
+                  <Text className="mt-1 text-sm text-secondary">
+                    {plan.publicationUses} lượt đăng ·{' '}
+                    {plan.durationDays ? `${plan.durationDays} ngày` : 'Dùng một lần'} ·{' '}
+                    {plan.priceVnd ? `${plan.priceVnd.toLocaleString('vi-VN')} ₫` : '0 ₫'}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          <Pressable
+            onPress={() => onOpenManagement('landlord-properties')}
+            accessibilityRole="button"
+            className="mt-4 min-h-12 items-center justify-center rounded-xl bg-brand">
+            <Text className="font-bold text-on-brand">Đăng tin ngay</Text>
+          </Pressable>
         </View>
 
         <View className="mt-8 px-5">

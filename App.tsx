@@ -155,6 +155,7 @@ function SignedInApp() {
       onOpenListing={openListing}
       onBrowse={browse}
       onOpenNews={() => setScreen('news')}
+      onOpenManagement={openManagement}
     />
   );
 }
