@@ -23,6 +23,7 @@ import BookingForm from '@/components/BookingForm';
 import AppointmentCalendar, { type CalendarState } from '@/components/AppointmentCalendar';
 import ListingDraftScreen from '@/screens/ListingDraftScreen';
 import BranchManagementScreen from '@/screens/BranchManagementScreen';
+import BillingScreen from '@/screens/BillingScreen';
 import { dateKey } from '@/lib/appointment-calendar';
 import { getDatePeriodRange, toLocalDateKey, type DatePeriod } from '@/lib/date-period';
 import { apiError } from '@/lib/api-error';
@@ -42,6 +43,7 @@ import {
   reportPaymentTransfer,
   statusLabel,
   money,
+  paymentTypeLabel,
   type ContractDocument,
   type ManagementAction,
   type ManagementEntry,
@@ -52,6 +54,7 @@ import {
   type RentalRequestStatus,
 } from '@/services/managementApi';
 import { getStorageViewUrl, uploadFile, type LocalFile } from '@/services/storageApi';
+import { getPaymentReceipt, shareReceiptPdf, type PaymentReceipt } from '@/services/billingApi';
 
 type Menu = {
   section: ManagementSection;
@@ -129,6 +132,7 @@ function EntryDetail({
   const showDialog = useDialog();
   const [entry, setEntry] = useState(initialEntry);
   const [documents, setDocuments] = useState<ContractDocument[]>([]);
+  const [receipt, setReceipt] = useState<PaymentReceipt | null>(null);
   const [onboarding, setOnboarding] = useState<RentalOnboarding | null>(null);
   const [activePayment, setActivePayment] = useState<Payment | null>(null);
   const [loading, setLoading] = useState(true);
@@ -158,6 +162,9 @@ function EntryDetail({
       setEntry(updatedEntry);
       setOnboarding(updatedOnboarding);
       if (section.endsWith('-contracts')) setDocuments(await getContractDocuments(initialEntry.id));
+      if (updatedEntry.payment?.status === 'CONFIRMED') {
+        setReceipt(await getPaymentReceipt(initialEntry.id).catch(() => null));
+      } else setReceipt(null);
     } catch (e) {
       setError(apiError(e));
     } finally {
@@ -283,6 +290,51 @@ function EntryDetail({
             </Text>
           </View>
         ))}
+        {entry.payment?.lineItems?.length ? (
+          <View className="mt-5 rounded-2xl border border-border bg-surface p-4">
+            <Text className="font-bold text-foreground">Chi tiết khoản thanh toán</Text>
+            {entry.payment.lineItems.map((item) => (
+              <View
+                key={item.id}
+                className="mt-3 flex-row justify-between gap-3 border-t border-border pt-3">
+                <Text className="flex-1 text-sm text-secondary">
+                  {item.displayName} · {item.quantity} × {money(item.unitPrice)}
+                </Text>
+                <Text className="text-sm font-bold text-foreground">{money(item.amount)}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+        {receipt ? (
+          <View className="mt-5 rounded-2xl border border-primary-border bg-primary-soft p-4">
+            <Text className="font-bold text-foreground">Phiếu xác nhận thanh toán</Text>
+            <Text className="mt-2 text-sm text-secondary">
+              {receipt.receiptNumber} · {receipt.title}
+            </Text>
+            <Text className="mt-1 text-sm text-secondary">
+              {receipt.payerName} → {receipt.payeeName}
+            </Text>
+            <Text className="mt-1 text-sm text-primary">
+              {money(receipt.totalAmount)} · {new Date(receipt.issuedAt).toLocaleString('vi-VN')}
+            </Text>
+            <Text className="mt-1 text-xs text-muted-foreground">
+              PDF:{' '}
+              {receipt.pdfStatus === 'READY'
+                ? 'Đã sẵn sàng'
+                : receipt.pdfStatus === 'FAILED'
+                  ? 'Tạo thất bại'
+                  : 'Đang tạo'}
+            </Text>
+            {receipt.pdfStatus === 'READY' ? (
+              <Button
+                label="Mở / Lưu PDF"
+                onPress={() =>
+                  void shareReceiptPdf(receipt.id).catch((cause) => setError(apiError(cause)))
+                }
+              />
+            ) : null}
+          </View>
+        ) : null}
         {section.endsWith('-requests') && onboarding ? (
           <View className="mt-5 rounded-2xl border border-border bg-surface p-4">
             <Text className="text-base font-bold text-foreground">Thanh toán trước khi ký</Text>
@@ -374,11 +426,7 @@ function EntryDetail({
         !error &&
         !transferBlocked &&
         entry.payment?.payerId === userId &&
-        (entry.status === 'AWAITING_TRANSFER' ||
-          (entry.payment.type === 'INITIAL_PAYMENT_REFUND' && entry.status === 'REJECTED')) &&
-        (entry.payment.type === 'INITIAL_PAYMENT_REFUND' ||
-          !entry.payment.dueAt ||
-          new Date(entry.payment.dueAt).getTime() > Date.now()) ? (
+        ['AWAITING_TRANSFER', 'REJECTED', 'OVERDUE'].includes(entry.status) ? (
           <View className="mt-5 rounded-2xl border border-border bg-surface p-4">
             <Text className="font-bold text-foreground">Báo chuyển khoản</Text>
             <Text className="mt-2 text-sm leading-5 text-muted-foreground">
@@ -486,6 +534,7 @@ export default function ManagementScreen({
   const [entry, setEntry] = useState<ManagementEntry | null>(null);
   const [creatingListing, setCreatingListing] = useState(false);
   const [editingListingId, setEditingListingId] = useState<string | null>(null);
+  const [billingOpen, setBillingOpen] = useState(false);
   const [rows, setRows] = useState<ManagementEntry[]>([]);
   const [attentionCounts, setAttentionCounts] = useState<
     Partial<Record<ManagementSection, number>>
@@ -512,6 +561,10 @@ export default function ManagementScreen({
   const [appointmentFilter, setAppointmentFilter] = useState<AppointmentListFilter>('ALL');
   const [listQuery, setListQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [paymentTypeFilter, setPaymentTypeFilter] = useState<string | null>(null);
+  const [paymentDirectionFilter, setPaymentDirectionFilter] = useState<'pay' | 'receive' | null>(
+    null
+  );
   const [datePeriod, setDatePeriod] = useState<DatePeriod>('ALL');
   const [dateAnchor, setDateAnchor] = useState(() => new Date());
   const [calendarState, setCalendarState] = useState<CalendarState>(() => ({
@@ -539,6 +592,14 @@ export default function ManagementScreen({
   const normalizedQuery = normalizeSearch(listQuery.trim());
   const visibleRows = rows.filter((row) => {
     if (statusFilter && row.status !== statusFilter) return false;
+    if (section?.endsWith('-payments') && row.payment) {
+      if (paymentTypeFilter && row.payment.type !== paymentTypeFilter) return false;
+      if (
+        paymentDirectionFilter &&
+        (row.payment.payerId === userId ? 'pay' : 'receive') !== paymentDirectionFilter
+      )
+        return false;
+    }
     const rowDate = toLocalDateKey(row.date);
     if (dateRange && (!rowDate || rowDate < dateRange.start || rowDate > dateRange.end))
       return false;
@@ -650,6 +711,8 @@ export default function ManagementScreen({
     setRows([]);
     setListQuery('');
     setStatusFilter(null);
+    setPaymentTypeFilter(null);
+    setPaymentDirectionFilter(null);
     setDatePeriod('ALL');
     setHasMore(false);
     setTotal(0);
@@ -685,6 +748,18 @@ export default function ManagementScreen({
     );
   if (section === 'landlord-branches')
     return <BranchManagementScreen onBack={onExit ?? (() => setSection(null))} />;
+  if (billingOpen && section?.endsWith('-payments'))
+    return (
+      <BillingScreen
+        owner={section.startsWith('landlord-')}
+        userId={userId}
+        onBack={() => setBillingOpen(false)}
+        onOpenPayment={(payment) => {
+          setEntry(paymentEntry(payment, userId));
+          setBillingOpen(false);
+        }}
+      />
+    );
   if (entry && section)
     return (
       <EntryDetail
@@ -776,6 +851,17 @@ export default function ManagementScreen({
           </>
         ) : (
           <>
+            {section?.endsWith('-payments') ? (
+              <Pressable
+                onPress={() => setBillingOpen(true)}
+                accessibilityRole="button"
+                className="mb-4 rounded-2xl border border-primary-border bg-primary-soft p-4">
+                <Text className="font-bold text-primary">Hóa đơn & chứng từ →</Text>
+                <Text className="mt-1 text-xs text-secondary">
+                  Xem các kỳ thanh toán, khoản cọc và phiếu xác nhận theo hợp đồng
+                </Text>
+              </Pressable>
+            ) : null}
             {section === 'landlord-properties' ? (
               <Pressable
                 onPress={() => setCreatingListing(true)}
@@ -901,6 +987,11 @@ export default function ManagementScreen({
                   onPeriodChange={setDatePeriod}
                   onAnchorChange={setDateAnchor}
                 />
+                {section?.endsWith('-payments') ? (
+                  <Text className="mb-3 text-xs text-muted-foreground">
+                    Thời gian tính theo ngày tạo giao dịch.
+                  </Text>
+                ) : null}
                 {!isRequests && !isAppointments && statusOptions.length > 1 ? (
                   <ScrollView
                     horizontal
@@ -924,6 +1015,52 @@ export default function ManagementScreen({
                       );
                     })}
                   </ScrollView>
+                ) : null}
+                {section?.endsWith('-payments') ? (
+                  <>
+                    <Text className="mb-2 text-xs font-semibold text-muted-foreground">
+                      Loại khoản tiền
+                    </Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-3">
+                      {[
+                        null,
+                        ...Array.from(
+                          new Set(rows.flatMap((row) => (row.payment ? [row.payment.type] : [])))
+                        ),
+                      ].map((type) => (
+                        <Pressable
+                          key={type ?? 'ALL'}
+                          onPress={() => setPaymentTypeFilter(type)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: paymentTypeFilter === type }}
+                          className={`mr-2 min-h-10 justify-center rounded-full border px-4 ${paymentTypeFilter === type ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
+                          <Text
+                            className={`text-sm ${paymentTypeFilter === type ? 'font-bold text-primary' : 'text-secondary'}`}>
+                            {type ? paymentTypeLabel(type) : 'Tất cả'}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                    <View className="mb-4 flex-row gap-2">
+                      {([null, 'pay', 'receive'] as const).map((direction) => (
+                        <Pressable
+                          key={direction ?? 'ALL'}
+                          onPress={() => setPaymentDirectionFilter(direction)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: paymentDirectionFilter === direction }}
+                          className={`min-h-10 flex-1 items-center justify-center rounded-xl border ${paymentDirectionFilter === direction ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
+                          <Text
+                            className={`text-xs font-semibold ${paymentDirectionFilter === direction ? 'text-primary' : 'text-secondary'}`}>
+                            {direction === 'pay'
+                              ? 'Tôi chuyển'
+                              : direction === 'receive'
+                                ? 'Tôi nhận'
+                                : 'Cả hai'}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </>
                 ) : null}
               </>
             ) : null}
@@ -949,8 +1086,20 @@ export default function ManagementScreen({
               <>
                 <Text className="mb-3 text-sm text-muted-foreground">
                   {visibleRows.length}
-                  {listQuery || statusFilter || datePeriod !== 'ALL' ? ` / ${total}` : ''}{' '}
-                  {isRequests ? 'yêu cầu' : isAppointments ? 'lịch hẹn' : 'mục'}
+                  {listQuery ||
+                  statusFilter ||
+                  paymentTypeFilter ||
+                  paymentDirectionFilter ||
+                  datePeriod !== 'ALL'
+                    ? ` / ${total}`
+                    : ''}{' '}
+                  {isRequests
+                    ? 'yêu cầu'
+                    : isAppointments
+                      ? 'lịch hẹn'
+                      : section?.endsWith('-payments')
+                        ? 'giao dịch'
+                        : 'mục'}
                 </Text>
                 {visibleRows.map((row) => (
                   <Pressable
@@ -1007,7 +1156,11 @@ export default function ManagementScreen({
               !error &&
               !(isRequests && requestCountsError) ? (
               <Text className="py-10 text-center text-muted-foreground">
-                {listQuery || statusFilter || datePeriod !== 'ALL'
+                {listQuery ||
+                statusFilter ||
+                paymentTypeFilter ||
+                paymentDirectionFilter ||
+                datePeriod !== 'ALL'
                   ? hasMore
                     ? 'Chưa tìm thấy mục phù hợp trong phần đã tải. Hãy tải thêm để tìm tiếp.'
                     : 'Không tìm thấy mục phù hợp với bộ lọc.'

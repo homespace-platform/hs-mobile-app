@@ -108,6 +108,8 @@ export type Payment = {
   id: string;
   listingId: string;
   rentalRequestId: string;
+  contractId?: string;
+  invoiceId?: string;
   payerId: string;
   payeeId: string;
   direction: string;
@@ -117,11 +119,25 @@ export type Payment = {
   transferReference: string;
   dueAt?: string;
   createdAt?: string | null;
+  payerReportedAt?: string;
+  payeeConfirmedAt?: string;
+  confirmedAt?: string;
+  updatedAt?: string;
+  bankTransactionReference?: string;
+  currency?: string;
+  lineItems?: {
+    id: string;
+    displayName: string;
+    quantity: number;
+    unitPrice: number;
+    amount: number;
+  }[];
   qrImageUrl?: string;
   payeeBankAccountSnapshot?: BankAccount;
   payeeAccount?: BankAccount;
   rejectedReason?: string;
   evidences?: { storageObjectId: string; note?: string }[];
+  evidenceList?: { storageObjectId: string; note?: string }[];
 };
 export type RentalOnboarding = {
   stage: string;
@@ -199,6 +215,14 @@ export function statusLabel(status: string) {
         TRANSFER_REPORTED: 'Đã báo chuyển khoản',
         DISPUTED: 'Đang đối soát',
         OVERDUE: 'Quá hạn',
+        UNPAID: 'Chưa thanh toán',
+        PAID: 'Đã thanh toán',
+        ROLLED_OVER: 'Đã chuyển kỳ',
+        LANDLORD_SIGNATURE_PENDING: 'Chờ chủ nhà ký',
+        TENANT_SIGNATURE_PENDING: 'Chờ người thuê ký',
+        CLOSED: 'Đã kết thúc',
+        TERMINATED: 'Đã chấm dứt',
+        FAILED: 'Tạo thất bại',
         SIGNED: 'Đã ký',
         ACTIVE: 'Đang hiệu lực',
         SENT: 'Đã gửi',
@@ -287,6 +311,23 @@ export function rentalEntry(row: RentalRequest, owner: boolean): ManagementEntry
   };
 }
 
+export function paymentTypeLabel(type: string) {
+  return (
+    (
+      {
+        RESERVATION_DEPOSIT: 'Cọc giữ chỗ',
+        INITIAL: 'Tiền thuê ban đầu',
+        MONTHLY_RENT: 'Tiền thuê định kỳ',
+        UTILITY: 'Phí tiện ích',
+        OTHER_CHARGE: 'Khoản thu khác',
+        INITIAL_PAYMENT_REFUND: 'Hoàn tiền ban đầu',
+        DEPOSIT_REFUND: 'Hoàn cọc',
+        DEPOSIT_ADJUSTMENT: 'Điều chỉnh cọc',
+      } as Record<string, string>
+    )[type] ?? type
+  );
+}
+
 export function paymentEntry(row: Payment, userId: string): ManagementEntry {
   const actions: ActionOption[] = [];
   if (row.payeeId === userId && row.status === 'TRANSFER_REPORTED')
@@ -307,15 +348,28 @@ export function paymentEntry(row: Payment, userId: string): ManagementEntry {
     status: row.status,
     date: row.createdAt,
     actions,
-    payment: row,
+    payment: { ...row, evidences: row.evidences ?? row.evidenceList ?? [] },
     fields: [
       ['Số tiền', money(row.totalAmount)],
       ['Nội dung chuyển khoản', row.transferReference],
-      ['Loại thanh toán', row.type],
+      ['Loại thanh toán', paymentTypeLabel(row.type)],
+      ['Chiều chuyển tiền', row.payerId === userId ? 'Bạn chuyển tiền' : 'Bạn nhận tiền'],
+      ['Ngày tạo', row.createdAt ? new Date(row.createdAt).toLocaleString('vi-VN') : '—'],
+      [
+        'Ngày báo chuyển khoản',
+        row.payerReportedAt ? new Date(row.payerReportedAt).toLocaleString('vi-VN') : '—',
+      ],
+      [
+        'Ngày xác nhận nhận tiền',
+        row.payeeConfirmedAt || row.confirmedAt
+          ? new Date((row.payeeConfirmedAt || row.confirmedAt)!).toLocaleString('vi-VN')
+          : '—',
+      ],
       ['Ngân hàng nhận', bank?.bankName || 'Chưa cấu hình'],
       ['Số tài khoản', bank?.accountNumber || '—'],
       ['Chủ tài khoản', bank?.accountHolderName || '—'],
-      ['Hạn thanh toán', row.dueAt || '—'],
+      ['Hạn thanh toán', row.dueAt ? new Date(row.dueAt).toLocaleString('vi-VN') : '—'],
+      ['Mã giao dịch ngân hàng', row.bankTransactionReference || '—'],
       ['Lý do từ chối', row.rejectedReason || '—'],
     ],
   };
