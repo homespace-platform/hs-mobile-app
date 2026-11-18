@@ -78,6 +78,7 @@ function SignedInApp() {
         own={ownListing}
         onBack={() => setScreen(returnScreen)}
         onOpenManagement={openManagement}
+        onOpenListing={(id) => openListing(id)}
         onOpenMessages={(id) => {
           setConversationId(id);
           setScreen('messages');
@@ -92,6 +93,7 @@ function SignedInApp() {
         initialConversationId={conversationId}
         onSelectTab={selectTab}
         onOpenConversationDetails={(conversation) => {
+          setConversationId(conversation.id);
           setConversationDetail(conversation);
           setScreen('conversation-detail');
         }}

@@ -71,9 +71,16 @@ export type ListingDetail = {
     assetName: string;
     quantity: number;
     handoverCondition: string;
+    handoverConditionLabel?: string;
     conditionNote?: string | null;
   }[];
-  policies?: { code: string; value: string; note?: string | null }[];
+  policies?: {
+    code: string;
+    label?: string;
+    value: string;
+    displayValue?: string;
+    note?: string | null;
+  }[];
   charges: {
     chargeType: string;
     billingMethod: string;
@@ -88,8 +95,11 @@ export type ListingDetail = {
     display?: string | null;
     addressNote?: string | null;
     provinceName: string;
+    cityId?: string;
     wardName: string;
     streetLine: string;
+    latitude?: number | null;
+    longitude?: number | null;
   } | null;
   owner?: {
     id: string;

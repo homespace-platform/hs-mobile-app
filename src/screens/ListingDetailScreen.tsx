@@ -2,10 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Ionicons from '@/components/Icon';
 import { ActivityIndicator, Image, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { WebView } from 'react-native-webview';
 
 import Avatar from '@/components/Avatar';
 import { createConversation, type RelatedListing } from '@/services/chatApi';
-import { getPublicListing, listingImage, type ListingDetail } from '@/services/listingApi';
+import {
+  getPublicListing,
+  getPublicListings,
+  listingImage,
+  type ListingDetail,
+  type ListingSummary,
+} from '@/services/listingApi';
 import { getAccessibleListing } from '@/services/listingApi';
 import { getFavoriteIds, toggleFavorite, recordListingHistory } from '@/services/favoriteApi';
 import { getUserProfileApi } from '@/services/userApi';
@@ -35,6 +42,17 @@ const LABELS: Record<string, string> = {
   totalFloors: 'Số tầng',
   expectedSeats: 'Chỗ ngồi',
   frontageWidthM: 'Mặt tiền',
+  landAreaM2: 'Diện tích đất',
+  lengthM: 'Chiều dài',
+  accessRoadWidthM: 'Đường trước nhà',
+  accessType: 'Loại đường vào',
+  frontageCount: 'Số mặt tiền',
+  maxVehicles: 'Số xe tối đa',
+  hasGarage: 'Có gara',
+  hasRooftop: 'Có sân thượng',
+  rentalScopeDescription: 'Phạm vi cho thuê',
+  rentedFloorFrom: 'Cho thuê từ tầng',
+  rentedFloorTo: 'Cho thuê đến tầng',
   restroomCount: 'Số WC',
   restroomType: 'Loại WC',
   positionType: 'Vị trí',
@@ -89,6 +107,23 @@ function formatValue(value: string | number | boolean) {
   return VALUE_LABELS[String(value)] ?? String(value).replace(/_/g, ' ');
 }
 
+function formatDetailValue(key: string, value: string | number | boolean) {
+  const units: Record<string, string> = {
+    landAreaM2: 'm²',
+    frontageWidthM: 'm',
+    lengthM: 'm',
+    accessRoadWidthM: 'm',
+    bedroomCount: 'phòng',
+    bathroomCount: 'phòng',
+    livingRoomCount: 'phòng',
+    kitchenCount: 'phòng',
+    maxOccupants: 'người',
+    maxVehicles: 'xe',
+    totalFloors: 'tầng',
+  };
+  return typeof value === 'number' && units[key] ? `${value} ${units[key]}` : formatValue(value);
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <View className="w-[48%] rounded-2xl bg-background p-3">
@@ -103,12 +138,14 @@ export default function ListingDetailScreen({
   onBack,
   onOpenMessages,
   onOpenManagement,
+  onOpenListing,
   own = false,
 }: {
   listingId: string;
   onBack: () => void;
   onOpenMessages: (conversationId: string) => void;
   onOpenManagement: (section: ManagementSection) => void;
+  onOpenListing: (listingId: string) => void;
   own?: boolean;
 }) {
   const [listing, setListing] = useState<ListingDetail | null>(null);
@@ -125,6 +162,7 @@ export default function ListingDetailScreen({
   const [rentalLoading, setRentalLoading] = useState(true);
   const [rentalError, setRentalError] = useState<string | null>(null);
   const [rentalReload, setRentalReload] = useState(0);
+  const [similarListings, setSimilarListings] = useState<ListingSummary[]>([]);
   useEffect(() => {
     if (own) {
       setRentalLoading(false);
@@ -192,6 +230,26 @@ export default function ListingDetailScreen({
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    let active = true;
+    const cityId = listing?.address?.cityId;
+    if (!own && cityId && listing) {
+      getPublicListings({ cityId, category: listing.category, page: 1, size: 8, sort: 'newest' })
+        .then((items) => {
+          if (active)
+            setSimilarListings(items.filter((item) => item.id !== listing.id).slice(0, 6));
+        })
+        .catch(() => {
+          if (active) setSimilarListings([]);
+        });
+    } else {
+      setSimilarListings([]);
+    }
+    return () => {
+      active = false;
+    };
+  }, [listing, own]);
 
   const detailValues = useMemo(() => {
     if (!listing) return [];
@@ -271,6 +329,18 @@ export default function ListingDetailScreen({
         .map((item) => listingImage(item.url))
     )
   );
+  const latitude = listing.address?.latitude;
+  const longitude = listing.address?.longitude;
+  const hasCoordinates =
+    typeof latitude === 'number' &&
+    Number.isFinite(latitude) &&
+    Math.abs(latitude) <= 90 &&
+    typeof longitude === 'number' &&
+    Number.isFinite(longitude) &&
+    Math.abs(longitude) <= 180;
+  const mapUrl = hasCoordinates
+    ? `https://www.google.com/maps?q=${latitude},${longitude}&z=16&output=embed`
+    : null;
   const categoryDetails = detailValues;
   const currentListing = listing;
   const relatedListing: RelatedListing = {
@@ -357,6 +427,32 @@ export default function ListingDetailScreen({
               {listing.address?.fullAddress || 'Đang cập nhật địa chỉ'}
             </Text>
           </View>
+          {mapUrl ? (
+            <View className="mt-4 overflow-hidden rounded-2xl border border-border bg-surface">
+              <View className="flex-row items-center justify-between border-b border-border px-4 py-3">
+                <Text className="text-sm font-bold text-foreground">Vị trí trên bản đồ</Text>
+                <Pressable
+                  onPress={() =>
+                    void Linking.openURL(`https://www.google.com/maps?q=${latitude},${longitude}`)
+                  }
+                  accessibilityRole="link"
+                  accessibilityLabel="Mở vị trí trên Google Maps"
+                  className="flex-row items-center gap-1">
+                  <Text className="text-xs font-semibold text-primary">Mở Google Maps</Text>
+                  <Ionicons name="open-outline" size={14} className="text-primary" />
+                </Pressable>
+              </View>
+              <WebView
+                key={`${latitude},${longitude}`}
+                source={{ uri: mapUrl }}
+                originWhitelist={['https://*']}
+                javaScriptEnabled
+                scrollEnabled={false}
+                style={{ height: 190 }}
+                accessibilityLabel="Bản đồ vị trí nhà"
+              />
+            </View>
+          ) : null}
           <Text className="mt-4 text-2xl font-extrabold text-primary">
             {formatMoney(listing.pricing.amount)}/tháng
           </Text>
@@ -440,7 +536,55 @@ export default function ListingDetailScreen({
                     className={`flex-row justify-between px-4 py-3 ${index ? 'border-t border-border' : ''}`}>
                     <Text className="text-sm text-muted-foreground">{LABELS[key]}</Text>
                     <Text className="max-w-[55%] text-right text-sm font-semibold text-foreground">
-                      {formatValue(value)}
+                      {formatDetailValue(key, value)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          {listing.furnishings?.length ? (
+            <View className="mt-7">
+              <Text className="text-lg font-bold text-foreground">Nội thất bàn giao</Text>
+              <View className="mt-3 overflow-hidden rounded-2xl border border-border bg-surface">
+                {listing.furnishings.map((item, index) => (
+                  <View
+                    key={`${item.itemCode}-${item.assetName}-${index}`}
+                    className={`flex-row items-center justify-between px-4 py-3 ${index ? 'border-t border-border' : ''}`}>
+                    <View className="flex-1 pr-3">
+                      <Text className="text-sm font-semibold text-foreground">
+                        {item.assetName}
+                      </Text>
+                      {item.conditionNote ? (
+                        <Text className="mt-1 text-xs text-muted-foreground">
+                          {item.conditionNote}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Text className="text-right text-xs text-secondary">
+                      {item.quantity} ·{' '}
+                      {item.handoverConditionLabel || formatValue(item.handoverCondition)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          {listing.policies?.length ? (
+            <View className="mt-7">
+              <Text className="text-lg font-bold text-foreground">Nội quy và chính sách</Text>
+              <View className="mt-3 gap-3">
+                {listing.policies.map((policy) => (
+                  <View
+                    key={policy.code}
+                    className="rounded-2xl border border-border bg-surface p-4">
+                    <Text className="text-sm font-bold text-foreground">
+                      {policy.label || formatValue(policy.code)}
+                    </Text>
+                    <Text className="mt-1 text-sm text-secondary">
+                      {policy.displayValue || formatValue(policy.value)}
                     </Text>
                   </View>
                 ))}
@@ -532,6 +676,15 @@ export default function ListingDetailScreen({
             </Text>
           </View>
 
+          {listing.address?.addressNote ? (
+            <View className="mt-5 rounded-2xl bg-primary-soft p-4">
+              <Text className="text-sm font-bold text-foreground">Ghi chú địa chỉ</Text>
+              <Text className="mt-1 text-sm leading-5 text-secondary">
+                {listing.address.addressNote}
+              </Text>
+            </View>
+          ) : null}
+
           <View className="mt-7 flex-row items-center rounded-2xl border border-border p-4">
             <Avatar
               uri={listing.owner?.avatarUrl}
@@ -549,6 +702,48 @@ export default function ListingDetailScreen({
               </View>
             </View>
           </View>
+
+          {similarListings.length ? (
+            <View className="mt-8">
+              <Text className="text-lg font-bold text-foreground">Nhà tương tự</Text>
+              <Text className="mt-1 text-xs text-muted-foreground">
+                Cùng loại nhà trong khu vực
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                className="-mx-5 mt-3 px-5">
+                {similarListings.map((item) => (
+                  <Pressable
+                    key={item.id}
+                    onPress={() => onOpenListing(item.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Mở tin đăng tương tự: ${item.title}`}
+                    className="mr-3 w-64 overflow-hidden rounded-2xl border border-border bg-surface">
+                    <Image
+                      source={{ uri: listingImage(item.coverImageUrl) }}
+                      className="h-36 w-full bg-muted"
+                    />
+                    <View className="p-3">
+                      <Text className="text-sm font-bold text-foreground" numberOfLines={2}>
+                        {item.title}
+                      </Text>
+                      <Text className="mt-2 text-base font-extrabold text-primary">
+                        {formatMoney(item.priceAmount)}/{item.priceUnit || 'tháng'}
+                      </Text>
+                      <Text className="mt-1 text-xs text-muted-foreground" numberOfLines={1}>
+                        {item.fullAddress || item.provinceName || 'Đang cập nhật địa chỉ'}
+                      </Text>
+                      <Text className="mt-1 text-xs text-secondary">
+                        {item.areaM2} m²
+                        {item.bedroomCount != null ? ` · ${item.bedroomCount} phòng ngủ` : ''}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
 

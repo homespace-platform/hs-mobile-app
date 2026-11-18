@@ -67,10 +67,13 @@ export async function listConversations() {
   return response.data.result ?? [];
 }
 
-export async function listMessages(conversationId: string) {
+export async function listMessages(
+  conversationId: string,
+  options: { before?: string; search?: string; media?: 'images'; limit?: number } = {}
+) {
   const response = await axiosClient.get<ApiResponse<MessagePage>>(
     `/api/v1/chat/conversations/${encodeURIComponent(conversationId)}/messages`,
-    { params: { limit: 50 } }
+    { params: { limit: options.limit ?? 50, ...options } }
   );
   return response.data.result;
 }
