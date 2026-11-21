@@ -1,14 +1,14 @@
-# Mobile theme
+# HomeSpace Mobile App Instructions
 
-<!-- BEGIN: HomeSpace engineering standards -->
-## HomeSpace engineering standards
+## Engineering standards
 
 - Preserve business invariants, public contracts and backward compatibility. Keep authentication, authorization, input validation and error handling intact.
 - Protect secrets and sensitive data in code, commits, tests, logs and reports. Treat third-party hooks as untrusted until reviewed and explicitly authorized.
 - Change production configuration, deploy or run destructive data operations only when explicitly authorized for the target environment.
 - Keep review tasks read-only unless the developer requests fixes.
 - Run targeted verification first. Broaden coverage when the risk or affected interfaces warrant it. Report checks that ran and any unverified behavior.
-<!-- END: HomeSpace engineering standards -->
+
+## Theme and dialogs
 
 - Define app colors only in `global.css`, in both `:root` and `.dark:root`.
 - Screens and components must use semantic classes from `tailwind.config.js`:
@@ -23,3 +23,7 @@
 - Run `npm run typecheck` and `npm run test:theme` after theme/UI changes.
 - Use `useDialog` from `src/components/AppDialog.tsx` for app notifications,
   confirmations, and choices; do not add native `Alert.alert` dialogs to the UI.
+
+## Skills
+
+Use mobile-ui-review for an explicit review in the scope described by the skill.
