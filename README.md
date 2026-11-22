@@ -54,6 +54,8 @@ tenant/landlord accounts before release.
 
 # Device testing
 
+For a fresh Windows checkout and Samsung Remote Test Lab, see the [step-by-step guide](docs/huong-dan-chay-mobile.md).
+
 For Android Studio's emulator with services on this computer, keep the
 `localhost` URLs in `.env` and set `EXPO_PUBLIC_ANDROID_API_HOST=10.0.2.2`.
 In Android development builds, API calls and Keycloak token/refresh requests then
