@@ -51,8 +51,10 @@ Mở phiên Samsung Remote Test Lab, chạy `rdb.exe` ở một cửa sổ riên
 Trong PowerShell đang ở repo, đổi `41813` thành cổng thực tế của phiên. Khi `adb devices -l` báo `device`, cài APK nếu phiên này chưa có HomeSpace.
 
 ```powershell
-$serial = "localhost:41813"
+$serial = "localhost:42359"
+adb disconnect $serial
 adb connect $serial
+adb -s $serial shell echo OK
 adb devices -l
 adb -s $serial install -r .\android\app\build\outputs\apk\debug\app-debug.apk
 adb -s $serial reverse tcp:4002 tcp:4002
