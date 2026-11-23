@@ -9,7 +9,6 @@ import type { MainTab } from '@/components/BottomTabBar';
 import type { ChatConversation } from '@/services/chatApi';
 import LoadingScreen from '@/screens/LoadingScreen';
 import LoginScreen from '@/screens/LoginScreen';
-import RegisterScreen from '@/screens/RegisterScreen';
 import ManagementScreen from '@/screens/ManagementScreen';
 import ConversationDetailScreen from '@/screens/ConversationDetailScreen';
 import HomeScreen from '@/screens/HomeScreen';
@@ -161,12 +160,7 @@ function SignedInApp() {
 }
 
 function SignedOutApp() {
-  const [registering, setRegistering] = useState(false);
-  return registering ? (
-    <RegisterScreen onBack={() => setRegistering(false)} />
-  ) : (
-    <LoginScreen onRegister={() => setRegistering(true)} />
-  );
+  return <LoginScreen />;
 }
 
 function AuthGate() {

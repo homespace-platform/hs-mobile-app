@@ -6,9 +6,9 @@ import { useAuth } from '@/features/auth/AuthProvider';
 
 /**
  * Sign-in entry. Credentials are only ever entered on the HomeSpace Keycloak page
- * (system auth browser + PKCE), which also provides Google login and password reset.
+ * (system auth browser + PKCE), which also provides Google login, registration and password reset.
  */
-export default function LoginScreen({ onRegister }: { onRegister: () => void }) {
+export default function LoginScreen() {
   const { login, canLogin, error } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
@@ -59,14 +59,6 @@ export default function LoginScreen({ onRegister }: { onRegister: () => void }) 
         Đăng nhập bằng tài khoản HomeSpace hoặc Google. Bạn sẽ tự động quay lại ứng dụng sau khi xác
         thực.
       </Text>
-
-      <Pressable
-        onPress={onRegister}
-        disabled={opening}
-        accessibilityRole="button"
-        className="mt-5 min-h-12 items-center justify-center rounded-xl border border-border-strong py-3">
-        <Text className="text-center text-sm font-semibold text-secondary">Tạo tài khoản mới</Text>
-      </Pressable>
     </AuthLayout>
   );
 }
