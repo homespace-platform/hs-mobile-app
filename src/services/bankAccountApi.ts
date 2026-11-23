@@ -1,6 +1,13 @@
 import axiosClient from '@/lib/axios-client';
 import type { ApiResponse } from '@/types/api';
 
+export type Bank = {
+  bin: string;
+  code: string;
+  name: string;
+  shortName: string;
+  logo: string | null;
+};
 export type BankAccount = {
   id: string;
   bankBin: string;
@@ -20,6 +27,18 @@ export type BankAccountInput = Pick<
   defaultForRefunds: boolean;
 };
 
+let banksCache: Promise<Bank[]> | null = null;
+/** Public bank catalog; one request per session, cache cleared on failure so it can be retried. */
+export function getBanks() {
+  banksCache ??= axiosClient
+    .get<ApiResponse<Bank[]>>('/api/v1/public/banks')
+    .then((response) => response.data.result ?? [])
+    .catch((cause) => {
+      banksCache = null;
+      throw cause;
+    });
+  return banksCache;
+}
 export async function getBankAccounts() {
   return (
     (await axiosClient.get<ApiResponse<BankAccount[]>>('/api/v1/bank-accounts')).data.result ?? []

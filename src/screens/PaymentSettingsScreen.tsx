@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Image,
   PanResponder,
   Pressable,
   ScrollView,
@@ -14,17 +15,45 @@ import Icon from '@/components/Icon';
 import { useDialog } from '@/components/AppDialog';
 import { ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
 import { apiError } from '@/lib/api-error';
-import { VIETNAMESE_BANKS } from '@/data/banks';
 import {
   createBankAccount,
   deleteBankAccount,
   getBankAccount,
   getBankAccounts,
+  getBanks,
   setBankAccountDefaults,
   updateBankAccount,
   type BankAccountInput,
+  type Bank,
   type BankAccount,
 } from '@/services/bankAccountApi';
+
+const norm = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/đ/g, 'd')
+    .toLowerCase();
+
+function BankLogo({ logo, code }: { logo?: string | null; code: string }) {
+  const [failedLogo, setFailedLogo] = useState<string | null>(null);
+  const showImage = !!logo && failedLogo !== logo;
+  return (
+    <View className="h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-primary-soft">
+      {showImage ? (
+        <Image
+          source={{ uri: logo }}
+          resizeMode="contain"
+          onError={() => setFailedLogo(logo)}
+          className="h-full w-full"
+          accessibilityIgnoresInvertColors
+        />
+      ) : (
+        <Text className="text-xs font-black text-primary">{code}</Text>
+      )}
+    </View>
+  );
+}
 
 export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }) {
   const showDialog = useDialog();
@@ -40,7 +69,10 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
   } | null>(null);
   const [bankQuery, setBankQuery] = useState('');
   const [bankOpen, setBankOpen] = useState(false);
-  const [bank, setBank] = useState(VIETNAMESE_BANKS[0]);
+  const [banks, setBanks] = useState<Bank[]>([]);
+  const [banksError, setBanksError] = useState(false);
+  const [pickedBank, setBank] = useState<Bank | null>(null);
+  const bank = pickedBank ?? banks[0] ?? null;
   const [accountNumber, setAccountNumber] = useState('');
   const [holder, setHolder] = useState('');
 
@@ -59,18 +91,27 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
     void load();
   }, [load]);
 
+  const loadBanks = useCallback(() => {
+    setBanksError(false);
+    getBanks().then(setBanks, () => setBanksError(true));
+  }, []);
+  useEffect(() => {
+    loadBanks();
+  }, [loadBanks]);
+
   function closeForm() {
     setFormOpen(false);
     setEditingId(null);
     setEditingDefaults(null);
     setAccountNumber('');
     setHolder('');
-    setBank(VIETNAMESE_BANKS[0]);
+    setBank(null);
     setBankQuery('');
     setBankOpen(false);
   }
 
   async function save() {
+    if (!bank) return;
     if (!accountNumber.trim() || !holder.trim()) {
       setError('Vui lòng nhập số tài khoản và tên chủ tài khoản.');
       return;
@@ -127,11 +168,12 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
         defaultForRefunds: account.defaultForRefunds,
       });
       setBank(
-        VIETNAMESE_BANKS.find((entry) => entry.bin === account.bankBin) ?? {
+        banks.find((entry) => entry.bin === account.bankBin) ?? {
           bin: account.bankBin,
           code: account.bankCode,
           name: account.bankName,
           shortName: account.bankCode,
+          logo: null,
         }
       );
       setAccountNumber(account.accountNumber);
@@ -229,9 +271,10 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
               onDelete={() => confirmRemove(item)}
               onLongPress={() => showAccountActions(item)}>
               <View className="flex-row items-center">
-                <View className="h-10 w-10 items-center justify-center rounded-xl bg-primary-soft">
-                  <Text className="text-xs font-black text-primary">{item.bankCode}</Text>
-                </View>
+                <BankLogo
+                  logo={banks.find((entry) => entry.bin === item.bankBin)?.logo}
+                  code={item.bankCode}
+                />
                 <View className="ml-3 flex-1">
                   <Text className="font-bold text-foreground">{item.bankName}</Text>
                   <Text className="mt-1 text-xs text-muted-foreground">
@@ -292,18 +335,32 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
             <Text className="text-base font-bold text-foreground">
               {editingId ? 'Chỉnh sửa tài khoản' : 'Thêm tài khoản'}
             </Text>
-            <Pressable
-              onPress={() => setBankOpen((value) => !value)}
-              className="mt-4 min-h-12 flex-row items-center rounded-xl border border-border px-3">
-              <Text className="flex-1 text-sm font-semibold text-foreground">
-                {bank.shortName} · {bank.name}
-              </Text>
-              <Icon
-                name={bankOpen ? 'chevron-up' : 'chevron-down'}
-                size={18}
-                className="text-subtle"
-              />
-            </Pressable>
+            {banksError ? (
+              <View className="mt-4 flex-row items-center rounded-xl border border-danger bg-danger-soft px-3 py-2">
+                <Text className="flex-1 text-sm text-danger">Không thể tải danh sách ngân hàng.</Text>
+                <Pressable onPress={loadBanks} className="min-h-9 justify-center px-3">
+                  <Text className="text-sm font-bold text-danger">Thử lại</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                disabled={!bank}
+                onPress={() => setBankOpen((value) => !value)}
+                className="mt-4 min-h-12 flex-row items-center rounded-xl border border-border px-3">
+                {bank ? <BankLogo logo={bank.logo} code={bank.code} /> : null}
+                <Text
+                  className={`flex-1 text-sm font-semibold ${
+                    bank ? 'ml-3 text-foreground' : 'text-muted-foreground'
+                  }`}>
+                  {bank ? `${bank.shortName} · ${bank.name}` : 'Đang tải danh sách ngân hàng...'}
+                </Text>
+                <Icon
+                  name={bankOpen ? 'chevron-up' : 'chevron-down'}
+                  size={18}
+                  className="text-subtle"
+                />
+              </Pressable>
+            )}
             {bankOpen ? (
               <View className="mt-2 rounded-xl border border-border p-2">
                 <TextInput
@@ -313,23 +370,24 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
                   className="min-h-11 rounded-lg bg-muted px-3 text-foreground placeholder:text-subtle"
                 />
                 <ScrollView className="max-h-48" nestedScrollEnabled>
-                  {VIETNAMESE_BANKS.filter((item) =>
-                    `${item.name} ${item.shortName} ${item.code}`
-                      .toLowerCase()
-                      .includes(bankQuery.toLowerCase())
-                  ).map((item) => (
-                    <Pressable
-                      key={item.bin}
-                      onPress={() => {
-                        setBank(item);
-                        setBankOpen(false);
-                      }}
-                      className="min-h-11 justify-center border-b border-border px-2">
-                      <Text className="text-sm text-foreground">
-                        {item.shortName} · {item.name}
-                      </Text>
-                    </Pressable>
-                  ))}
+                  {banks
+                    .filter((item) =>
+                      norm(`${item.name} ${item.shortName} ${item.code}`).includes(norm(bankQuery))
+                    )
+                    .map((item) => (
+                      <Pressable
+                        key={item.bin}
+                        onPress={() => {
+                          setBank(item);
+                          setBankOpen(false);
+                        }}
+                        className="min-h-11 flex-row items-center border-b border-border px-2 py-1">
+                        <BankLogo logo={item.logo} code={item.code} />
+                        <Text className="ml-3 flex-1 text-sm text-foreground">
+                          {item.shortName} · {item.name}
+                        </Text>
+                      </Pressable>
+                    ))}
                 </ScrollView>
               </View>
             ) : null}
@@ -360,7 +418,7 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
                 <Text className="font-semibold text-secondary">Hủy</Text>
               </Pressable>
               <Pressable
-                disabled={busy}
+                disabled={busy || !bank}
                 onPress={() => void save()}
                 className="min-h-12 flex-1 items-center justify-center rounded-xl bg-brand">
                 <Text className="font-bold text-on-brand">
