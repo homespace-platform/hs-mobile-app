@@ -2,7 +2,14 @@ import { AuthRequest, CodeChallengeMethod } from 'expo-auth-session';
 
 import { keycloakConfig } from '@/config/env';
 import { exchangeAuthorizationCode } from '@/features/auth/session';
-import { authScopes, discovery, redirectUri, registrationEndpoint } from '@/lib/auth/discovery';
+import {
+  authBrowserOptions,
+  authScopes,
+  authUiLocales,
+  discovery,
+  redirectUri,
+  registrationEndpoint,
+} from '@/lib/auth/discovery';
 
 export async function registerWithKeycloak() {
   // A fresh state and PKCE verifier are required for each registration attempt.
@@ -12,12 +19,12 @@ export async function registerWithKeycloak() {
     scopes: authScopes,
     usePKCE: true,
     codeChallengeMethod: CodeChallengeMethod.S256,
-    extraParams: { ui_locales: 'vi' },
+    extraParams: { ui_locales: authUiLocales },
   });
-  const response = await request.promptAsync({
-    ...discovery,
-    authorizationEndpoint: registrationEndpoint,
-  });
+  const response = await request.promptAsync(
+    { ...discovery, authorizationEndpoint: registrationEndpoint },
+    authBrowserOptions
+  );
 
   if (response.type === 'cancel' || response.type === 'dismiss') return;
   if (response.type === 'error') {

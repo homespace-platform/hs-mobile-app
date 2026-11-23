@@ -773,74 +773,17 @@ test('emulator transport rewrites API/token loopback URLs only in Android develo
   );
 });
 
-test('password login distinguishes network/timeouts from invalid credentials and clears its timeout', async () => {
-  for (const scenario of ['network', 'timeout', 'credentials', 'success']) {
-    let timeoutCallback;
-    let cleared = false;
-    let request;
-    const api = load(
-      'features/auth/session.ts',
-      {
-        'expo-auth-session': {
-          TokenResponse: class {
-            constructor(value) {
-              Object.assign(this, value);
-            }
-          },
-        },
-        'expo-secure-store': { setItemAsync: async () => {} },
-        'expo-web-browser': {},
-        '@/config/env': { keycloakConfig: { clientId: 'mobile' } },
-        '@/lib/auth/discovery': {
-          discovery: { tokenEndpoint: 'http://10.0.2.2:9000/token' },
-          authScopes: ['openid'],
-          redirectUri: 'homespace://oauth2redirect',
-        },
-      },
-      {
-        AbortController,
-        setTimeout: (callback, delay) => {
-          assert.equal(delay, 15000);
-          timeoutCallback = callback;
-          return 123;
-        },
-        clearTimeout: (id) => {
-          assert.equal(id, 123);
-          cleared = true;
-        },
-        fetch: async (url, options) => {
-          request = { url, options };
-          if (scenario === 'timeout') timeoutCallback();
-          if (scenario === 'network' || scenario === 'timeout')
-            throw new TypeError('Network request failed');
-          return {
-            ok: scenario === 'success',
-            json: async () =>
-              scenario === 'success'
-                ? { access_token: 'test-token', refresh_token: 'test-refresh' }
-                : { error_description: 'Invalid user credentials' },
-          };
-        },
-      }
-    );
-    const promise = api.loginWithPassword('test-user', 'test-password');
-    if (scenario === 'success') {
-      await promise;
-      assert.equal(api.isSignedIn(), true);
-    } else {
-      await assert.rejects(
-        promise,
-        scenario === 'network'
-          ? /Không kết nối/
-          : scenario === 'timeout'
-            ? /phản hồi quá lâu/
-            : /Invalid user credentials/
-      );
-      assert.equal(api.isSignedIn(), false);
-    }
-    assert.equal(cleared, true);
-    assert.equal(request.url, 'http://10.0.2.2:9000/token');
-    assert.ok(request.options.signal);
+test('mobile auth never uses the password grant; credentials stay on the Keycloak page', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  for (const file of [
+    'features/auth/session.ts',
+    'features/auth/AuthProvider.tsx',
+    'screens/LoginScreen.tsx',
+  ]) {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'src', file), 'utf8');
+    assert.doesNotMatch(source, /grant_type['"]?\s*:\s*['"]password/, file);
+    assert.doesNotMatch(source, /secureTextEntry/, file);
   }
 });
 

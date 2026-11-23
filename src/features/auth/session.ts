@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as WebBrowser from 'expo-web-browser';
 
 import { keycloakConfig } from '@/config/env';
-import { authScopes, discovery, redirectUri } from '@/lib/auth/discovery';
+import { authBrowserOptions, authScopes, discovery, redirectUri } from '@/lib/auth/discovery';
 
 const REFRESH_TOKEN_KEY = 'homespace.refreshToken';
 
@@ -69,56 +69,6 @@ export const exchangeAuthorizationCode = async (code: string, codeVerifier: stri
   );
 
   await applyTokens(next);
-};
-
-export const loginWithPassword = async (username: string, password: string) => {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
-  const response = await fetch(discovery.tokenEndpoint!, {
-    signal: controller.signal,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'password',
-      client_id: keycloakConfig.clientId,
-      username,
-      password,
-      scope: authScopes.join(' '),
-    }).toString(),
-  })
-    .catch(() => {
-      throw new Error(
-        controller.signal.aborted
-          ? 'Máy chủ đăng nhập phản hồi quá lâu. Vui lòng thử lại.'
-          : 'Không kết nối được máy chủ đăng nhập. Kiểm tra kết nối mạng và thử lại.'
-      );
-    })
-    .finally(() => clearTimeout(timeout));
-
-  const payload = (await response.json().catch(() => null)) as {
-    access_token?: string;
-    refresh_token?: string;
-    token_type?: AuthSession.TokenType;
-    expires_in?: number;
-    scope?: string;
-    id_token?: string;
-    error_description?: string;
-  } | null;
-
-  if (!response.ok || !payload?.access_token) {
-    throw new Error(payload?.error_description ?? 'Tên đăng nhập hoặc mật khẩu không đúng');
-  }
-
-  await applyTokens(
-    new AuthSession.TokenResponse({
-      accessToken: payload.access_token,
-      refreshToken: payload.refresh_token,
-      tokenType: payload.token_type,
-      expiresIn: payload.expires_in,
-      scope: payload.scope,
-      idToken: payload.id_token,
-    })
-  );
 };
 
 export const restoreSession = async () => {
@@ -214,7 +164,11 @@ export const signOut = async () => {
     .join('&');
 
   try {
-    await WebBrowser.openAuthSessionAsync(`${discovery.endSessionEndpoint}?${query}`, redirectUri);
+    await WebBrowser.openAuthSessionAsync(
+      `${discovery.endSessionEndpoint}?${query}`,
+      redirectUri,
+      authBrowserOptions
+    );
   } catch {
     // Keycloak SSO cookie may survive, but the app no longer holds any token.
   }

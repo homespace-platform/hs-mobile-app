@@ -15,12 +15,17 @@ import { registerWithKeycloak } from '@/features/auth/registration';
 import {
   exchangeAuthorizationCode,
   isSignedIn,
-  loginWithPassword as loginWithPasswordSession,
   restoreSession,
   signOut,
   subscribeSession,
 } from '@/features/auth/session';
-import { authScopes, discovery, redirectUri } from '@/lib/auth/discovery';
+import {
+  authBrowserOptions,
+  authScopes,
+  authUiLocales,
+  discovery,
+  redirectUri,
+} from '@/lib/auth/discovery';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -32,7 +37,6 @@ interface AuthContextValue {
   canLogin: boolean;
   login: () => Promise<void>;
   register: () => Promise<void>;
-  loginWithPassword: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -49,6 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       redirectUri,
       scopes: authScopes,
       usePKCE: true,
+      extraParams: { ui_locales: authUiLocales },
     },
     discovery
   );
@@ -116,18 +121,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async () => {
     setError(null);
-    await promptAsync();
+    await promptAsync(authBrowserOptions);
   }, [promptAsync]);
-
-  const loginWithPassword = useCallback(async (username: string, password: string) => {
-    setError(null);
-    try {
-      await loginWithPasswordSession(username, password);
-    } catch (loginError: unknown) {
-      setStatus('signedOut');
-      throw loginError;
-    }
-  }, []);
 
   const register = useCallback(async () => {
     setError(null);
@@ -147,10 +142,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       canLogin: request !== null,
       login,
       register,
-      loginWithPassword,
       logout,
     }),
-    [error, login, register, loginWithPassword, logout, request, status]
+    [error, login, register, logout, request, status]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
