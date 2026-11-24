@@ -28,6 +28,10 @@ export type ListingSummary = {
   publishedAt?: string | null;
   availableFrom?: string | null;
   viewCount?: number;
+  // Also returned by /public/listings (see web PublicListingSummaryResponse).
+  ownerAvatarUrl?: string | null;
+  hasVideo?: boolean;
+  updatedAt?: string | null;
 };
 
 type DetailValues = Record<string, string | number | boolean | null | undefined>;
@@ -132,6 +136,18 @@ export async function getPublicListingsPage(params: Record<string, string | numb
   return (
     await axiosClient.get<PageResponse<ListingSummary>>('/api/v1/public/listings', { params })
   ).data;
+}
+
+/** Published listing count of the 5 home metros, optionally per category. */
+export async function getCityListingCounts(category?: string) {
+  return (
+    (
+      await axiosClient.get<ApiResponse<{ cityId: string; count: number }[]>>(
+        '/api/v1/public/listings/city-counts',
+        { params: category ? { category } : undefined }
+      )
+    ).data.result ?? []
+  );
 }
 
 export async function getAccessibleListing(id: string) {

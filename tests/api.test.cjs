@@ -853,3 +853,30 @@ test('avatar uploads reject files above the server limit of 5 MB', async () => {
   );
   assert.equal(calls.length, 0);
 });
+
+test('membership card status follows the web rules and /membership/me failures degrade safely', async () => {
+  const { client, calls } = mockApi({ result: { tier: 'pro', remainingUses: 7, expiresAt: null } });
+  const api = load('services/membershipApi.ts', { '@/lib/axios-client': client });
+  const me = await api.getMyMembership();
+  assert.equal(calls[0].args[0], '/api/v1/membership/me');
+  assert.deepEqual(
+    { ...me },
+    {
+      tier: 'PRO',
+      remainingUses: 7,
+      reservedUses: 0,
+      expiresAt: null,
+      unlimited: false,
+    }
+  );
+  const lib = load('lib/membership.ts', {});
+  const plan = (code) => lib.mergeMembershipPlans(null).find((item) => item.code === code);
+  const status = (code, view, unlimited = false) => lib.planCardStatus(plan(code), view, unlimited);
+  assert.equal(status('FREE', me).label, 'Gói khởi đầu mặc định');
+  assert.equal(status('FREE', null).label, 'Đang áp dụng (Còn 3 lượt)');
+  assert.equal(status('STARTER', me).label, 'Đang sử dụng gói cao hơn');
+  assert.equal(status('PRO', me).current, true);
+  assert.match(status('BUSINESS', me).label, /^Nâng cấp lên Business/);
+  assert.match(status('STARTER', null).label, /^Mua gói Starter/);
+  assert.equal(status('PRO', me, true).label, 'ADMIN: Đã có lượt không giới hạn');
+});

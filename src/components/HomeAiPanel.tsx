@@ -76,7 +76,7 @@ export default function HomeAiPanel({ onOpenListing }: { onOpenListing?: (id: st
       <TextInput
         value={draft}
         onChangeText={setDraft}
-        placeholder="Ví dụ: Phòng cho 2 người dưới 4 triệu, có ban công..."
+        placeholder="Ví dụ: Mình cần phòng cho 2 người, dưới 4 triệu, có ban công ở Phú Lợi…"
         multiline
         maxLength={500}
         accessibilityLabel="Mô tả nhu cầu tìm nhà hoặc hỏi HomeSpace AI"

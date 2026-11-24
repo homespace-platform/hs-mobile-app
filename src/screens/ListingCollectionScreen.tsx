@@ -11,17 +11,28 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, ErrorNotice, ScreenHeader } from '@/components/Screen';
 import { apiError } from '@/lib/api-error';
-import { getFavorites } from '@/services/favoriteApi';
+import { getFavorites, getHistory } from '@/services/favoriteApi';
 import { getPublicListingsPage, listingImage, type ListingSummary } from '@/services/listingApi';
 import { money } from '@/services/managementApi';
 
+const TITLES = {
+  favorites: 'Tin đã yêu thích',
+  history: 'Lịch sử xem tin',
+  browse: 'Tìm nhà cho thuê',
+};
+const EMPTY = {
+  favorites: 'Bạn chưa lưu tin đăng nào.',
+  history: 'Bạn chưa xem tin đăng nào.',
+  browse: 'Chưa có tin phù hợp với bộ lọc.',
+};
+
 export default function ListingCollectionScreen({
-  favorites,
+  mode,
   filters,
   onBack,
   onOpenListing,
 }: {
-  favorites: boolean;
+  mode: 'favorites' | 'history' | 'browse';
   filters: Record<string, string | number>;
   onBack: () => void;
   onOpenListing: (id: string) => void;
@@ -36,9 +47,12 @@ export default function ListingCollectionScreen({
       setLoading(true);
       setError(null);
       try {
-        const data = favorites
-          ? await getFavorites(nextPage)
-          : await getPublicListingsPage({ ...filters, page: nextPage, size: 12 });
+        const data =
+          mode === 'favorites'
+            ? await getFavorites(nextPage)
+            : mode === 'history'
+              ? await getHistory(nextPage)
+              : await getPublicListingsPage({ ...filters, page: nextPage, size: 12 });
         setRows((current) =>
           nextPage === 1
             ? data.result
@@ -55,14 +69,14 @@ export default function ListingCollectionScreen({
         setLoading(false);
       }
     },
-    [favorites, filters]
+    [mode, filters]
   );
   useEffect(() => {
     void load();
   }, [load]);
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <ScreenHeader title={favorites ? 'Tin đã yêu thích' : 'Tìm nhà cho thuê'} onBack={onBack} />
+      <ScreenHeader title={TITLES[mode]} onBack={onBack} />
       <ScrollView
         contentContainerClassName="px-5 pb-10 pt-4"
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load()} />}>
@@ -90,9 +104,7 @@ export default function ListingCollectionScreen({
         {loading ? (
           <ActivityIndicator className="my-6 text-primary" />
         ) : !rows.length && !error ? (
-          <Text className="py-10 text-center text-muted-foreground">
-            {favorites ? 'Bạn chưa lưu tin đăng nào.' : 'Chưa có tin phù hợp với bộ lọc.'}
-          </Text>
+          <Text className="py-10 text-center text-muted-foreground">{EMPTY[mode]}</Text>
         ) : null}
         {hasMore ? (
           <Button label="Tải thêm" onPress={() => load(page + 1)} disabled={loading} />

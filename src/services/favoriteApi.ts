@@ -22,3 +22,10 @@ export async function getFavorites(page: number) {
 export async function recordListingHistory(listingId: string) {
   await axiosClient.post(`/api/v1/history/${encodeURIComponent(listingId)}`);
 }
+export async function getHistory(page: number) {
+  return (
+    await axiosClient.get<PageResponse<ListingSummary>>('/api/v1/history', {
+      params: { page, size: 12 },
+    })
+  ).data;
+}

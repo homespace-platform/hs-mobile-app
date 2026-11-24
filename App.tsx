@@ -22,11 +22,12 @@ import type { ManagementSection } from '@/services/managementApi';
 
 function SignedInApp() {
   const [screen, setScreen] = useState<
-    MainTab | 'detail' | 'conversation-detail' | 'favorites' | 'browse' | 'news'
+    MainTab | 'detail' | 'conversation-detail' | 'favorites' | 'history' | 'browse' | 'news'
   >('home');
-  const [returnScreen, setReturnScreen] = useState<MainTab | 'favorites' | 'browse' | 'news'>(
-    'home'
-  );
+  const [returnScreen, setReturnScreen] = useState<
+    MainTab | 'favorites' | 'history' | 'browse' | 'news'
+  >('home');
+  const [favoritesOrigin, setFavoritesOrigin] = useState<'home' | 'profile'>('profile');
   const [ownListing, setOwnListing] = useState(false);
   const [managementSection, setManagementSection] = useState<ManagementSection | null>(null);
   const [managementOrigin, setManagementOrigin] = useState<'profile' | 'detail' | null>(null);
@@ -60,12 +61,12 @@ function SignedInApp() {
     setScreen('browse');
   };
 
-  if (screen === 'favorites' || screen === 'browse')
+  if (screen === 'favorites' || screen === 'history' || screen === 'browse')
     return (
       <ListingCollectionScreen
-        favorites={screen === 'favorites'}
+        mode={screen}
         filters={filters}
-        onBack={() => setScreen(screen === 'favorites' ? 'profile' : 'home')}
+        onBack={() => setScreen(screen === 'favorites' ? favoritesOrigin : 'home')}
         onOpenListing={openListing}
       />
     );
@@ -143,7 +144,10 @@ function SignedInApp() {
       <ProfileScreen
         onSelectTab={selectTab}
         onOpenManagement={openManagement}
-        onOpenFavorites={() => setScreen('favorites')}
+        onOpenFavorites={() => {
+          setFavoritesOrigin('profile');
+          setScreen('favorites');
+        }}
       />
     );
   }
@@ -155,6 +159,11 @@ function SignedInApp() {
       onBrowse={browse}
       onOpenNews={() => setScreen('news')}
       onOpenManagement={openManagement}
+      onOpenFavorites={() => {
+        setFavoritesOrigin('home');
+        setScreen('favorites');
+      }}
+      onOpenHistory={() => setScreen('history')}
     />
   );
 }
