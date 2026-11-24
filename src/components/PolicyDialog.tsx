@@ -114,7 +114,7 @@ export function PolicyDialog({
   );
 }
 
-/** One-line summary + "Xem chi tiết" opening the full content in PolicyDialog. */
+/** One-line summary + book icon opening the full content in PolicyDialog. */
 export function PolicyNotice({
   summary,
   title,
@@ -123,7 +123,7 @@ export function PolicyNotice({
   text,
   children,
   tone = 'info',
-  actionLabel = 'Xem chi tiết',
+  actionLabel = 'Xem nội dung đầy đủ',
   icon = 'information-circle-outline',
   className = '',
 }: {
@@ -142,19 +142,20 @@ export function PolicyNotice({
   const t = TONES[tone];
   return (
     <>
-      <View className={`flex-row items-center rounded-2xl border px-3 ${t.box} ${className}`}>
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`${actionLabel}: ${title}`}
+        accessibilityHint="Mở cửa sổ xem nội dung"
+        className={`flex-row items-center rounded-2xl border px-3 ${t.box} ${className}`}>
         <Icon name={icon} size={20} className={t.icon} />
         <Text numberOfLines={2} className="ml-2 flex-1 py-2 text-sm leading-5 text-foreground">
           {summary}
         </Text>
-        <Pressable
-          onPress={() => setOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel={`${actionLabel}: ${title}`}
-          className="ml-2 min-h-11 justify-center">
-          <Text className="text-sm font-bold text-primary">{actionLabel}</Text>
-        </Pressable>
-      </View>
+        <View className="ml-2 h-11 w-11 items-center justify-center rounded-full">
+          <Icon name="book-outline" size={22} className="text-muted-foreground" />
+        </View>
+      </Pressable>
       <PolicyDialog
         visible={open}
         onClose={() => setOpen(false)}
