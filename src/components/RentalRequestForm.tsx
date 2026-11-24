@@ -5,7 +5,7 @@ import Icon from '@/components/Icon';
 import BookingDatePicker from '@/components/BookingDatePicker';
 import { Button, ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
 import { useDialog } from '@/components/AppDialog';
-import { TermsLink } from '@/components/InfoDisclosure';
+import { PolicyConsent } from '@/components/PolicyDialog';
 import { apiError } from '@/lib/api-error';
 import { nonnegativeInteger, positiveInteger, today, validDate } from '@/lib/form-validation';
 import {
@@ -451,8 +451,10 @@ export default function RentalRequestForm({
                 <Text className="text-sm leading-5 text-secondary">
                   Điều kiện giữ chỗ cần được xác nhận trước khi gửi yêu cầu.
                 </Text>
-                <TermsLink
-                  title={`Điều kiện giữ chỗ · Phiên bản ${policy.version}`}
+                <PolicyConsent
+                  title="Điều kiện giữ chỗ"
+                  version={`Phiên bản ${policy.version}`}
+                  onAgree={() => estimate?.paymentPlan && setAccepted(true)}
                   text={policy.text.replace(/^./, (letter) => letter.toUpperCase())}
                 />
               </View>

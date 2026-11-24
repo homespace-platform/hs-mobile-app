@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import Icon from '@/components/Icon';
 import { useDialog } from '@/components/AppDialog';
-import { InfoDisclosure } from '@/components/InfoDisclosure';
+import { PolicyNotice } from '@/components/PolicyDialog';
 import { ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
 import BookingDatePicker from '@/components/BookingDatePicker';
 import { dateKey } from '@/lib/appointment-calendar';
@@ -615,11 +615,12 @@ export default function ListingDraftScreen({
         ref={scrollRef}
         keyboardShouldPersistTaps="handled"
         contentContainerClassName="px-5 pb-10 pt-5">
-        <InfoDisclosure
+        <PolicyNotice
           tone="warning"
           className="mb-5"
+          title="Lưu ý khi đăng tin"
           summary="Kiểm tra kỹ thông tin trước khi lưu."
-          details={
+          text={
             original
               ? 'Kiểm tra kỹ thông tin trước khi lưu. Tin đang hiển thị sẽ chuyển sang chờ duyệt lại khi gửi thay đổi.'
               : 'Kiểm tra kỹ thông tin trước khi lưu. Ảnh và video sẽ được tải lên khi bạn gửi biểu mẫu.'
@@ -1079,13 +1080,12 @@ export default function ListingDraftScreen({
               onChange={(value) => setPrice('paymentCycle', value)}
             />
             {selectedBranch ? (
-              <View className="mt-8 rounded-2xl border border-primary-border bg-primary-soft p-4">
-                <Text className="font-bold text-foreground">Biểu phí theo chi nhánh</Text>
-                <Text className="mt-1 text-sm leading-5 text-secondary">
-                  Các khoản phí của “{selectedBranch.name}” sẽ được dùng cho tin này. Bạn có thể sửa
-                  biểu phí trong Quản lý chi nhánh.
-                </Text>
-              </View>
+              <PolicyNotice
+                className="mt-8"
+                title="Biểu phí theo chi nhánh"
+                summary={`Các khoản phí của “${selectedBranch.name}” sẽ được dùng cho tin này.`}
+                text={`Các khoản phí của “${selectedBranch.name}” sẽ được dùng cho tin này. Bạn có thể sửa biểu phí trong Quản lý chi nhánh.`}
+              />
             ) : (
               <>
                 <View className="mt-8">
@@ -1379,13 +1379,12 @@ export default function ListingDraftScreen({
                 </Pressable>
               );
             })}
-            <View className="mt-6 rounded-2xl border border-primary-border bg-primary-soft p-4">
-              <Text className="font-bold text-foreground">Hoàn tất tin đăng</Text>
-              <Text className="mt-2 text-sm leading-5 text-secondary">
-                Cả lưu nháp và gửi duyệt đều cần đủ thông tin cơ bản, địa chỉ, ảnh, giá và mô tả.
-                Gửi duyệt cần thêm các chính sách bắt buộc.
-              </Text>
-            </View>
+            <PolicyNotice
+              className="mt-6"
+              title="Hoàn tất tin đăng"
+              summary="Cả lưu nháp và gửi duyệt đều cần đủ thông tin cơ bản, địa chỉ, ảnh, giá và mô tả."
+              text="Cả lưu nháp và gửi duyệt đều cần đủ thông tin cơ bản, địa chỉ, ảnh, giá và mô tả. Gửi duyệt cần thêm các chính sách bắt buộc."
+            />
           </>
         ) : null}
       </ScrollView>

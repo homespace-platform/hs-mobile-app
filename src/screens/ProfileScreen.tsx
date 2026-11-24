@@ -7,6 +7,7 @@ import Avatar from '@/components/Avatar';
 import TabHeader from '@/components/TabHeader';
 import ThemeSelector from '@/components/ThemeSelector';
 import { useDialog } from '@/components/AppDialog';
+import { PolicyDialog } from '@/components/PolicyDialog';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { getUserProfileApi } from '@/services/userApi';
@@ -98,6 +99,10 @@ export default function ProfileScreen({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [reservationPolicy, setReservationPolicy] = useState<{
+    version: string;
+    text: string;
+  } | null>(null);
   const [security, setSecurity] = useState(false);
   const [paymentSettings, setPaymentSettings] = useState(false);
 
@@ -276,10 +281,10 @@ export default function ProfileScreen({
               onPress={async () => {
                 try {
                   const policy = await getReservationPolicy();
-                  showDialog(
-                    `Chính sách giữ chỗ · ${policy.version}`,
-                    policy.text.replace(/^./, (letter) => letter.toUpperCase())
-                  );
+                  setReservationPolicy({
+                    version: policy.version,
+                    text: policy.text.replace(/^./, (letter) => letter.toUpperCase()),
+                  });
                 } catch (e) {
                   showDialog('Không tải được chính sách', apiError(e));
                 }
@@ -297,6 +302,13 @@ export default function ProfileScreen({
       </ScrollView>
 
       <BottomTabBar active="profile" onSelect={onSelectTab} />
+      <PolicyDialog
+        visible={Boolean(reservationPolicy)}
+        onClose={() => setReservationPolicy(null)}
+        title="Chính sách giữ chỗ"
+        version={reservationPolicy ? `Phiên bản ${reservationPolicy.version}` : undefined}
+        text={reservationPolicy?.text}
+      />
     </SafeAreaView>
   );
 }

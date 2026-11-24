@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import { Button, ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
 import { useDialog } from '@/components/AppDialog';
+import { PolicyNotice } from '@/components/PolicyDialog';
 import { apiError } from '@/lib/api-error';
 import {
   createKycSession,
@@ -99,10 +100,13 @@ export default function AccountSecurityScreen({ onBack }: { onBack: () => void }
           {kyc?.rejectionReason ? (
             <Text className="mt-2 text-sm text-danger">{kyc.rejectionReason}</Text>
           ) : null}
-          <Text className="mt-2 text-sm leading-5 text-muted-foreground">
-            Cần xác minh danh tính để đặt lịch xem và gửi yêu cầu thuê. Trạng thái được lấy từ hệ
-            thống định danh.
-          </Text>
+          <PolicyNotice
+            tone="neutral"
+            className="mt-2"
+            title="Xác minh danh tính"
+            summary="Cần xác minh danh tính để đặt lịch xem và gửi yêu cầu thuê."
+            text="Cần xác minh danh tính để đặt lịch xem và gửi yêu cầu thuê. Trạng thái được lấy từ hệ thống định danh."
+          />
           {kyc && kyc.status !== 'VERIFIED' ? (
             <Button label="Tiếp tục xác minh danh tính" onPress={verify} busy={busy} />
           ) : null}

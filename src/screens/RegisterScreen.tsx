@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, BackHandler, Pressable, Text, View } from 'react-native';
 
 import AuthLayout from '@/components/AuthLayout';
+import { PolicyNotice } from '@/components/PolicyDialog';
 import Icon from '@/components/Icon';
 import { useAuth } from '@/features/auth/AuthProvider';
 
@@ -42,10 +43,13 @@ export default function RegisterScreen({ onBack }: { onBack: () => void }) {
         <Text className="mt-3 text-center text-sm font-semibold text-foreground">
           Một tài khoản cho web và ứng dụng
         </Text>
-        <Text className="mt-2 text-center text-sm leading-6 text-secondary">
-          Tiếp tục tới trang đăng ký HomeSpace để điền tên, email và mật khẩu. Sau khi hoàn tất các
-          bước xác thực, bạn sẽ được đưa về ứng dụng.
-        </Text>
+        <PolicyNotice
+          tone="neutral"
+          className="mt-2"
+          title="Đăng ký tài khoản"
+          summary="Tiếp tục tới trang đăng ký HomeSpace để điền tên, email và mật khẩu."
+          text="Tiếp tục tới trang đăng ký HomeSpace để điền tên, email và mật khẩu. Sau khi hoàn tất các bước xác thực, bạn sẽ được đưa về ứng dụng."
+        />
       </View>
 
       {error ? (

@@ -15,6 +15,7 @@ import * as ImagePicker from 'expo-image-picker';
 import Icon from '@/components/Icon';
 import DatePeriodFilter from '@/components/DatePeriodFilter';
 import { useDialog } from '@/components/AppDialog';
+import { PolicyNotice } from '@/components/PolicyDialog';
 import { Button, ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
 import { apiError } from '@/lib/api-error';
 import { getDatePeriodRange, toLocalDateKey, type DatePeriod } from '@/lib/date-period';
@@ -614,9 +615,14 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
             {selected.buildingRules ? (
               <>
                 <Text className="mt-7 text-lg font-bold text-foreground">Nội quy</Text>
-                <Text className="mt-2 text-sm leading-6 text-secondary">
-                  {selected.buildingRules}
-                </Text>
+                <PolicyNotice
+                  tone="neutral"
+                  icon="document-text-outline"
+                  className="mt-2"
+                  title="Nội quy chi nhánh"
+                  summary={selected.buildingRules}
+                  text={selected.buildingRules}
+                />
               </>
             ) : null}
             <Button
@@ -729,10 +735,13 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
         {mode === 'form' && step === 1 ? (
           <>
             <Text className="text-lg font-bold text-foreground">Biểu phí dịch vụ</Text>
-            <Text className="mt-1 text-sm leading-5 text-muted-foreground">
-              Các khoản này dùng chung cho mọi tin đăng trong chi nhánh. Chọn cách tính rồi nhập đơn
-              giá nếu có thu phí.
-            </Text>
+            <PolicyNotice
+              tone="neutral"
+              className="mt-2"
+              title="Biểu phí dịch vụ"
+              summary="Các khoản này dùng chung cho mọi tin đăng trong chi nhánh."
+              text="Các khoản này dùng chung cho mọi tin đăng trong chi nhánh. Chọn cách tính rồi nhập đơn giá nếu có thu phí."
+            />
             {CHARGE_FIELDS.map((field) => {
               const charge = form.charges[field.key];
               return (
@@ -872,10 +881,14 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
               </Text>
             </View>
             {missingFees.length ? (
-              <Text className="mt-4 rounded-xl bg-warning-soft p-3 text-sm leading-5 text-warning">
-                Biểu phí còn thiếu: {missingFees.join(', ')}. Bạn vẫn có thể lưu, nhưng chưa thể
-                dùng chi nhánh này để đăng tin cho đến khi bổ sung.
-              </Text>
+              <PolicyNotice
+                tone="warning"
+                icon="warning-outline"
+                className="mt-4"
+                title="Biểu phí còn thiếu"
+                summary={`Biểu phí còn thiếu: ${missingFees.join(', ')}.`}
+                text={`Biểu phí còn thiếu: ${missingFees.join(', ')}. Bạn vẫn có thể lưu, nhưng chưa thể dùng chi nhánh này để đăng tin cho đến khi bổ sung.`}
+              />
             ) : null}
             {selected && (selected.activeListingsCount ?? 0) > 0 ? (
               <Text className="mt-4 rounded-xl bg-warning-soft p-3 text-sm leading-5 text-warning">

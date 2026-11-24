@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
 import { useDialog } from '@/components/AppDialog';
-import { InfoDisclosure } from '@/components/InfoDisclosure';
+import { PolicyNotice } from '@/components/PolicyDialog';
 import { ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
 import { apiError } from '@/lib/api-error';
 import {
@@ -237,9 +237,10 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <ScreenHeader title="Cài đặt thanh toán" onBack={onBack} />
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerClassName="px-5 pb-10 pt-5">
-        <InfoDisclosure
+        <PolicyNotice
+          title="Về thanh toán"
           summary="HomeSpace không giữ tiền."
-          details="HomeSpace dùng số tài khoản để người thuê chuyển tiền trực tiếp cho chủ nhà và hoàn cọc. HomeSpace không giữ tiền."
+          text="HomeSpace dùng số tài khoản để người thuê chuyển tiền trực tiếp cho chủ nhà và hoàn cọc. HomeSpace không giữ tiền."
         />
         <View className="mt-6 flex-row items-center justify-between">
           <Text className="text-lg font-bold text-foreground">Tài khoản ngân hàng</Text>

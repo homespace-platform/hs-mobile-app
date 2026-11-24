@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import Icon from '@/components/Icon';
+import { PolicyNotice } from '@/components/PolicyDialog';
 import { calendarDays, dateKey, moveCalendar, type CalendarView } from '@/lib/appointment-calendar';
 import { statusLabel, type ManagementEntry } from '@/services/managementApi';
 
@@ -158,9 +159,13 @@ export default function AppointmentCalendar({
             </View>
           ))}
         </View>
-        <Text className="px-3 py-3 text-xs leading-5 text-muted-foreground">
-          Lịch hiển thị hẹn đã xác nhận và đã hoàn thành. Chạm một ngày để xem chi tiết bên dưới.
-        </Text>
+        <PolicyNotice
+          tone="neutral"
+          className="m-3"
+          title="Cách xem lịch"
+          summary="Lịch hiển thị hẹn đã xác nhận và đã hoàn thành."
+          text="Lịch hiển thị hẹn đã xác nhận và đã hoàn thành. Chạm một ngày để xem chi tiết bên dưới."
+        />
       </View>
       <View className="mb-3 mt-5 flex-row items-center justify-between">
         <Text className="font-bold text-foreground">

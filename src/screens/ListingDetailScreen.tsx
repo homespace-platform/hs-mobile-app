@@ -19,6 +19,7 @@ import { getUserProfileApi } from '@/services/userApi';
 import BookingForm from '@/components/BookingForm';
 import RentalRequestForm from '@/components/RentalRequestForm';
 import { Button } from '@/components/Screen';
+import { PolicyNotice } from '@/components/PolicyDialog';
 import ListingDraftScreen from '@/screens/ListingDraftScreen';
 import { apiError } from '@/lib/api-error';
 import { getMyRentalRequestByListing, type ActiveRentalRequest } from '@/services/bookingApi';
@@ -575,20 +576,27 @@ export default function ListingDetailScreen({
           {listing.policies?.length ? (
             <View className="mt-7">
               <Text className="text-lg font-bold text-foreground">Nội quy và chính sách</Text>
-              <View className="mt-3 gap-3">
-                {listing.policies.map((policy) => (
-                  <View
-                    key={policy.code}
-                    className="rounded-2xl border border-border bg-surface p-4">
-                    <Text className="text-sm font-bold text-foreground">
-                      {policy.label || formatValue(policy.code)}
-                    </Text>
-                    <Text className="mt-1 text-sm text-secondary">
-                      {policy.displayValue || formatValue(policy.value)}
-                    </Text>
-                  </View>
-                ))}
-              </View>
+              <PolicyNotice
+                tone="neutral"
+                icon="document-text-outline"
+                className="mt-3"
+                title="Nội quy và chính sách"
+                summary={`${listing.policies.length} nội quy và chính sách áp dụng cho tin này.`}>
+                <View className="gap-3">
+                  {listing.policies.map((policy) => (
+                    <View
+                      key={policy.code}
+                      className="rounded-2xl border border-border bg-surface p-4">
+                      <Text className="text-sm font-bold text-foreground">
+                        {policy.label || formatValue(policy.code)}
+                      </Text>
+                      <Text className="mt-1 text-sm text-secondary">
+                        {policy.displayValue || formatValue(policy.value)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </PolicyNotice>
             </View>
           ) : null}
 

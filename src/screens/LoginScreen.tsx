@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, Text } from 'react-native';
 
 import AuthLayout from '@/components/AuthLayout';
+import { PolicyNotice } from '@/components/PolicyDialog';
 import { useAuth } from '@/features/auth/AuthProvider';
 
 /**
@@ -55,10 +56,13 @@ export default function LoginScreen() {
         </Text>
       </Pressable>
 
-      <Text className="mt-3 text-center text-xs leading-5 text-muted-foreground">
-        Đăng nhập bằng tài khoản HomeSpace hoặc Google. Bạn sẽ tự động quay lại ứng dụng sau khi xác
-        thực.
-      </Text>
+      <PolicyNotice
+        tone="neutral"
+        className="mt-3"
+        title="Đăng nhập"
+        summary="Đăng nhập bằng tài khoản HomeSpace hoặc Google."
+        text="Đăng nhập bằng tài khoản HomeSpace hoặc Google. Bạn sẽ tự động quay lại ứng dụng sau khi xác thực."
+      />
     </AuthLayout>
   );
 }

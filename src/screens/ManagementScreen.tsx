@@ -16,6 +16,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import Icon from '@/components/Icon';
 import DatePeriodFilter from '@/components/DatePeriodFilter';
 import { useDialog } from '@/components/AppDialog';
+import { PolicyNotice } from '@/components/PolicyDialog';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import TabHeader from '@/components/TabHeader';
 import { Button, ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
@@ -429,10 +430,13 @@ function EntryDetail({
         ['AWAITING_TRANSFER', 'REJECTED', 'OVERDUE'].includes(entry.status) ? (
           <View className="mt-5 rounded-2xl border border-border bg-surface p-4">
             <Text className="font-bold text-foreground">Báo chuyển khoản</Text>
-            <Text className="mt-2 text-sm leading-5 text-muted-foreground">
-              Chuyển đúng số tiền và nội dung ở trên. Chỉ báo sau khi ngân hàng xác nhận chuyển
-              thành công.
-            </Text>
+            <PolicyNotice
+              tone="neutral"
+              className="mt-2"
+              title="Báo chuyển khoản"
+              summary="Chuyển đúng số tiền và nội dung ở trên."
+              text="Chuyển đúng số tiền và nội dung ở trên. Chỉ báo sau khi ngân hàng xác nhận chuyển thành công."
+            />
             <Field
               label="Mã giao dịch ngân hàng (nếu có)"
               value={reference}
