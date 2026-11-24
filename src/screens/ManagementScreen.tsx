@@ -480,7 +480,7 @@ function EntryDetail({
         ) : null}
         {entry.actions.some((action) => action.needsReason) ? (
           <Field
-            label="Lý do (bắt buộc khi từ chối/hủy/đối soát)"
+            label="Lý do (bắt buộc khi từ chối/hủy)"
             value={reason}
             onChangeText={setReason}
             multiline

@@ -39,8 +39,7 @@ export type ManagementAction =
   | 'publish'
   | 'resubmit'
   | 'confirm-receipt'
-  | 'reject-receipt'
-  | 'dispute';
+  | 'reject-receipt';
 export type ActionOption = {
   action: ManagementAction;
   label: string;
@@ -213,7 +212,6 @@ export function statusLabel(status: string) {
         RENTED: 'Đã cho thuê',
         AWAITING_TRANSFER: 'Chờ chuyển khoản',
         TRANSFER_REPORTED: 'Đã báo chuyển khoản',
-        DISPUTED: 'Đang đối soát',
         OVERDUE: 'Quá hạn',
         UNPAID: 'Chưa thanh toán',
         PAID: 'Đã thanh toán',
@@ -285,7 +283,7 @@ export function rentalEntry(row: RentalRequest, owner: boolean): ManagementEntry
   if (
     row.status === 'PENDING' ||
     (row.status === 'ACCEPTED' &&
-      !['TRANSFER_REPORTED', 'CONFIRMED', 'DISPUTED'].includes(row.initialPayment?.status ?? ''))
+      !['TRANSFER_REPORTED', 'CONFIRMED'].includes(row.initialPayment?.status ?? ''))
   )
     actions.push({ action: 'cancel', label: 'Hủy yêu cầu thuê', danger: true });
   return {
@@ -335,11 +333,6 @@ export function paymentEntry(row: Payment, userId: string): ManagementEntry {
       { action: 'confirm-receipt', label: 'Xác nhận đã nhận đủ tiền' },
       { action: 'reject-receipt', label: 'Chưa nhận đủ tiền', needsReason: true, danger: true }
     );
-  if (
-    [row.payerId, row.payeeId].includes(userId) &&
-    ['TRANSFER_REPORTED', 'REJECTED'].includes(row.status)
-  )
-    actions.push({ action: 'dispute', label: 'Yêu cầu đối soát', needsReason: true });
   const bank = row.payeeBankAccountSnapshot ?? row.payeeAccount;
   return {
     id: row.id,

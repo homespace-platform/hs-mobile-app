@@ -281,7 +281,7 @@ test('appointment transitions require reasons and use the correct owner/renter p
 
 test('accepted rental requests with reported or confirmed money cannot be canceled in UI', () => {
   const api = load('services/managementApi.ts', { '@/lib/axios-client': {} });
-  for (const status of ['TRANSFER_REPORTED', 'CONFIRMED', 'DISPUTED']) {
+  for (const status of ['TRANSFER_REPORTED', 'CONFIRMED']) {
     const row = api.rentalEntry(
       { ...appointment, status: 'ACCEPTED', initialPayment: { status } },
       false
