@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -13,10 +12,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import TabHeader from '@/components/TabHeader';
+import ListingCard from '@/components/ListingCard';
 import { ErrorNotice } from '@/components/Screen';
+import { useFavoriteListings } from '@/lib/use-favorite-listings';
 import { matchesProvince } from '@/lib/location-search';
 import { apiError } from '@/lib/api-error';
-import { getPublicListingsPage, listingImage, type ListingSummary } from '@/services/listingApi';
+import { getPublicListingsPage, type ListingSummary } from '@/services/listingApi';
 import provinces from '@/data/provinces.json';
 import wardsCatalog from '@/data/wards.json';
 
@@ -265,6 +266,7 @@ export default function SearchScreen({
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [applied, setApplied] = useState(() => queryParams(city.code, '', '', DEFAULT_FILTERS));
+  const { favoriteIds, toggle: toggleFavoriteListing } = useFavoriteListings();
   const [rows, setRows] = useState<ListingSummary[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -613,30 +615,18 @@ export default function SearchScreen({
           <Text className="text-sm text-muted-foreground">{total} tin</Text>
         </View>
         <ErrorNotice message={error} />
-        {rows.map((row) => (
-          <Pressable
-            key={row.id}
-            onPress={() => onOpenListing(row.id)}
-            accessibilityRole="button"
-            className="mt-3 overflow-hidden rounded-2xl border border-border bg-surface">
-            <Image
-              source={{ uri: listingImage(row.coverImageUrl) }}
-              className="h-44 w-full bg-muted"
+        <View className="mt-3">
+          {rows.map((row) => (
+            <ListingCard
+              key={row.id}
+              fullWidth
+              listing={row}
+              favorite={favoriteIds.has(row.id)}
+              onPress={() => onOpenListing(row.id)}
+              onToggleFavorite={() => void toggleFavoriteListing(row.id)}
             />
-            <View className="p-4">
-              <Text className="text-base font-bold text-foreground">{row.title}</Text>
-              <Text className="mt-2 font-bold text-primary">
-                {row.priceAmount.toLocaleString('vi-VN')} đ/tháng
-              </Text>
-              <Text className="mt-1 text-sm text-muted-foreground">
-                {row.fullAddress || row.provinceName}
-              </Text>
-              <Text className="mt-2 text-xs text-secondary">
-                {row.areaM2} m² · {row.bedroomCount ?? '—'} PN · {row.bathroomCount ?? '—'} WC
-              </Text>
-            </View>
-          </Pressable>
-        ))}
+          ))}
+        </View>
         {loading ? (
           <ActivityIndicator className="my-8 text-primary" />
         ) : !rows.length && !error ? (

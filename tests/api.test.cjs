@@ -497,6 +497,53 @@ test('public search requires the current Vietmap city ID; favorites use server b
   assert.equal(calls[1].args[0], '/api/v1/favorites/id%2F1/toggle');
 });
 
+test('saved listings use the same list, remove and clear endpoints as web', async () => {
+  const { client, calls } = mockApi({ result: [] });
+  const api = load('services/favoriteApi.ts', { '@/lib/axios-client': client });
+  await api.getFavorites(1, 50);
+  await api.getHistory(1, 40);
+  await api.removeFavorite('id/1');
+  await api.clearHistory();
+  assert.deepEqual(
+    calls.map((call) => [call.method, call.args[0]]),
+    [
+      ['get', '/api/v1/favorites'],
+      ['get', '/api/v1/history'],
+      ['delete', '/api/v1/favorites/id%2F1'],
+      ['delete', '/api/v1/history'],
+    ]
+  );
+  assert.deepEqual({ ...calls[0].args[1].params }, { page: 1, size: 50 });
+  assert.deepEqual({ ...calls[1].args[1].params }, { page: 1, size: 40 });
+});
+
+test('saved listing filter, sort and paging match the web pages', () => {
+  const saved = load('lib/saved-listings.ts');
+  const row = (id, category, priceAmount, areaM2, title = id, fullAddress = '') => ({
+    id,
+    category,
+    priceAmount,
+    areaM2,
+    title,
+    fullAddress,
+  });
+  const rows = [
+    row('a', 'HOUSE', 5, 30, 'Nhà Quận 1'),
+    row('b', 'OFFICE', 3, 50, 'Văn phòng', 'Phường Bến Nghé'),
+    row('c', 'APARTMENT', 9, 10),
+  ];
+  assert.deepEqual({ ...saved.categoryCounts(rows) }, { all: 3, HOUSE: 1, APARTMENT: 1, ROOM: 1 });
+  const ids = (options) => saved.filterSavedListings(rows, options).map((item) => item.id);
+  assert.deepEqual(ids({ sort: 'recent' }), ['a', 'b', 'c']);
+  assert.deepEqual(ids({ sort: 'price_asc' }), ['b', 'a', 'c']);
+  assert.deepEqual(ids({ sort: 'price_desc' }), ['c', 'a', 'b']);
+  assert.deepEqual(ids({ sort: 'area_desc' }), ['b', 'a', 'c']);
+  assert.deepEqual(ids({ category: 'ROOM', sort: 'recent' }), ['b']);
+  assert.deepEqual(ids({ query: ' bến NGHÉ ', sort: 'recent' }), ['b']);
+  assert.deepEqual({ ...saved.pageWindow(0, 1) }, { page: 1, totalPages: 1, start: 0, end: 0 });
+  assert.deepEqual({ ...saved.pageWindow(17, 9) }, { page: 3, totalPages: 3, start: 16, end: 17 });
+});
+
 test('rental policy and authoritative cost estimate go through the backend', async () => {
   const { client, calls } = mockApi({ result: { version: 'server-version', text: 'Policy' } });
   const api = load('services/bookingApi.ts', { '@/lib/axios-client': client });

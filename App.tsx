@@ -68,6 +68,7 @@ function SignedInApp() {
         filters={filters}
         onBack={() => setScreen(screen === 'favorites' ? favoritesOrigin : 'home')}
         onOpenListing={openListing}
+        onExplore={() => selectTab('search')}
       />
     );
 

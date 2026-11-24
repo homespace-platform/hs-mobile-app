@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 
 import Avatar from '@/components/Avatar';
+import ListingCard from '@/components/ListingCard';
 import { createConversation, type RelatedListing } from '@/services/chatApi';
 import {
   getPublicListing,
@@ -22,6 +23,7 @@ import { Button } from '@/components/Screen';
 import { PolicyNotice } from '@/components/PolicyDialog';
 import ListingDraftScreen from '@/screens/ListingDraftScreen';
 import { apiError } from '@/lib/api-error';
+import { useFavoriteListings } from '@/lib/use-favorite-listings';
 import { getMyRentalRequestByListing, type ActiveRentalRequest } from '@/services/bookingApi';
 import type { ManagementSection } from '@/services/managementApi';
 
@@ -163,6 +165,7 @@ export default function ListingDetailScreen({
   const [rentalLoading, setRentalLoading] = useState(true);
   const [rentalError, setRentalError] = useState<string | null>(null);
   const [rentalReload, setRentalReload] = useState(0);
+  const { favoriteIds: similarFavoriteIds, toggle: toggleSimilarFavorite } = useFavoriteListings();
   const [similarListings, setSimilarListings] = useState<ListingSummary[]>([]);
   useEffect(() => {
     if (own) {
@@ -722,32 +725,13 @@ export default function ListingDetailScreen({
                 showsHorizontalScrollIndicator={false}
                 className="-mx-5 mt-3 px-5">
                 {similarListings.map((item) => (
-                  <Pressable
+                  <ListingCard
                     key={item.id}
+                    listing={item}
+                    favorite={similarFavoriteIds.has(item.id)}
                     onPress={() => onOpenListing(item.id)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Mở tin đăng tương tự: ${item.title}`}
-                    className="mr-3 w-64 overflow-hidden rounded-2xl border border-border bg-surface">
-                    <Image
-                      source={{ uri: listingImage(item.coverImageUrl) }}
-                      className="h-36 w-full bg-muted"
-                    />
-                    <View className="p-3">
-                      <Text className="text-sm font-bold text-foreground" numberOfLines={2}>
-                        {item.title}
-                      </Text>
-                      <Text className="mt-2 text-base font-extrabold text-primary">
-                        {formatMoney(item.priceAmount)}/{item.priceUnit || 'tháng'}
-                      </Text>
-                      <Text className="mt-1 text-xs text-muted-foreground" numberOfLines={1}>
-                        {item.fullAddress || item.provinceName || 'Đang cập nhật địa chỉ'}
-                      </Text>
-                      <Text className="mt-1 text-xs text-secondary">
-                        {item.areaM2} m²
-                        {item.bedroomCount != null ? ` · ${item.bedroomCount} phòng ngủ` : ''}
-                      </Text>
-                    </View>
-                  </Pressable>
+                    onToggleFavorite={() => void toggleSimilarFavorite(item.id)}
+                  />
                 ))}
               </ScrollView>
             </View>

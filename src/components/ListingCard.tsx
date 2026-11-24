@@ -24,19 +24,26 @@ export default function ListingCard({
   favorite,
   onPress,
   onToggleFavorite,
+  fullWidth = false,
 }: {
   listing: ListingSummary;
   favorite: boolean;
   onPress: () => void;
   onToggleFavorite: () => void;
+  /** Vertical lists: fill the row instead of the fixed carousel width. */
+  fullWidth?: boolean;
 }) {
   const cover = listing.coverImageUrl ?? listing.imageUrls?.[0];
   const photoCount = listing.imageUrls?.length || (listing.coverImageUrl ? 1 : 0);
   const ownerName = listing.ownerName || 'Chủ nhà';
 
   return (
-    <View className="mr-4 w-72 overflow-hidden rounded-3xl border border-border bg-surface shadow-sm">
-      <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={listing.title}>
+    <View
+      className={`${fullWidth ? 'mb-4 w-full' : 'mr-4 w-72'} overflow-hidden rounded-3xl border border-border bg-surface shadow-sm`}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`Mở tin đăng: ${listing.title}`}>
         <View className="h-40 w-full bg-muted">
           <Image source={{ uri: listingImage(cover) }} className="h-full w-full" />
           <View className="absolute left-2.5 top-2.5 rounded-lg bg-overlay/60 px-2.5 py-1">

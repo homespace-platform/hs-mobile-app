@@ -1,12 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import Ionicons from '@/components/Icon';
-import { useDialog } from '@/components/AppDialog';
-import { apiError } from '@/lib/api-error';
+import ListingCard from '@/components/ListingCard';
 import { LISTING_CATEGORIES } from '@/lib/listing-format';
-import { getFavoriteIds, toggleFavorite } from '@/services/favoriteApi';
+import { useFavoriteListings } from '@/lib/use-favorite-listings';
 import type { ListingSummary } from '@/services/listingApi';
-import ListingCard from './ListingCard';
 
 function Skeleton() {
   return (
@@ -55,42 +52,7 @@ export default function FeaturedListings({
   onViewAll: () => void;
   onOpenListing?: (id: string) => void;
 }) {
-  const showDialog = useDialog();
-  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
-  const pending = useRef(new Set<string>());
-
-  useEffect(() => {
-    getFavoriteIds()
-      .then((ids) => setFavoriteIds(new Set(ids)))
-      .catch(() => undefined); // Hearts stay empty; a toggle still reports the server state.
-  }, []);
-
-  const setFavorite = useCallback((id: string, value: boolean) => {
-    setFavoriteIds((current) => {
-      const next = new Set(current);
-      if (value) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }, []);
-
-  const toggle = useCallback(
-    async (id: string) => {
-      if (pending.current.has(id)) return;
-      pending.current.add(id);
-      const before = favoriteIds.has(id);
-      setFavorite(id, !before); // optimistic
-      try {
-        setFavorite(id, await toggleFavorite(id));
-      } catch (cause) {
-        setFavorite(id, before);
-        showDialog('Chưa cập nhật được yêu thích', apiError(cause));
-      } finally {
-        pending.current.delete(id);
-      }
-    },
-    [favoriteIds, setFavorite, showDialog]
-  );
+  const { favoriteIds, toggle } = useFavoriteListings();
 
   return (
     <View className="mt-7 px-5">

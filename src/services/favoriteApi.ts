@@ -12,20 +12,28 @@ export async function toggleFavorite(listingId: string) {
     )
   ).data.result.isFavorite;
 }
-export async function getFavorites(page: number) {
+// Same endpoint as web favoriteService.removeFavorite.
+export async function removeFavorite(listingId: string) {
+  await axiosClient.delete(`/api/v1/favorites/${encodeURIComponent(listingId)}`);
+}
+export async function getFavorites(page: number, size = 12) {
   return (
     await axiosClient.get<PageResponse<ListingSummary>>('/api/v1/favorites', {
-      params: { page, size: 12 },
+      params: { page, size },
     })
   ).data;
 }
 export async function recordListingHistory(listingId: string) {
   await axiosClient.post(`/api/v1/history/${encodeURIComponent(listingId)}`);
 }
-export async function getHistory(page: number) {
+export async function getHistory(page: number, size = 12) {
   return (
     await axiosClient.get<PageResponse<ListingSummary>>('/api/v1/history', {
-      params: { page, size: 12 },
+      params: { page, size },
     })
   ).data;
+}
+// Same endpoint as web historyService.clearMyHistory.
+export async function clearHistory() {
+  await axiosClient.delete('/api/v1/history');
 }
