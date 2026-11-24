@@ -3,6 +3,12 @@ import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
 
+/** Policy codes like "RESERVATION_DEFAULT_V3" are internal; users only see "Phiên bản 3". */
+function versionLabel(version?: string) {
+  const n = version?.trim().match(/v?(\d+(?:\.\d+)*)$/i)?.[1];
+  return n ? `Phiên bản ${n}` : null;
+}
+
 type IconName = ComponentProps<typeof Icon>['name'];
 
 const TONES = {
@@ -73,9 +79,9 @@ export function PolicyDialog({
                 <Text className="mt-0.5 text-xs text-muted-foreground">{subtitle}</Text>
               ) : null}
             </View>
-            {version ? (
+            {versionLabel(version) ? (
               <View className="ml-2 rounded-full bg-primary-soft px-3 py-1">
-                <Text className="text-xs font-bold text-primary">{version}</Text>
+                <Text className="text-xs font-bold text-primary">{versionLabel(version)}</Text>
               </View>
             ) : null}
           </View>
