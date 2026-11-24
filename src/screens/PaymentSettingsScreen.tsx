@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
 import { useDialog } from '@/components/AppDialog';
+import { InfoDisclosure } from '@/components/InfoDisclosure';
 import { ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
 import { apiError } from '@/lib/api-error';
 import {
@@ -29,11 +30,7 @@ import {
 } from '@/services/bankAccountApi';
 
 const norm = (value: string) =>
-  value
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/đ/g, 'd')
-    .toLowerCase();
+  value.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase();
 
 function BankLogo({ logo, code }: { logo?: string | null; code: string }) {
   const [failedLogo, setFailedLogo] = useState<string | null>(null);
@@ -240,15 +237,10 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <ScreenHeader title="Cài đặt thanh toán" onBack={onBack} />
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerClassName="px-5 pb-10 pt-5">
-        <View className="rounded-2xl border border-primary-border bg-primary-soft p-4">
-          <View className="flex-row items-start">
-            <Icon name="information-circle-outline" size={21} className="mt-0.5 text-primary" />
-            <Text className="ml-2 flex-1 text-sm leading-5 text-secondary">
-              HomeSpace dùng số tài khoản để người thuê chuyển tiền trực tiếp cho chủ nhà và hoàn
-              cọc. HomeSpace không giữ tiền.
-            </Text>
-          </View>
-        </View>
+        <InfoDisclosure
+          summary="HomeSpace không giữ tiền."
+          details="HomeSpace dùng số tài khoản để người thuê chuyển tiền trực tiếp cho chủ nhà và hoàn cọc. HomeSpace không giữ tiền."
+        />
         <View className="mt-6 flex-row items-center justify-between">
           <Text className="text-lg font-bold text-foreground">Tài khoản ngân hàng</Text>
           {!formOpen ? (
@@ -337,7 +329,9 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
             </Text>
             {banksError ? (
               <View className="mt-4 flex-row items-center rounded-xl border border-danger bg-danger-soft px-3 py-2">
-                <Text className="flex-1 text-sm text-danger">Không thể tải danh sách ngân hàng.</Text>
+                <Text className="flex-1 text-sm text-danger">
+                  Không thể tải danh sách ngân hàng.
+                </Text>
                 <Pressable onPress={loadBanks} className="min-h-9 justify-center px-3">
                   <Text className="text-sm font-bold text-danger">Thử lại</Text>
                 </Pressable>

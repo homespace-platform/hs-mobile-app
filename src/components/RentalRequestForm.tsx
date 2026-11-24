@@ -5,6 +5,7 @@ import Icon from '@/components/Icon';
 import BookingDatePicker from '@/components/BookingDatePicker';
 import { Button, ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
 import { useDialog } from '@/components/AppDialog';
+import { TermsLink } from '@/components/InfoDisclosure';
 import { apiError } from '@/lib/api-error';
 import { nonnegativeInteger, positiveInteger, today, validDate } from '@/lib/form-validation';
 import {
@@ -446,13 +447,14 @@ export default function RentalRequestForm({
             <Text className="mt-2 text-right text-xs text-subtle">{note.length}/500</Text>
             <Text className="mt-7 text-base font-bold text-foreground">Điều kiện giữ chỗ</Text>
             {policy ? (
-              <View className="mt-3 rounded-2xl border border-border bg-surface p-4">
-                <Text className="text-sm font-bold text-foreground">
-                  Phiên bản {policy.version}
+              <View className="mt-3 rounded-2xl border border-border bg-surface px-4 py-1">
+                <Text className="text-sm leading-5 text-secondary">
+                  Điều kiện giữ chỗ cần được xác nhận trước khi gửi yêu cầu.
                 </Text>
-                <Text className="mt-2 text-sm leading-6 text-secondary">
-                  {policy.text.replace(/^./, (letter) => letter.toUpperCase())}
-                </Text>
+                <TermsLink
+                  title={`Điều kiện giữ chỗ · Phiên bản ${policy.version}`}
+                  text={policy.text.replace(/^./, (letter) => letter.toUpperCase())}
+                />
               </View>
             ) : (
               <Button label="Tải lại điều kiện giữ chỗ" onPress={loadDefaults} disabled={busy} />

@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import Icon from '@/components/Icon';
 import { useDialog } from '@/components/AppDialog';
+import { InfoDisclosure } from '@/components/InfoDisclosure';
 import { ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
 import BookingDatePicker from '@/components/BookingDatePicker';
 import { dateKey } from '@/lib/appointment-calendar';
@@ -614,13 +615,16 @@ export default function ListingDraftScreen({
         ref={scrollRef}
         keyboardShouldPersistTaps="handled"
         contentContainerClassName="px-5 pb-10 pt-5">
-        <View className="mb-5 rounded-2xl border border-warning bg-warning-soft p-3">
-          <Text className="text-xs leading-5 text-warning">
-            {original
+        <InfoDisclosure
+          tone="warning"
+          className="mb-5"
+          summary="Kiểm tra kỹ thông tin trước khi lưu."
+          details={
+            original
               ? 'Kiểm tra kỹ thông tin trước khi lưu. Tin đang hiển thị sẽ chuyển sang chờ duyệt lại khi gửi thay đổi.'
-              : 'Kiểm tra kỹ thông tin trước khi lưu. Ảnh và video sẽ được tải lên khi bạn gửi biểu mẫu.'}
-          </Text>
-        </View>
+              : 'Kiểm tra kỹ thông tin trước khi lưu. Ảnh và video sẽ được tải lên khi bạn gửi biểu mẫu.'
+          }
+        />
         <ErrorNotice message={error} />
 
         {step === 0 ? (
