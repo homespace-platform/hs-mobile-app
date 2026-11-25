@@ -19,6 +19,7 @@ import {
   signOut,
   subscribeSession,
 } from '@/features/auth/session';
+import { registerPushDevice, unregisterPushDevice, watchPushToken } from '@/lib/push/device';
 import {
   authBrowserOptions,
   authScopes,
@@ -82,6 +83,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  // Register this device for push on sign-in/app open (also after an account switch: same installation, new
+  // user) and whenever FCM rotates the token. Failures are swallowed inside.
+  useEffect(() => {
+    if (status !== 'signedIn') return;
+    void registerPushDevice({ prompt: true });
+    return watchPushToken();
+  }, [status]);
+
   useEffect(() => {
     // An authorization code is single-use, so each response must be exchanged once.
     if (!response || handledResponseRef.current === response) {
@@ -131,6 +140,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     setStatus('loading');
+    // Needs the still-valid session; bounded to ~3s and never throws.
+    await unregisterPushDevice();
     await signOut();
     setStatus('signedOut');
   }, []);

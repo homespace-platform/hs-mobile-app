@@ -29,6 +29,9 @@ import {
   type ChatConversation,
   type ChatMessage,
 } from '@/services/chatApi';
+import { applyChatMessage, toChatMessage } from '@/lib/realtime/pure';
+import { subscribeChatEvents } from '@/lib/realtime/connections';
+import { chatUnreadStore } from '@/lib/unread-store';
 import { listingImage } from '@/services/listingApi';
 import { getStorageViewUrl, uploadChatAttachment } from '@/services/storageApi';
 import { getUserProfileApi } from '@/services/userApi';
@@ -132,8 +135,13 @@ export default function MessagesScreen({
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
   const initialOpenedId = useRef<string | null>(null);
   const listingAttachedIds = useRef(new Set<string>());
+  const seenMessageIds = useRef(new Set<string>());
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
+  const lastLoadAt = useRef(0);
 
   const load = useCallback(async (refresh = false) => {
+    lastLoadAt.current = Date.now();
     if (refresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
@@ -163,6 +171,55 @@ export default function MessagesScreen({
         conversation.listing?.title.toLowerCase().includes(keyword)
     );
   }, [conversations, search]);
+
+  // Keeps the Messages tab badge in sync with what this screen shows.
+  useEffect(() => {
+    if (!loading)
+      chatUnreadStore.dispatch({
+        type: 'set',
+        count: conversations.reduce((total, item) => total + item.unreadCount, 0),
+      });
+  }, [conversations, loading]);
+
+  // Realtime chat (Gateway chat socket): new messages update the list/unread count and the open thread.
+  const myId = profile?.id;
+  useEffect(
+    () =>
+      subscribeChatEvents((event, payload) => {
+        if (event === 'connect') {
+          if (Date.now() - lastLoadAt.current < 2000) return;
+          void load(true);
+          if (selectedId)
+            void listMessages(selectedId)
+              .then((page) => setMessages(page.items ?? []))
+              .catch(() => undefined);
+          return;
+        }
+        if (event !== 'chat:message') return;
+        const message = toChatMessage(payload);
+        if (!message || seenMessageIds.current.has(message.id)) return;
+        seenMessageIds.current.add(message.id);
+        // shortcut: retain 500 ids; fine for one session of a phone chat.
+        if (seenMessageIds.current.size > 500)
+          seenMessageIds.current.delete(seenMessageIds.current.values().next().value!);
+        const result = applyChatMessage(conversationsRef.current, message, {
+          myId,
+          openId: selectedId,
+        });
+        if (result.unknown) {
+          void load(true);
+          return;
+        }
+        setConversations(result.conversations);
+        if (result.appendToOpen)
+          setMessages((current) =>
+            current.some((item) => item.id === message.id) ? current : [...current, message]
+          );
+        if (result.markRead)
+          void markConversationRead(message.conversationId).catch(() => undefined);
+      }),
+    [load, myId, selectedId]
+  );
 
   const selected = conversations.find((conversation) => conversation.id === selectedId) ?? null;
 
@@ -237,7 +294,10 @@ export default function MessagesScreen({
         attachment ? [attachment] : undefined
       );
       if (listing) listingAttachedIds.current.add(selected.id);
-      setMessages((current) => [...current, message]);
+      // The chat socket may deliver the same message first.
+      setMessages((current) =>
+        current.some((item) => item.id === message.id) ? current : [...current, message]
+      );
       setConversations((current) =>
         current.map((conversation) =>
           conversation.id === selected.id

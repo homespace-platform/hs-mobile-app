@@ -29,10 +29,18 @@
     --color-on-disabled: 51 65 85;
     --color-danger: 185 28 28;
     --color-danger-soft: 254 242 242;
+    --color-danger-solid: 225 29 72;
+    --color-on-danger-solid: 255 255 255;
     --color-success: 4 120 87;
     --color-success-soft: 236 253 245;
     --color-warning: 146 64 14;
     --color-warning-soft: 255 251 235;
+    /* Fixed mini-screens in Giao diện settings; identical in both modes on purpose. */
+    --color-preview-light: 241 245 249;
+    --color-preview-light-card: 255 255 255;
+    --color-preview-dark: 15 23 42;
+    --color-preview-dark-card: 30 41 59;
+    --color-preview-accent: 59 130 246;
   }
 
   .dark:root {
@@ -59,9 +67,16 @@
     --color-on-disabled: 226 232 240;
     --color-danger: 252 165 165;
     --color-danger-soft: 69 10 10;
+    --color-danger-solid: 225 29 72;
+    --color-on-danger-solid: 255 255 255;
     --color-success: 110 231 183;
     --color-success-soft: 6 46 37;
     --color-warning: 252 211 77;
     --color-warning-soft: 69 26 3;
+    --color-preview-light: 241 245 249;
+    --color-preview-light-card: 255 255 255;
+    --color-preview-dark: 15 23 42;
+    --color-preview-dark-card: 30 41 59;
+    --color-preview-accent: 59 130 246;
   }
 }

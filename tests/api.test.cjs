@@ -927,3 +927,245 @@ test('membership card status follows the web rules and /membership/me failures d
   assert.match(status('STARTER', null).label, /^Mua gói Starter/);
   assert.equal(status('PRO', me, true).label, 'ADMIN: Đã có lượt không giới hạn');
 });
+
+test('notification API uses the same endpoints and params as the web service', async () => {
+  const { client, calls } = mockApi({
+    result: { items: [{ id: 'n/1' }], nextCursor: 'c1', hasMore: true, count: 7 },
+  });
+  const api = load('services/notificationApi.ts', {
+    '@/lib/axios-client': client,
+    '@/lib/notification': load('lib/notification.ts'),
+  });
+  const page = await api.getNotificationFeed({
+    limit: 500,
+    cursor: ' c0 ',
+    category: 'PAYMENT',
+    unreadOnly: true,
+  });
+  assert.deepEqual(
+    { ...calls[0].args[1].params },
+    { limit: 50, cursor: 'c0', category: 'PAYMENT', unreadOnly: true }
+  );
+  assert.equal(calls[0].args[0], '/api/v1/notifications/feed');
+  assert.equal(page.nextCursor, 'c1');
+  assert.equal(await api.getUnreadNotificationCount(), 7);
+  assert.equal(calls[1].args[0], '/api/v1/notifications/unread-count');
+  await api.markNotificationRead('n/1');
+  assert.deepEqual(
+    { method: calls[2].method, url: calls[2].args[0] },
+    { method: 'patch', url: '/api/v1/notifications/n%2F1/read' }
+  );
+  await api.markAllNotificationsRead();
+  assert.deepEqual(
+    { method: calls[3].method, url: calls[3].args[0] },
+    { method: 'patch', url: '/api/v1/notifications/read-all' }
+  );
+  await api.getNotificationFeed({ category: 'ALL' });
+  assert.equal('category' in calls[4].args[1].params, false);
+});
+
+test('notification preferences use the web endpoints and normalize to every category', async () => {
+  const { client, calls } = mockApi({
+    result: {
+      items: [
+        { category: 'PAYMENT', push: false },
+        { category: 'BOGUS', push: false },
+      ],
+    },
+  });
+  const n = load('lib/notification.ts');
+  const api = load('services/notificationSettingsApi.ts', {
+    '@/lib/axios-client': client,
+    '@/lib/notification': n,
+  });
+  const items = await api.getNotificationPreferences();
+  assert.deepEqual(
+    Array.from(items, (item) => item.category),
+    [...n.NOTIFICATION_CATEGORIES]
+  );
+  assert.deepEqual(
+    { ...items.find((item) => item.category === 'PAYMENT') },
+    { category: 'PAYMENT', push: false, email: true }
+  );
+  assert.equal(items.find((item) => item.category === 'CHAT').push, true);
+  assert.deepEqual(
+    { method: calls[0].method, url: calls[0].args[0] },
+    { method: 'get', url: '/api/v1/notifications/preferences' }
+  );
+  await api.patchNotificationPreference('CHAT', 'push', false);
+  assert.equal(calls[1].method, 'patch');
+  assert.equal(calls[1].args[0], '/api/v1/notifications/preferences');
+  assert.deepEqual({ ...calls[1].args[1] }, { category: 'CHAT', channel: 'push', enabled: false });
+  assert.equal(n.withDefaultPreferences(null).length, n.NOTIFICATION_CATEGORIES.length);
+  for (const category of n.NOTIFICATION_CATEGORIES)
+    assert.ok(n.NOTIFICATION_SETTINGS_META[category].title, category);
+});
+
+test('notification actionPath is validated and mapped only to existing mobile screens', () => {
+  const n = load('lib/notification.ts');
+  const id = '123e4567-e89b-12d3-a456-426614174000';
+  for (const bad of [
+    '//evil.example',
+    '/\evil',
+    'https://x.y',
+    'javascript:alert(1)',
+    '/a/../b',
+    '/a b',
+    'rel/path',
+    '',
+    null,
+    '/operations/x',
+  ])
+    assert.equal(n.notificationTarget(bad).kind, 'none', String(bad));
+  const target = (path) => ({ ...n.notificationTarget(path) });
+  assert.deepEqual(target(`/rent/${id}`), { kind: 'listing', id, own: false });
+  assert.deepEqual(target(`/dashboard/properties/view?id=${id}`), {
+    kind: 'listing',
+    id,
+    own: true,
+  });
+  assert.equal(target('/rent/not-a-uuid').kind, 'none');
+  assert.equal(target('/news/tin-moi').kind, 'news');
+  assert.deepEqual(target('/dashboard/viewing-schedules?appointmentId=b1'), {
+    kind: 'management',
+    section: 'landlord-appointments',
+  });
+  assert.equal(
+    target('/dashboard/viewing-schedules/my-bookings?appointmentId=b1').section,
+    'tenant-appointments'
+  );
+  assert.equal(target('/dashboard/rental-requests?requestId=r1').section, 'landlord-requests');
+  assert.equal(
+    target('/dashboard/rental-requests/my-requests?requestId=r1').section,
+    'tenant-requests'
+  );
+  assert.deepEqual(target('/dashboard/contracts/c1?tab=sign'), {
+    kind: 'management-choice',
+    tenant: 'tenant-contracts',
+    landlord: 'landlord-contracts',
+  });
+  assert.equal(target('/dashboard/payments?paymentId=p1').tenant, 'tenant-payments');
+  assert.equal(
+    target('/dashboard/invoices/c1?section=monthly&invoice=i1').landlord,
+    'landlord-payments'
+  );
+  for (const path of [
+    '/dashboard/membership/return?orderId=o',
+    '/settings/account-security',
+    '/notifications',
+    '/chat?conversationId=1',
+    '/dashboard/contracts',
+  ])
+    assert.equal(target(path).kind, 'none', path);
+});
+
+test('notification badges, dates and chat exclusion follow the web rules', () => {
+  const n = load('lib/notification.ts');
+  const tag = (category, type, metadata = null) =>
+    n.getNotificationTag({ category, type, metadata });
+  assert.equal(tag('ACCOUNT', 'KYC_VERIFIED'), 'Đã xác minh');
+  assert.equal(tag('ACCOUNT', 'KYC_REJECTED'), 'Cần xác minh lại');
+  assert.equal(tag('PAYMENT', 'INVOICE_OVERDUE'), 'Quá hạn');
+  assert.equal(tag('CONTRACT', 'LEASE_CLOSED'), 'Đã đóng hồ sơ quyết toán cọc');
+  assert.equal(tag('LISTING', 'LISTING_STATUS_CHANGED', { status: 'HIDDEN' }), 'Đã ẩn');
+  assert.equal(tag('LISTING', 'UNKNOWN'), 'Tin đăng');
+  assert.equal(tag('PAYMENT', 'toString'), 'Thanh toán');
+  assert.equal(n.formatNotificationDate('2026-11-03T09:05:00'), '03/11/2026 09:05');
+  assert.equal(n.isNotificationUnread({ readAt: null }), true);
+  assert.equal(n.isVisibleNotification({ category: 'CHAT' }), false);
+  assert.equal(
+    n.NOTIFICATION_FILTER_TABS.some((item) => item.id === 'CHAT'),
+    false
+  );
+});
+
+test('password change validation mirrors web schema', () => {
+  const { validatePasswordChange: v } = load('lib/password.ts');
+  assert.equal(v('', 'Abcdef1!', 'Abcdef1!'), 'Vui lòng nhập mật khẩu hiện tại');
+  assert.equal(v('old', 'Ab1!', 'Ab1!'), 'Mật khẩu mới phải có ít nhất 8 ký tự');
+  assert.equal(v('old', 'abcdefg1!', 'x'), 'Mật khẩu mới phải có ít nhất một chữ hoa');
+  assert.equal(v('old', 'Abcdefgh!', 'x'), 'Mật khẩu mới phải có ít nhất một chữ số');
+  assert.match(v('old', 'Abcdefg1', 'x'), /ký tự đặc biệt/);
+  assert.equal(v('old', 'Abcdef1!', ''), 'Vui lòng xác nhận mật khẩu mới');
+  assert.equal(v('old', 'Abcdef1!', 'Abcdef1?'), 'Mật khẩu xác nhận không trùng khớp');
+  assert.equal(v('old', 'Abcdef1!', 'Abcdef1!'), null);
+  assert.equal(v('', 'Abcdef1!', 'Abcdef1!', false), null);
+});
+
+test('profile form validation mirrors the web zod schema and detects real changes', () => {
+  const p = load('lib/profile-form.ts', {
+    '@/lib/form-validation': load('lib/form-validation.ts'),
+  });
+  const base = {
+    username: 'an.nguyen',
+    email: 'an@example.com',
+    firstName: 'An',
+    lastName: 'Nguyen',
+    phone: null,
+    dob: null,
+    gender: null,
+  };
+  assert.deepEqual({ ...p.validateProfileForm(base) }, {});
+  assert.equal(p.validateProfileForm({ ...base, phone: '0353999798' }).phone, undefined);
+  assert.ok(p.validateProfileForm({ ...base, phone: '123' }).phone);
+  assert.equal(p.validateProfileForm({ ...base, phone: '  ' }).phone, undefined);
+  assert.ok(p.validateProfileForm({ ...base, username: 'a b' }).username);
+  assert.ok(p.validateProfileForm({ ...base, username: 'ab' }).username);
+  assert.ok(p.validateProfileForm({ ...base, email: 'x@y' }).email);
+  assert.ok(p.validateProfileForm({ ...base, firstName: ' A ' }).firstName);
+  assert.ok(p.validateProfileForm({ ...base, lastName: 'N'.repeat(51) }).lastName);
+  assert.ok(p.validateProfileForm({ ...base, dob: '2020-02-31' }).dob);
+  assert.equal(p.isProfileDirty({ ...base, firstName: ' An ' }, base), false);
+  assert.equal(p.isProfileDirty({ ...base, phone: '0353999798' }, base), true);
+  assert.equal(p.normalizeProfileForm({ ...base, phone: '  ' }).phone, null);
+  assert.equal(p.profileFullName({ firstName: 'An', lastName: 'Nguyen' }), 'An Nguyen');
+  assert.equal(p.profileFullName({ firstName: '', lastName: '', username: 'an' }), 'an');
+  assert.equal(p.avatarFileError('image/gif', 10), 'Ảnh đại diện chỉ hỗ trợ JPG, PNG hoặc WebP.');
+  assert.ok(p.avatarFileError('image/png', 21 * 1024 * 1024));
+  assert.equal(p.avatarFileError('image/webp', 1024), null);
+  assert.equal(p.avatarMimeType(null, 'a.PNG'), 'image/png');
+  assert.equal(p.formatInstant(null), 'Chưa có dữ liệu');
+  assert.equal(p.formatRole('ADMIN'), 'Quản trị viên');
+  assert.ok(p.mapUrl(10.7, 106.6).includes('10.7%2C106.6'));
+  assert.equal(p.mapUrl(91, 0), null);
+  assert.equal(p.mapUrl(undefined, 0), null);
+});
+
+test('avatar history and address endpoints match the web services', async () => {
+  const { client, calls } = mockApi({ result: [{ id: 'a1' }] });
+  const storage = load('services/storageApi.ts', { '@/lib/axios-client': client });
+  assert.equal((await storage.listUserAvatars('u1'))[0].id, 'a1');
+  assert.equal(calls[0].args[0], '/api/v1/storage');
+  assert.deepEqual(
+    { ...calls[0].args[1].params },
+    {
+      referenceType: 'USER',
+      referenceId: 'u1',
+      purpose: 'USER_AVATAR',
+      status: 'READY',
+      page: 1,
+      size: 20,
+    }
+  );
+  const { client: userClient, calls: userCalls } = mockApi({ result: { refId: 'r1' } });
+  const user = load('services/userApi.ts', {
+    '@/features/auth/session': { getAccessToken: async () => 'token' },
+    '@/lib/axios-client': userClient,
+  });
+  await user.getLocationPlace('r1');
+  assert.equal(userCalls[0].args[0], '/api/v1/locations/place');
+  assert.equal(userCalls[0].args[1].params.refId, 'r1');
+  await user.saveUserAddress('r1', 'Tầng 3');
+  assert.equal(userCalls[1].args[0], '/api/v1/users/me/address');
+  assert.deepEqual({ ...userCalls[1].args[1] }, { refId: 'r1', addressNote: 'Tầng 3' });
+});
+
+test('profile join date is "tháng M năm YYYY" and share link follows web /u/{username}', () => {
+  const { formatMonthYear, buildProfileLink } = load('lib/profile-format.ts');
+  assert.equal(formatMonthYear('2026-11-15T10:00:00'), 'tháng 11 năm 2026');
+  assert.equal(formatMonthYear(null), null);
+  assert.equal(formatMonthYear('bad'), null);
+  assert.equal(buildProfileLink('https://homespace.vn/', 'a b'), 'https://homespace.vn/u/a%20b');
+  assert.equal(buildProfileLink('', 'a'), null);
+  assert.equal(buildProfileLink(undefined, 'a'), null);
+});

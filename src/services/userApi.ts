@@ -1,6 +1,6 @@
 import axiosClient from '@/lib/axios-client';
 import { getAccessToken } from '@/features/auth/session';
-import type { ApiResponse, UserProfileResponse } from '@/types/api';
+import type { ApiResponse, UserAddress, UserProfileResponse, VietmapAddress } from '@/types/api';
 
 let profileRequest: Promise<UserProfileResponse> | null = null;
 let profileRequestToken: string | null = null;
@@ -52,6 +52,24 @@ export async function updateUserAvatar(storageId: string) {
   await axiosClient.put('/api/v1/users/me/avatar', { storageId });
   profileCache = null;
   profileRequest = null;
+}
+export async function getLocationPlace(refId: string, signal?: AbortSignal) {
+  return (
+    await axiosClient.get<ApiResponse<VietmapAddress>>('/api/v1/locations/place', {
+      params: { refId },
+      signal,
+      timeout: 12000,
+    })
+  ).data.result;
+}
+export async function saveUserAddress(refId: string, addressNote?: string) {
+  const response = await axiosClient.put<ApiResponse<UserAddress>>('/api/v1/users/me/address', {
+    refId,
+    addressNote,
+  });
+  profileCache = null;
+  profileRequest = null;
+  return response.data.result;
 }
 export async function hasPassword() {
   return (await axiosClient.get<ApiResponse<boolean>>('/api/v1/users/me/password/status')).data

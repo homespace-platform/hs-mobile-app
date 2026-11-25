@@ -1,5 +1,5 @@
 import axiosClient from '@/lib/axios-client';
-import type { ApiResponse } from '@/types/api';
+import type { ApiResponse, PageResponse } from '@/types/api';
 import type { ChatAttachment } from '@/services/chatApi';
 
 type UploadResponse = {
@@ -105,6 +105,22 @@ export async function uploadChatAttachment(
     contentType: result.contentType,
     sizeBytes: result.sizeBytes,
   };
+}
+
+export type StorageObject = { id: string; originalName: string };
+
+export async function listUserAvatars(userId: string, page = 1, size = 20) {
+  const response = await axiosClient.get<PageResponse<StorageObject>>('/api/v1/storage', {
+    params: {
+      referenceType: 'USER',
+      referenceId: userId,
+      purpose: 'USER_AVATAR',
+      status: 'READY',
+      page,
+      size,
+    },
+  });
+  return response.data.result ?? [];
 }
 
 export async function getStorageViewUrl(storageId: string) {

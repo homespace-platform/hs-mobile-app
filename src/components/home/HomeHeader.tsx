@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
 import Avatar from '@/components/Avatar';
-import { useDialog } from '@/components/AppDialog';
 import Ionicons from '@/components/Icon';
+import { useUnreadNotificationCount } from '@/lib/use-unread';
+import { refreshNotificationUnread } from '@/lib/unread-sync';
 import LocationPicker, { type City } from './LocationPicker';
 
 export default function HomeHeader({
@@ -12,7 +13,9 @@ export default function HomeHeader({
   onChangeLocation,
   avatarUri,
   userName,
+  favoriteCount,
   onOpenFavorites,
+  onOpenNotifications,
   onOpenMenu,
 }: {
   city: City;
@@ -21,11 +24,20 @@ export default function HomeHeader({
   onChangeLocation: (city: City, wardId: string) => void;
   avatarUri?: string | null;
   userName: string;
+  favoriteCount: number;
   onOpenFavorites: () => void;
+  onOpenNotifications: () => void;
   onOpenMenu: () => void;
 }) {
-  const showDialog = useDialog();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const unread = useUnreadNotificationCount();
+  const hasFavorites = favoriteCount > 0;
+  const hasUnread = unread > 0;
+
+  // Shared store keeps the badge live (socket/push); also refresh when Home remounts.
+  useEffect(() => {
+    void refreshNotificationUnread();
+  }, []);
 
   return (
     <View className="border-b border-border bg-surface px-5 pb-3 pt-2">
@@ -41,15 +53,23 @@ export default function HomeHeader({
             onPress={onOpenFavorites}
             accessibilityRole="button"
             accessibilityLabel="Tin đã yêu thích"
-            className="h-12 w-12 items-center justify-center">
-            <Ionicons name="heart-outline" size={24} className="text-foreground" />
+            className="h-11 w-11 items-center justify-center rounded-full border border-border bg-surface">
+            <Ionicons
+              name={hasFavorites ? 'heart' : 'heart-outline'}
+              size={20}
+              className={hasFavorites ? 'text-danger' : 'text-secondary'}
+            />
           </Pressable>
           <Pressable
-            onPress={() => showDialog('Thông báo', 'Thông báo chưa hỗ trợ trên ứng dụng')}
+            onPress={onOpenNotifications}
             accessibilityRole="button"
-            accessibilityLabel="Thông báo"
-            className="h-12 w-12 items-center justify-center">
-            <Ionicons name="notifications-outline" size={24} className="text-foreground" />
+            accessibilityLabel={hasUnread ? 'Thông báo, có tin chưa đọc' : 'Thông báo'}
+            className="h-11 w-11 items-center justify-center rounded-full border border-border bg-surface">
+            <Ionicons
+              name={hasUnread ? 'notifications' : 'notifications-outline'}
+              size={20}
+              className={hasUnread ? 'text-warning' : 'text-secondary'}
+            />
           </Pressable>
           <Pressable
             onPress={onOpenMenu}

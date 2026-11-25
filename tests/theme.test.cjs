@@ -37,6 +37,14 @@ test('all semantic colors compile for both light and dark native themes', async 
   }
 });
 
+test('appearance preview tokens stay fixed across light and dark themes', async () => {
+  const { rootVariables } = await compiled;
+  for (const token of Object.keys(config.theme.colors).filter((n) => n.startsWith('preview-'))) {
+    const { light, dark } = rootVariables[`--color-${token}`];
+    assert.deepEqual(light, dark, `${token} must not change with the theme`);
+  }
+});
+
 test('input placeholder and selection colors reach native props', async () => {
   const { rules } = await compiled;
   for (const [utility, prop] of [
@@ -68,6 +76,7 @@ test('text and button token pairs retain readable contrast in both themes', asyn
     ['on-inverse', 'inverse'],
     ['on-disabled', 'disabled'],
     ['danger', 'danger-soft'],
+    ['on-danger-solid', 'danger-solid'],
     ['success', 'success-soft'],
     ['warning', 'warning-soft'],
   ];

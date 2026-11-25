@@ -21,7 +21,15 @@
       "expo-web-browser",
       "expo-secure-store",
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/homespace-logo.png",
+          "color": "#2563EB",
+          "defaultChannel": "homespace-notifications"
+        }
+      ]
     ],
     "orientation": "portrait",
     "icon": "./assets/homespace-logo.png",

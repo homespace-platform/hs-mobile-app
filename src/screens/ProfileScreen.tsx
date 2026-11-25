@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState, type ComponentProps } from 'react';
 import Ionicons from '@/components/Icon';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Share, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import Avatar from '@/components/Avatar';
+import ProfileHeader from '@/components/profile/ProfileHeader';
+import ProfileInfoCard from '@/components/profile/ProfileInfoCard';
 import TabHeader from '@/components/TabHeader';
-import ThemeSelector from '@/components/ThemeSelector';
 import { useDialog } from '@/components/AppDialog';
 import { PolicyDialog } from '@/components/PolicyDialog';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
@@ -13,27 +13,16 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { getUserProfileApi } from '@/services/userApi';
 import type { UserProfileResponse } from '@/types/api';
 import type { ManagementSection } from '@/services/managementApi';
-import ProfileEditScreen from '@/screens/ProfileEditScreen';
-import AccountSecurityScreen from '@/screens/AccountSecurityScreen';
-import PaymentSettingsScreen from '@/screens/PaymentSettingsScreen';
+import SettingsScreen, { type SettingsSection } from '@/screens/SettingsScreen';
 import { apiError } from '@/lib/api-error';
+import { webBaseUrl } from '@/config/env';
+import { buildProfileLink } from '@/lib/profile-format';
 import { getReservationPolicy } from '@/services/bookingApi';
 
 function displayName(profile: UserProfileResponse | null) {
   if (!profile) return 'Người dùng';
   const name = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
   return name || profile.username || profile.email;
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <View className="w-1/2 px-2 py-3">
-      <Text className="text-xs text-subtle">{label}</Text>
-      <Text className="mt-1 text-sm font-semibold text-foreground" numberOfLines={1}>
-        {value}
-      </Text>
-    </View>
-  );
 }
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -98,13 +87,12 @@ export default function ProfileScreen({
   const [profile, setProfile] = useState<UserProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
+  // null = profile tab; otherwise the settings hub, optionally opened on one section.
+  const [settings, setSettings] = useState<{ section: SettingsSection | null } | null>(null);
   const [reservationPolicy, setReservationPolicy] = useState<{
     version: string;
     text: string;
   } | null>(null);
-  const [security, setSecurity] = useState(false);
-  const [paymentSettings, setPaymentSettings] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -123,27 +111,24 @@ export default function ProfileScreen({
   }, [load]);
 
   const name = displayName(profile);
-  if (editing && profile)
+  if (settings)
     return (
-      <ProfileEditScreen
+      <SettingsScreen
         profile={profile}
-        onBack={() => setEditing(false)}
-        onSaved={() => {
-          setEditing(false);
-          void load();
-        }}
+        initialSection={settings.section}
+        onBack={() => setSettings(null)}
+        onProfileChanged={() => void load()}
       />
     );
-  if (security)
-    return (
-      <AccountSecurityScreen
-        onBack={() => {
-          setSecurity(false);
-          void load();
-        }}
-      />
-    );
-  if (paymentSettings) return <PaymentSettingsScreen onBack={() => setPaymentSettings(false)} />;
+  const profileLink = buildProfileLink(webBaseUrl, profile?.username);
+  const shareLink = async () => {
+    if (!profileLink) return;
+    try {
+      await Share.share({ message: profileLink });
+    } catch (e) {
+      showDialog('Không thể chia sẻ liên kết', apiError(e));
+    }
+  };
   const unavailable = (title: string) =>
     showDialog(
       title,
@@ -158,14 +143,6 @@ export default function ProfileScreen({
             <Text accessibilityRole="header" className="text-2xl font-bold text-on-brand">
               Hồ sơ
             </Text>
-            <Pressable
-              disabled={!profile}
-              onPress={() => setEditing(true)}
-              accessibilityRole="button"
-              className="flex-row items-center rounded-full bg-on-brand/15 px-4 py-2">
-              <Ionicons name="create-outline" size={15} className="text-on-brand" />
-              <Text className="ml-1.5 text-xs font-semibold text-on-brand">Chỉnh sửa</Text>
-            </Pressable>
           </View>
           {loading ? (
             <View className="items-center py-10">
@@ -178,25 +155,14 @@ export default function ProfileScreen({
                 <Text className="text-xs font-bold text-primary">Thử lại</Text>
               </Pressable>
             </View>
-          ) : (
-            <View className="mt-7 flex-row items-center">
-              <View className="rounded-full border-4 border-on-brand/30">
-                <Avatar uri={profile?.avatarUrl} name={name} size={76} />
-              </View>
-              <View className="ml-4 flex-1">
-                <Text className="text-xl font-bold text-on-brand">{name}</Text>
-                <Text className="mt-1 text-sm text-on-brand-muted">{profile?.email}</Text>
-                <View className="mt-2 self-start rounded-full bg-on-brand/20 px-3 py-1">
-                  <View className="flex-row items-center">
-                    <Ionicons name="checkmark-circle" size={14} className="text-on-brand" />
-                    <Text className="ml-1 text-xs font-semibold text-on-brand">
-                      {profile?.kycVerified ? 'Đã xác minh danh tính' : 'Chưa xác minh danh tính'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-          )}
+          ) : profile ? (
+            <ProfileHeader
+              profile={profile}
+              name={name}
+              onEdit={() => setSettings({ section: 'profile' })}
+              onShareLink={profileLink ? () => void shareLink() : undefined}
+            />
+          ) : null}
         </View>
 
         <View className="-mt-4 px-5">
@@ -233,42 +199,13 @@ export default function ProfileScreen({
             />
           </View>
 
-          {profile ? (
-            <View className="mt-6 rounded-3xl border border-border bg-surface p-3 shadow-sm">
-              <View className="flex-row items-center justify-between px-2 pb-2 pt-1">
-                <Text className="text-base font-bold text-foreground">Thông tin cá nhân</Text>
-                <Pressable onPress={() => setEditing(true)} accessibilityRole="button">
-                  <Text className="text-xs font-semibold text-primary">Cập nhật</Text>
-                </Pressable>
-              </View>
-              <View className="flex-row flex-wrap">
-                <Field label="Tên đăng nhập" value={profile.username} />
-                <Field label="Vai trò" value={profile.role || 'USER'} />
-                <Field label="Số điện thoại" value={profile.phone || 'Chưa cập nhật'} />
-                <Field label="Ngày sinh" value={profile.dob || 'Chưa cập nhật'} />
-                <Field label="Giới tính" value={profile.gender || 'Chưa cập nhật'} />
-                <Field label="Trạng thái" value={profile.active ? 'Đang hoạt động' : 'Tạm khóa'} />
-              </View>
-            </View>
-          ) : null}
-
-          <ThemeSelector />
+          {profile ? <ProfileInfoCard profile={profile} /> : null}
 
           <View className="mt-6 overflow-hidden rounded-3xl border border-border bg-surface shadow-sm">
             <MenuItem
-              icon="shield-checkmark-outline"
-              label="Bảo mật & xác minh danh tính"
-              onPress={() => setSecurity(true)}
-            />
-            <MenuItem
-              icon="card-outline"
-              label="Cài đặt thanh toán"
-              onPress={() => setPaymentSettings(true)}
-            />
-            <MenuItem
-              icon="notifications-outline"
-              label="Cài đặt thông báo (chưa hỗ trợ)"
-              onPress={() => unavailable('Thông báo')}
+              icon="settings-outline"
+              label="Cài đặt"
+              onPress={() => setSettings({ section: null })}
             />
             <MenuItem
               icon="help-circle-outline"

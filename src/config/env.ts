@@ -16,3 +16,10 @@ export const keycloakConfig = {
 export const gatewayBaseUrl = apiTransportUrl(
   process.env.EXPO_PUBLIC_GATEWAY_BASE_URL ?? 'http://localhost:8080'
 );
+
+// Optional public web origin, used only to build shareable links such as /u/{username}.
+export const webBaseUrl = process.env.EXPO_PUBLIC_WEB_BASE_URL?.trim() || undefined;
+
+// Mobile's own Origin for the notification socket (independent of the web URL). It must be listed in the
+// notification-service NOTIFICATION_REALTIME_ORIGINS; without it that socket stays off (push + REST still work).
+export const realtimeOrigin = process.env.EXPO_PUBLIC_REALTIME_ORIGIN?.trim() || undefined;

@@ -2,7 +2,6 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import Ionicons from '@/components/Icon';
 import ListingCard from '@/components/ListingCard';
 import { LISTING_CATEGORIES } from '@/lib/listing-format';
-import { useFavoriteListings } from '@/lib/use-favorite-listings';
 import type { ListingSummary } from '@/services/listingApi';
 
 function Skeleton() {
@@ -40,6 +39,8 @@ export default function FeaturedListings({
   onRetry,
   onViewAll,
   onOpenListing,
+  favoriteIds,
+  onToggleFavorite,
 }: {
   areaLabel: string;
   wholeCity: boolean;
@@ -51,9 +52,9 @@ export default function FeaturedListings({
   onRetry: () => void;
   onViewAll: () => void;
   onOpenListing?: (id: string) => void;
+  favoriteIds: Set<string>;
+  onToggleFavorite: (id: string) => void;
 }) {
-  const { favoriteIds, toggle } = useFavoriteListings();
-
   return (
     <View className="mt-7 px-5">
       <Text className="text-xs font-semibold uppercase tracking-wider text-primary">
@@ -114,7 +115,7 @@ export default function FeaturedListings({
               listing={listing}
               favorite={favoriteIds.has(listing.id)}
               onPress={() => onOpenListing?.(listing.id)}
-              onToggleFavorite={() => void toggle(listing.id)}
+              onToggleFavorite={() => onToggleFavorite(listing.id)}
             />
           ))}
         </ScrollView>

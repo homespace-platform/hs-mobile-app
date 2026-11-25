@@ -12,6 +12,7 @@ import MembershipSection from '@/components/home/MembershipSection';
 import PopularAreas from '@/components/home/PopularAreas';
 import PriceExplorer from '@/components/home/PriceExplorer';
 import { mergeMembershipPlans, type MembershipPlanInfo } from '@/lib/membership';
+import { useFavoriteListings } from '@/lib/use-favorite-listings';
 import { wardsOfCity } from '@/lib/wards';
 import { getPublicListings, type ListingSummary } from '@/services/listingApi';
 import { getUserProfileApi } from '@/services/userApi';
@@ -27,6 +28,7 @@ export default function HomeScreen({
   onOpenNews,
   onOpenManagement,
   onOpenFavorites,
+  onOpenNotifications,
   onOpenHistory,
 }: {
   onSelectTab?: (tab: MainTab) => void;
@@ -35,6 +37,7 @@ export default function HomeScreen({
   onOpenNews: () => void;
   onOpenManagement: (section: ManagementSection) => void;
   onOpenFavorites: () => void;
+  onOpenNotifications: () => void;
   onOpenHistory: () => void;
 }) {
   const [listings, setListings] = useState<ListingSummary[]>([]);
@@ -115,6 +118,9 @@ export default function HomeScreen({
       .catch(() => undefined);
   }, []);
 
+  // One favorite set for the cards and the header heart count.
+  const { favoriteIds, toggle: toggleFavoriteListing } = useFavoriteListings();
+
   const userName =
     [profile?.firstName, profile?.lastName].filter(Boolean).join(' ') ||
     profile?.username ||
@@ -132,7 +138,9 @@ export default function HomeScreen({
         }}
         avatarUri={profile?.avatarUrl}
         userName={userName}
+        favoriteCount={favoriteIds.size}
         onOpenFavorites={onOpenFavorites}
+        onOpenNotifications={onOpenNotifications}
         onOpenMenu={() => setMenuOpen(true)}
       />
       <ScrollView
@@ -157,6 +165,8 @@ export default function HomeScreen({
           onRetry={() => loadListings()}
           onViewAll={() => onBrowse(browseFilters)}
           onOpenListing={onOpenListing}
+          favoriteIds={favoriteIds}
+          onToggleFavorite={(id) => void toggleFavoriteListing(id)}
         />
 
         <PopularAreas

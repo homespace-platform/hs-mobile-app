@@ -1,6 +1,8 @@
 import { useEffect, useState, type ComponentProps } from 'react';
 import Ionicons from '@/components/Icon';
 import { Pressable, Text, View } from 'react-native';
+import { refreshChatUnread } from '@/lib/unread-sync';
+import { useUnreadChatCount } from '@/lib/use-unread';
 import { getManagementAttentionCounts } from '@/services/managementApi';
 
 export type MainTab = 'home' | 'search' | 'management' | 'messages' | 'profile';
@@ -24,6 +26,11 @@ export default function BottomTabBar({
   attentionVersion?: number;
 }) {
   const [hasManagementAttention, setHasManagementAttention] = useState(false);
+  const chatUnread = useUnreadChatCount();
+  // Realtime keeps it fresh; this covers cold start and a missed event (max one request per 30s).
+  useEffect(() => {
+    void refreshChatUnread(30_000);
+  }, []);
   useEffect(() => {
     let active = true;
     void getManagementAttentionCounts(attentionVersion > 0).then((counts) => {
@@ -48,7 +55,9 @@ export default function BottomTabBar({
             accessibilityLabel={
               tab.id === 'management' && hasManagementAttention
                 ? `${tab.label}, có mục đang chờ xử lý`
-                : tab.label
+                : tab.id === 'messages' && chatUnread > 0
+                  ? `${tab.label}, ${chatUnread} tin chưa đọc`
+                  : tab.label
             }>
             <View className="relative h-6 w-6 items-center justify-center">
               <Ionicons
@@ -58,6 +67,13 @@ export default function BottomTabBar({
               />
               {tab.id === 'management' && hasManagementAttention ? (
                 <View className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-surface bg-danger" />
+              ) : null}
+              {tab.id === 'messages' && chatUnread > 0 ? (
+                <View className="absolute -right-2.5 -top-1.5 min-w-4 items-center rounded-full border-2 border-surface bg-danger-solid px-1">
+                  <Text className="text-[9px] font-bold leading-3 text-on-danger-solid">
+                    {chatUnread > 99 ? '99+' : chatUnread}
+                  </Text>
+                </View>
               ) : null}
             </View>
             <Text

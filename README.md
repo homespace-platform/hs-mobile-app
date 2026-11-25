@@ -56,6 +56,8 @@ tenant/landlord accounts before release.
 
 For a fresh Windows checkout and Samsung Remote Test Lab, see the [step-by-step guide](docs/huong-dan-chay-mobile.md).
 
+Optional `EXPO_PUBLIC_WEB_BASE_URL` (public web origin) enables the profile "Sao chép liên kết" button (`/u/{username}`); without it the button is hidden.
+
 For Android Studio's emulator with services on this computer, keep the
 `localhost` URLs in `.env` and set `EXPO_PUBLIC_ANDROID_API_HOST=10.0.2.2`.
 In Android development builds, API calls and Keycloak token/refresh requests then
@@ -118,9 +120,27 @@ Use semantic NativeWind classes for all current and future screens:
 | Neutral selected button / text  | `bg-inverse`, `text-on-inverse`                                             |
 | Disabled button / text          | `bg-disabled`, `text-on-disabled`                                           |
 | Status                          | `text-danger`, `bg-danger-soft` (also `success`, `warning`)                 |
+| Count badge on an icon          | `bg-danger-solid`, `text-on-danger-solid`                                   |
+| Theme preview thumbnails only   | `bg-preview-*` (same in both modes; used by `ThemeSelector`)                |
 
 Use `Icon` from `@/components/Icon` with `className="text-primary"` for Ionicons.
 NativeWind's `ActivityIndicator` supports `className="text-primary"`; inputs use
 `placeholder:text-subtle selection:text-primary`. Avoid hex values, palette
 classes such as `bg-white`/`text-slate-900`, and per-screen `dark:` colors. Add a
 semantic token in **both** CSS themes and `tailwind.config.js` if a new role is needed.
+
+# Push notifications (Android)
+
+The app registers the device with `PUT /api/v1/notifications/devices` and receives pushes while closed
+(channel `homespace-notifications`). This needs a **development/production build**, not Expo Go.
+
+1. In the Firebase project shared with the web app, add an Android app with package `com.homespace.mobile`.
+2. Download `google-services.json` and put it in the `hs-mobile-app/` root. It is git-ignored; never commit it.
+   `app.config.js` wires it into the Android config only when the file exists.
+3. Rebuild the native app (`npx expo prebuild` then `npm run run:android`); a JS reload is not enough.
+4. The backend must run with push enabled and Firebase credentials. iOS push is not supported yet
+   (it needs an FCM token, e.g. `@react-native-firebase/messaging`).
+
+Realtime while the app is open uses Socket.IO through the Gateway. The notification socket needs
+`EXPO_PUBLIC_REALTIME_ORIGIN` (the app's own origin, sent as `Origin`; unrelated to the web URL) and that
+origin must be listed in the server's `NOTIFICATION_REALTIME_ORIGINS`; without it only push and REST refresh are used. Run `npm run test:push` for the pure helpers.

@@ -5,6 +5,9 @@ import * as WebBrowser from 'expo-web-browser';
 import { Button, ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
 import { useDialog } from '@/components/AppDialog';
 import { PolicyNotice } from '@/components/PolicyDialog';
+import { isAxiosError } from 'axios';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { validatePasswordChange } from '@/lib/password';
 import { apiError } from '@/lib/api-error';
 import {
   createKycSession,
@@ -16,6 +19,7 @@ import {
 
 export default function AccountSecurityScreen({ onBack }: { onBack: () => void }) {
   const showDialog = useDialog();
+  const { logout } = useAuth();
   const [passwordExists, setPasswordExists] = useState<boolean | null>(null);
   const [kyc, setKyc] = useState<KycStatus | null>(null);
   const [oldPassword, setOldPassword] = useState('');
@@ -42,17 +46,9 @@ export default function AccountSecurityScreen({ onBack }: { onBack: () => void }
   }, [load]);
   async function update() {
     if (busy || passwordExists === null) return;
-    if (
-      newPassword.length < 8 ||
-      !/[A-Z]/.test(newPassword) ||
-      !/[0-9]/.test(newPassword) ||
-      !/[@#$%^&+=!]/.test(newPassword) ||
-      newPassword !== confirmation ||
-      (passwordExists && !oldPassword)
-    ) {
-      setError(
-        'Mật khẩu cần ít nhất 8 ký tự, chữ hoa, số và ký tự @#$%^&+=!. Nhập đúng mật khẩu xác nhận và mật khẩu cũ.'
-      );
+    const invalid = validatePasswordChange(oldPassword, newPassword, confirmation, passwordExists);
+    if (invalid) {
+      setError(invalid);
       return;
     }
     setBusy(true);
@@ -63,9 +59,25 @@ export default function AccountSecurityScreen({ onBack }: { onBack: () => void }
       setNewPassword('');
       setConfirmation('');
       setPasswordExists(true);
-      showDialog('Thành công', 'Đã lưu mật khẩu mới.', undefined, 'success');
+      if (passwordExists) {
+        // Web signs out after a password change so every session re-authenticates.
+        showDialog(
+          'Thành công',
+          'Đổi mật khẩu thành công. Đang đăng xuất...',
+          undefined,
+          'success'
+        );
+        setTimeout(() => void logout(), 800);
+      } else showDialog('Thành công', 'Đã tạo mật khẩu mới.', undefined, 'success');
     } catch (e) {
-      setError(apiError(e));
+      const message = isAxiosError<{ message?: string }>(e) ? e.response?.data?.message : null;
+      setError(
+        typeof message === 'string' && message.trim()
+          ? message
+          : isAxiosError(e) && e.response
+            ? 'Không thể đổi mật khẩu. Vui lòng thử lại.'
+            : apiError(e)
+      );
     } finally {
       setBusy(false);
     }
@@ -117,9 +129,13 @@ export default function AccountSecurityScreen({ onBack }: { onBack: () => void }
             <Text className="mt-6 text-lg font-bold text-foreground">
               {passwordExists ? 'Đổi mật khẩu' : 'Tạo mật khẩu'}
             </Text>
+            <Text className="mt-1 text-xs text-muted-foreground">
+              Để bảo vệ tài khoản, hãy sử dụng mật khẩu mạnh bao gồm chữ hoa, chữ thường và số.
+            </Text>
             {passwordExists ? (
               <Field
                 label="Mật khẩu hiện tại"
+                placeholder="Nhập mật khẩu hiện tại"
                 value={oldPassword}
                 onChangeText={setOldPassword}
                 secureTextEntry
@@ -129,6 +145,7 @@ export default function AccountSecurityScreen({ onBack }: { onBack: () => void }
             ) : null}
             <Field
               label="Mật khẩu mới"
+              placeholder="Tối thiểu 8 ký tự, có chữ hoa, số và ký tự đặc biệt"
               value={newPassword}
               onChangeText={setNewPassword}
               secureTextEntry
@@ -136,7 +153,8 @@ export default function AccountSecurityScreen({ onBack }: { onBack: () => void }
               editable={!busy}
             />
             <Field
-              label="Nhập lại mật khẩu mới"
+              label="Xác nhận mật khẩu mới"
+              placeholder="Nhập lại mật khẩu mới"
               value={confirmation}
               onChangeText={setConfirmation}
               secureTextEntry
@@ -146,10 +164,16 @@ export default function AccountSecurityScreen({ onBack }: { onBack: () => void }
             <Button
               label="Lưu mật khẩu mới"
               onPress={() =>
-                showDialog('Cập nhật mật khẩu', 'Lưu mật khẩu mới cho tài khoản?', [
-                  { text: 'Quay lại', style: 'cancel' },
-                  { text: 'Lưu', onPress: () => void update() },
-                ])
+                showDialog(
+                  passwordExists ? 'Đổi mật khẩu' : 'Tạo mật khẩu',
+                  passwordExists
+                    ? 'Sau khi đổi mật khẩu, bạn sẽ được đăng xuất. Tiếp tục?'
+                    : 'Lưu mật khẩu mới cho tài khoản?',
+                  [
+                    { text: 'Quay lại', style: 'cancel' },
+                    { text: 'Lưu', onPress: () => void update() },
+                  ]
+                )
               }
               busy={busy}
             />
