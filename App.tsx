@@ -11,6 +11,7 @@ import type { MainTab } from '@/components/BottomTabBar';
 import type { ChatConversation } from '@/services/chatApi';
 import LoadingScreen from '@/screens/LoadingScreen';
 import LoginScreen from '@/screens/LoginScreen';
+import ManagementDashboardScreen from '@/screens/ManagementDashboardScreen';
 import ManagementScreen from '@/screens/ManagementScreen';
 import ConversationDetailScreen from '@/screens/ConversationDetailScreen';
 import HomeScreen from '@/screens/HomeScreen';
@@ -21,6 +22,7 @@ import NotificationsScreen from '@/screens/NotificationsScreen';
 import SearchScreen from '@/screens/SearchScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
 import ListingCollectionScreen from '@/screens/ListingCollectionScreen';
+import type { ManagementRole } from '@/lib/dashboard-navigation';
 import type { ManagementSection } from '@/services/managementApi';
 import InitialPasswordGate from '@/components/InitialPasswordGate';
 import { setOpenSettingsHandler } from '@/lib/profile-gate-signal';
@@ -45,6 +47,7 @@ function SignedInApp() {
     MainTab | 'favorites' | 'history' | 'browse' | 'news' | 'notifications'
   >('home');
   const [ownListing, setOwnListing] = useState(false);
+  const [managementRole, setManagementRole] = useState<ManagementRole>('tenant');
   const [managementSection, setManagementSection] = useState<ManagementSection | null>(null);
   const [managementOrigin, setManagementOrigin] = useState<'detail' | 'notifications' | null>(null);
   const [filters, setFilters] = useState<Record<string, string | number>>({});
@@ -63,6 +66,7 @@ function SignedInApp() {
   }, []);
   const selectTab = (tab: MainTab) => {
     setConversationId(null);
+    setFilters({}); // a plain tab press opens "Tìm nhà" without Home's initial filters
     setScreen(tab);
     if (tab === 'management') {
       setManagementSection(null);
@@ -91,7 +95,7 @@ function SignedInApp() {
   };
   const browse = (nextFilters: Record<string, string | number>) => {
     setFilters(nextFilters);
-    setScreen('browse');
+    setScreen('search'); // Home entry points land on the "Tìm nhà" screen with these initial filters
   };
 
   if (screen === 'favorites' || screen === 'history' || screen === 'browse')
@@ -161,25 +165,32 @@ function SignedInApp() {
   }
 
   if (screen === 'search') {
-    return <SearchScreen onSelectTab={selectTab} onOpenListing={openListing} />;
+    return (
+      <SearchScreen onSelectTab={selectTab} onOpenListing={openListing} initialFilters={filters} />
+    );
   }
 
   if (screen === 'management') {
+    if (!managementSection) {
+      return (
+        <ManagementDashboardScreen
+          role={managementRole}
+          onSelectRole={setManagementRole}
+          onSelectTab={selectTab}
+        />
+      );
+    }
     return (
       <ManagementScreen
-        key={managementSection ?? 'root'}
+        key={managementSection}
         onSelectTab={selectTab}
         onOpenListing={openListing}
         initialSection={managementSection}
-        onExit={
-          managementOrigin
-            ? () => {
-                setManagementSection(null);
-                setScreen(managementOrigin);
-                setManagementOrigin(null);
-              }
-            : undefined
-        }
+        onExit={() => {
+          setManagementSection(null);
+          if (managementOrigin) setScreen(managementOrigin);
+          setManagementOrigin(null);
+        }}
       />
     );
   }

@@ -20,10 +20,12 @@ export default function BottomTabBar({
   active,
   onSelect,
   attentionVersion = 0,
+  showManagementAttention = true,
 }: {
   active: MainTab;
   onSelect: (tab: MainTab) => void;
   attentionVersion?: number;
+  showManagementAttention?: boolean;
 }) {
   const [hasManagementAttention, setHasManagementAttention] = useState(false);
   const chatUnread = useUnreadChatCount();
@@ -32,6 +34,7 @@ export default function BottomTabBar({
     void refreshChatUnread(30_000);
   }, []);
   useEffect(() => {
+    if (!showManagementAttention) return;
     let active = true;
     void getManagementAttentionCounts(attentionVersion > 0).then((counts) => {
       if (active)
@@ -40,12 +43,14 @@ export default function BottomTabBar({
     return () => {
       active = false;
     };
-  }, [attentionVersion]);
+  }, [attentionVersion, showManagementAttention]);
 
   return (
     <View className="flex-row border-t border-border bg-surface px-4 py-2">
       {TABS.map((tab) => {
         const selected = tab.id === active;
+        const managementAttention =
+          tab.id === 'management' && showManagementAttention && hasManagementAttention;
         return (
           <Pressable
             key={tab.id}
@@ -53,7 +58,7 @@ export default function BottomTabBar({
             className="flex-1 items-center py-1"
             accessibilityRole="button"
             accessibilityLabel={
-              tab.id === 'management' && hasManagementAttention
+              managementAttention
                 ? `${tab.label}, có mục đang chờ xử lý`
                 : tab.id === 'messages' && chatUnread > 0
                   ? `${tab.label}, ${chatUnread} tin chưa đọc`
@@ -65,7 +70,7 @@ export default function BottomTabBar({
                 size={21}
                 className={selected ? 'text-primary' : 'text-subtle'}
               />
-              {tab.id === 'management' && hasManagementAttention ? (
+              {managementAttention ? (
                 <View className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-surface bg-danger" />
               ) : null}
               {tab.id === 'messages' && chatUnread > 0 ? (
