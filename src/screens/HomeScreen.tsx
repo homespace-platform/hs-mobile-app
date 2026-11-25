@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Linking, RefreshControl, ScrollView, View } from 'react-native';
+import { Platform, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import HomeAiPanel from '@/components/HomeAiPanel';
@@ -10,20 +10,22 @@ import FeaturedListings from '@/components/home/FeaturedListings';
 import HomeDrawer from '@/components/home/HomeDrawer';
 import HomeHeader from '@/components/home/HomeHeader';
 import type { City } from '@/components/home/LocationPicker';
+import MembershipCheckout from '@/components/home/MembershipCheckout';
 import MembershipSection from '@/components/home/MembershipSection';
 import PopularAreas from '@/components/home/PopularAreas';
 import PriceExplorer from '@/components/home/PriceExplorer';
-import { gatewayBaseUrl, webBaseUrl } from '@/config/env';
-import {
-  buildMembershipCheckoutUrl,
-  mergeMembershipPlans,
-  type MembershipPlanInfo,
-} from '@/lib/membership';
+import { mergeMembershipPlans, type MembershipPlanInfo } from '@/lib/membership';
+import { isPaidMembershipTier } from '@/lib/membership-checkout';
 import { useFavoriteListings } from '@/lib/use-favorite-listings';
 import { wardsOfCity } from '@/lib/wards';
 import { getPublicListings, type ListingSummary } from '@/services/listingApi';
 import { getUserProfileApi } from '@/services/userApi';
-import { getMembershipPlans, getMyMembership, type MembershipView } from '@/services/membershipApi';
+import {
+  getMembershipPlans,
+  getMyMembership,
+  type MembershipView,
+  type PaidMembershipTier,
+} from '@/services/membershipApi';
 import type { ManagementSection } from '@/services/managementApi';
 import type { UserProfileResponse } from '@/types/api';
 import provinces from '@/data/provinces.json';
@@ -53,7 +55,7 @@ export default function HomeScreen({
   const [profile, setProfile] = useState<UserProfileResponse | null>(null);
   const [membershipPlans, setMembershipPlans] = useState<MembershipPlanInfo[] | null>(null);
   const [membership, setMembership] = useState<MembershipView | null>(null);
-  const openedCheckout = useRef(false);
+  const [checkoutTier, setCheckoutTier] = useState<PaidMembershipTier | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -125,33 +127,20 @@ export default function HomeScreen({
     getMembershipPlans()
       .then((plans) => setMembershipPlans(mergeMembershipPlans(plans)))
       .catch(() => setMembershipPlans(mergeMembershipPlans(null)));
-    void refreshMembership();
-
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state !== 'active' || !openedCheckout.current) return;
-      openedCheckout.current = false;
-      void refreshMembership();
-    });
-    return () => subscription.remove();
+    refreshMembership();
   }, [refreshMembership]);
 
-  async function openMembershipCheckout(tier: string) {
-    const url = buildMembershipCheckoutUrl(tier, gatewayBaseUrl, webBaseUrl);
-    if (!url) {
-      showDialog(
-        'Chưa thể mở thanh toán',
-        'Cần cấu hình URL HTTPS của website HomeSpace cho môi trường hiện tại.'
-      );
+  function openMembershipCheckout(tier: string) {
+    if (!isPaidMembershipTier(tier)) return;
+    if (Platform.OS === 'web') {
+      showDialog('Thanh toán hội viên', 'Mở ứng dụng HomeSpace trên điện thoại để dùng thanh toán thử.');
       return;
     }
-
-    openedCheckout.current = true;
-    try {
-      await Linking.openURL(url);
-    } catch {
-      openedCheckout.current = false;
-      showDialog('Không mở được website', 'Vui lòng thử lại để tiếp tục thanh toán gói hội viên.');
+    if (!profile?.id) {
+      showDialog('Chưa tải được tài khoản', 'Hãy tải lại trang chủ rồi thử thanh toán lại.');
+      return;
     }
+    setCheckoutTier(tier);
   }
 
   // One favorite set for the cards and the header heart count.
@@ -187,7 +176,8 @@ export default function HomeScreen({
             refreshing={refreshing}
             onRefresh={() => {
               void loadListings(true);
-              void refreshMembership();
+              refreshMembership();
+              if (!profile) void getUserProfileApi().then(setProfile).catch(() => undefined);
             }}
           />
         }
@@ -245,6 +235,14 @@ export default function HomeScreen({
       </ScrollView>
 
       <BottomTabBar active="home" onSelect={(tab) => onSelectTab?.(tab)} />
+      {checkoutTier && profile?.id ? (
+        <MembershipCheckout
+          tier={checkoutTier}
+          userId={profile.id}
+          onClose={() => setCheckoutTier(null)}
+          onPaid={refreshMembership}
+        />
+      ) : null}
       <HomeDrawer
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}

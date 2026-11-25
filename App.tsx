@@ -8,7 +8,7 @@ import BackendHealthGate from '@/components/BackendHealthGate';
 import NetworkGate from '@/components/NetworkGate';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 import type { MainTab } from '@/components/BottomTabBar';
-import type { ChatConversation } from '@/services/chatApi';
+import type { ChatConversation, RelatedListing } from '@/services/chatApi';
 import LoadingScreen from '@/screens/LoadingScreen';
 import LoginScreen from '@/screens/LoginScreen';
 import ManagementDashboardScreen from '@/screens/ManagementDashboardScreen';
@@ -53,6 +53,7 @@ function SignedInApp() {
   const [filters, setFilters] = useState<Record<string, string | number>>({});
   const [listingId, setListingId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [pendingListing, setPendingListing] = useState<RelatedListing | null>(null);
   const [conversationDetail, setConversationDetail] = useState<ChatConversation | null>(null);
   // Settings section requested from anywhere (banner, 1010 dialog); ProfileScreen opens it and clears it.
   const [pendingSettings, setPendingSettings] = useState<ProfileGateSection | null>(null);
@@ -66,6 +67,7 @@ function SignedInApp() {
   }, []);
   const selectTab = (tab: MainTab) => {
     setConversationId(null);
+    setPendingListing(null);
     setFilters({}); // a plain tab press opens "Tìm nhà" without Home's initial filters
     setScreen(tab);
     if (tab === 'management') {
@@ -117,8 +119,9 @@ function SignedInApp() {
         onBack={() => setScreen(returnScreen)}
         onOpenManagement={openManagement}
         onOpenListing={(id) => openListing(id)}
-        onOpenMessages={(id) => {
+        onOpenMessages={(id, listing) => {
           setConversationId(id);
+          setPendingListing(listing ?? null);
           setScreen('messages');
         }}
       />
@@ -129,6 +132,8 @@ function SignedInApp() {
     return (
       <MessagesScreen
         initialConversationId={conversationId}
+        pendingListing={pendingListing}
+        onPendingListingConsumed={() => setPendingListing(null)}
         onSelectTab={selectTab}
         onOpenConversationDetails={(conversation) => {
           setConversationId(conversation.id);

@@ -67,22 +67,6 @@ const METADATA: Record<string, Omit<MembershipPlanInfo, keyof MembershipPlan>> =
 
 const ORDER = ['FREE', 'STARTER', 'PRO', 'BUSINESS'];
 
-export function buildMembershipCheckoutUrl(
-  tier: string,
-  gatewayUrl: string,
-  webUrl?: string,
-): string | null {
-  if (tier === 'FREE' || !ORDER.includes(tier)) return null;
-
-  const productionGateway = /^https:\/\/api\.homespace\.id\.vn\/?$/i.test(gatewayUrl);
-  const webOrigin = (webUrl ?? (productionGateway ? 'https://www.homespace.id.vn' : ''))
-    .trim()
-    .replace(/\/+$/, '');
-  if (!/^https:\/\/[a-z\d.-]+(?::\d{1,5})?$/i.test(webOrigin)) return null;
-
-  return `${webOrigin}/membership?tier=${encodeURIComponent(tier)}`;
-}
-
 // Only used when GET /membership/plans fails (values copied from the web defaults).
 const FALLBACK_NUMBERS: MembershipPlan[] = [
   { code: 'FREE', publicationUses: 3, durationDays: 0, priceVnd: 0 },
@@ -158,5 +142,5 @@ export function planCardStatus(
     : TIER_RANK[plan.code] > TIER_RANK[tier] && tier !== 'FREE'
       ? `Nâng cấp lên ${plan.shortName}`
       : `Mua gói ${plan.shortName}`;
-  return { current, kind: 'purchase', label: `${action} trên website HomeSpace` };
+  return { current, kind: 'purchase', label: action };
 }

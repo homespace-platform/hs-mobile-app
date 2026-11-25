@@ -969,24 +969,73 @@ test('membership card status follows the web rules and /membership/me failures d
   assert.equal(status('PRO', me, true).label, 'ADMIN: Đã có lượt không giới hạn');
 });
 
-test('membership checkout opens a paid tier on the configured HTTPS web origin', () => {
-  const { buildMembershipCheckoutUrl } = load('lib/membership.ts', {});
-  const productionGateway = 'https://api.homespace.id.vn';
-  const devGateway = 'http://127.0.0.1:8080';
-  assert.equal(
-    buildMembershipCheckoutUrl('STARTER', productionGateway),
-    'https://www.homespace.id.vn/membership?tier=STARTER'
-  );
-  assert.equal(
-    buildMembershipCheckoutUrl('PRO', devGateway, 'https://web.example.com/'),
-    'https://web.example.com/membership?tier=PRO'
-  );
-  assert.equal(buildMembershipCheckoutUrl('FREE', productionGateway), null);
-  assert.equal(buildMembershipCheckoutUrl('ADMIN', productionGateway), null);
-  assert.equal(buildMembershipCheckoutUrl('BUSINESS', devGateway), null);
-  for (const origin of ['http://web.example.com', 'https://web.example.com@other.example.com', 'https://web.example.com?next=somewhere']) {
-    assert.equal(buildMembershipCheckoutUrl('BUSINESS', productionGateway, origin), null);
-  }
+test('membership checkout quotes, creates, checks and cancels through the authenticated API', async () => {
+  const { client, calls } = mockApi({ result: {} });
+  const api = load('services/membershipApi.ts', { '@/lib/axios-client': client });
+  const id = 'abcd'.repeat(8);
+  await api.getMembershipQuote('STARTER');
+  await api.createMembershipCheckout('STARTER');
+  await api.getMembershipOrder(id);
+  await api.cancelMembershipOrder(id);
+  assert.equal(calls[0].args[0], '/api/v1/membership/quote');
+  assert.equal(calls[0].args[1].params.tier, 'STARTER');
+  assert.equal(calls[1].args[0], '/api/v1/membership/checkout');
+  assert.deepEqual({ ...calls[1].args[1] }, { tier: 'STARTER', provider: 'SEPAY' });
+  assert.equal(calls[2].args[0], `/api/v1/membership/orders/${id}`);
+  assert.equal(calls[3].args[0], `/api/v1/membership/orders/${id}/cancel`);
+});
+
+test('membership checkout submits only a matching signed Sandbox form', () => {
+  const { buildSandboxCheckout, isSandboxPaymentPage, isMembershipQuote } = load('lib/membership-checkout.ts', {});
+  const id = 'abcd'.repeat(8);
+  const returnUrl = `https://homespace.example.com/dashboard/membership/return?orderId=${id}`;
+  const checkout = {
+    orderId: id,
+    amountVnd: 49000,
+    provider: 'SEPAY',
+    paymentUrl: 'https://pay-sandbox.sepay.vn/v1/checkout/init',
+    formFields: {
+      signature: 'signed+/=',
+      merchant: 'sandbox-merchant',
+      order_amount: '49000',
+      currency: 'VND',
+      operation: 'PURCHASE',
+      order_description: 'HomeSpace membership STARTER',
+      order_invoice_number: id,
+      success_url: `${returnUrl}&sepayReturn=success`,
+      error_url: `${returnUrl}&sepayReturn=error`,
+      cancel_url: `${returnUrl}&sepayReturn=cancel`,
+    },
+  };
+  const quote = { tier: 'STARTER', amountVnd: 49000, remainingUsesAfter: 10 };
+  assert.equal(isMembershipQuote(quote, 'STARTER'), true);
+  assert.equal(isMembershipQuote({ ...quote, amountVnd: 0 }, 'STARTER'), false);
+  assert.equal(isMembershipQuote(quote, 'PRO'), false);
+
+  const hosted = buildSandboxCheckout(checkout, 49000);
+  const form = new URLSearchParams(hosted.source.body);
+  assert.equal(hosted.source.method, 'POST');
+  assert.equal(hosted.source.uri, checkout.paymentUrl);
+  assert.equal(form.get('signature'), checkout.formFields.signature);
+  assert.equal(form.get('success_url'), checkout.formFields.success_url);
+  assert.deepEqual([...form.keys()], [
+    'order_amount', 'merchant', 'currency', 'operation', 'order_description',
+    'order_invoice_number', 'success_url', 'error_url', 'cancel_url', 'signature',
+  ]);
+  assert.equal(isSandboxPaymentPage(hosted.source.uri), true);
+  assert.equal(isSandboxPaymentPage(checkout.formFields.success_url), false);
+  assert.equal(isSandboxPaymentPage('https://pay-sandbox.sepay.vn.evil.example/'), false);
+  assert.throws(() => buildSandboxCheckout(checkout, 129000), /Số tiền đã thay đổi/);
+  assert.throws(() => buildSandboxCheckout({ ...checkout, provider: 'ETH' }, 49000), /Sandbox/);
+  assert.throws(() => buildSandboxCheckout({
+    ...checkout, paymentUrl: 'https://pay.sepay.vn/v1/checkout/init',
+  }, 49000), /Sandbox/);
+  assert.throws(() => buildSandboxCheckout({
+    ...checkout, formFields: { ...checkout.formFields, order_amount: '129000' },
+  }, 49000), /biểu mẫu/);
+  assert.throws(() => buildSandboxCheckout({
+    ...checkout, formFields: { ...checkout.formFields, success_url: returnUrl.replace(id, 'other') + '&sepayReturn=success' },
+  }, 49000), /trả kết quả/);
 });
 
 test('notification API uses the same endpoints and params as the web service', async () => {

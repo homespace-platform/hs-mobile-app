@@ -38,3 +38,53 @@ export async function getMyMembership(): Promise<MembershipView> {
     unlimited: Boolean(me.unlimited) || tier === 'ADMIN',
   };
 }
+
+export type PaidMembershipTier = 'STARTER' | 'PRO' | 'BUSINESS';
+
+export type MembershipQuote = {
+  tier: PaidMembershipTier;
+  amountVnd: number;
+  remainingUsesAfter: number;
+  expiresAtAfter: string | null;
+};
+
+export type MembershipCheckout = {
+  orderId: string;
+  paymentUrl: string;
+  amountVnd: number;
+  provider: string;
+  formFields: Record<string, string>;
+};
+
+export type MembershipOrder = {
+  id: string;
+  status: 'PENDING' | 'PAID' | 'FAILED' | 'EXPIRED' | 'CANCELLED' | 'REVIEW';
+};
+
+const membershipPath = '/api/v1/membership';
+const orderPath = (id: string) => `${membershipPath}/orders/${encodeURIComponent(id)}`;
+
+export async function getMembershipQuote(tier: PaidMembershipTier) {
+  const { data } = await axiosClient.get<ApiResponse<MembershipQuote>>(`${membershipPath}/quote`, {
+    params: { tier },
+  });
+  return data.result;
+}
+
+export async function createMembershipCheckout(tier: PaidMembershipTier) {
+  const { data } = await axiosClient.post<ApiResponse<MembershipCheckout>>(`${membershipPath}/checkout`, {
+    tier,
+    provider: 'SEPAY',
+  });
+  return data.result;
+}
+
+export async function getMembershipOrder(id: string) {
+  const { data } = await axiosClient.get<ApiResponse<MembershipOrder>>(orderPath(id));
+  return data.result;
+}
+
+export async function cancelMembershipOrder(id: string) {
+  const { data } = await axiosClient.post<ApiResponse<MembershipOrder>>(`${orderPath(id)}/cancel`);
+  return data.result;
+}

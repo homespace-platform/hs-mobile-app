@@ -84,7 +84,7 @@ function PlanCard({
             <Text className="shrink text-center text-xs font-bold text-on-brand">
               {status.label}
             </Text>
-            <Ionicons name="open-outline" size={16} className="text-on-brand" />
+            <Ionicons name="card-outline" size={16} className="text-on-brand" />
           </Pressable>
         ) : (
           <View
@@ -134,9 +134,6 @@ export default function MembershipSection({
         <Text className="font-semibold text-foreground">3 lượt đăng tin miễn phí</Text> dùng một
         lần. Tạo nháp và chỉnh sửa bài đăng hoàn toàn miễn phí — linh hoạt mua hoặc nâng cấp gói 30
         ngày qua SePay khi cần mở rộng quy mô.
-      </Text>
-      <Text className="mt-2 text-xs leading-5 text-muted-foreground">
-        Khi thanh toán trên website, hãy dùng cùng tài khoản HomeSpace.
       </Text>
       <Pressable
         onPress={onPostListing}

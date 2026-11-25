@@ -30,7 +30,9 @@ import {
   sendMessage,
   type ChatConversation,
   type ChatMessage,
+  type RelatedListing,
 } from '@/services/chatApi';
+import { dedupeConversationsByParticipant, shouldAttachPendingListing } from '@/lib/chat-threads';
 import { applyChatMessage, toChatMessage } from '@/lib/realtime/pure';
 import PresenceLabel from '@/components/PresenceLabel';
 import { useChatPresence } from '@/lib/use-chat-presence';
@@ -114,12 +116,34 @@ function MessageAttachment({
   );
 }
 
+function ListingCard({ listing, mine }: { listing: RelatedListing; mine: boolean }) {
+  return (
+    <View
+      className={`mt-1 w-64 max-w-full flex-row rounded-2xl border border-border bg-surface p-2 ${mine ? 'self-end' : 'self-start'}`}>
+      <Image
+        source={{ uri: listingImage(listing.image) }}
+        className="h-14 w-16 rounded-xl bg-muted"
+      />
+      <View className="ml-3 flex-1">
+        <Text className="text-xs font-semibold text-foreground" numberOfLines={2}>
+          {listing.title}
+        </Text>
+        <Text className="mt-1 text-xs font-bold text-primary">{listing.price}</Text>
+      </View>
+    </View>
+  );
+}
+
 export default function MessagesScreen({
   initialConversationId,
+  pendingListing,
+  onPendingListingConsumed,
   onSelectTab,
   onOpenConversationDetails,
 }: {
   initialConversationId?: string | null;
+  pendingListing?: RelatedListing | null;
+  onPendingListingConsumed?: () => void;
   onSelectTab: (tab: MainTab) => void;
   onOpenConversationDetails: (conversation: ChatConversation) => void;
 }) {
@@ -138,7 +162,8 @@ export default function MessagesScreen({
   const [messageError, setMessageError] = useState<string | null>(null);
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
   const initialOpenedId = useRef<string | null>(null);
-  const listingAttachedIds = useRef(new Set<string>());
+  const initialIdRef = useRef(initialConversationId);
+  initialIdRef.current = initialConversationId;
   const seenMessageIds = useRef(new Set<string>());
   const conversationsRef = useRef(conversations);
   conversationsRef.current = conversations;
@@ -153,7 +178,7 @@ export default function MessagesScreen({
     try {
       const [currentProfile, items] = await Promise.all([getUserProfileApi(), listConversations()]);
       setProfile(currentProfile);
-      setConversations(items);
+      setConversations(dedupeConversationsByParticipant(items, initialIdRef.current));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Không tải được cuộc trò chuyện');
     } finally {
@@ -172,8 +197,7 @@ export default function MessagesScreen({
     return conversations.filter(
       (conversation) =>
         conversationName(conversation).toLowerCase().includes(keyword) ||
-        conversation.lastMessage?.toLowerCase().includes(keyword) ||
-        conversation.listing?.title.toLowerCase().includes(keyword)
+        conversation.lastMessage?.toLowerCase().includes(keyword)
     );
   }, [conversations, search]);
 
@@ -192,7 +216,10 @@ export default function MessagesScreen({
   const quietRefresh = useCallback(async () => {
     lastLoadAt.current = Date.now();
     try {
-      const items = await listConversations();
+      const items = dedupeConversationsByParticipant(
+        await listConversations(),
+        selectedIdRef.current ?? initialIdRef.current
+      );
       const openId = selectedIdRef.current;
       setConversations(
         openId
@@ -289,6 +316,15 @@ export default function MessagesScreen({
     }
   }, [conversations, initialConversationId, loading, openConversation, selectedId]);
 
+  // Listing context carried over from the listing detail: attached to the next message, once.
+  const activeListing =
+    selected &&
+    selected.id === initialConversationId &&
+    !messagesLoading &&
+    shouldAttachPendingListing(pendingListing, messages, profile?.id)
+      ? pendingListing!
+      : null;
+
   async function handleSend() {
     const content = draft.trim();
     if ((!content && !pendingAttachment) || !selected || sending) return;
@@ -298,13 +334,7 @@ export default function MessagesScreen({
       const name = profile
         ? [profile.lastName, profile.firstName].filter(Boolean).join(' ') || profile.username
         : undefined;
-      const listing =
-        selected.id === initialConversationId &&
-        selected.listing &&
-        !listingAttachedIds.current.has(selected.id) &&
-        !messages.some((message) => message.listing?.id === selected.listing?.id)
-          ? selected.listing
-          : undefined;
+      const listing = activeListing ?? undefined;
       const attachment = pendingAttachment
         ? await uploadChatAttachment(
             pendingAttachment.uri,
@@ -325,7 +355,7 @@ export default function MessagesScreen({
         },
         attachment ? [attachment] : undefined
       );
-      if (listing) listingAttachedIds.current.add(selected.id);
+      if (listing) onPendingListingConsumed?.();
       // The chat socket may deliver the same message first.
       setMessages((current) =>
         current.some((item) => item.id === message.id) ? current : [...current, message]
@@ -428,23 +458,6 @@ export default function MessagesScreen({
             </Pressable>
           </View>
 
-          {selected.listing ? (
-            <View className="mx-4 mt-3 flex-row rounded-2xl border border-border bg-surface p-3">
-              <Image
-                source={{ uri: listingImage(selected.listing.image) }}
-                className="h-14 w-16 rounded-xl bg-muted"
-              />
-              <View className="ml-3 flex-1">
-                <Text className="text-xs font-semibold text-foreground" numberOfLines={2}>
-                  {selected.listing.title}
-                </Text>
-                <Text className="mt-1 text-xs font-bold text-primary">
-                  {selected.listing.price}
-                </Text>
-              </View>
-            </View>
-          ) : null}
-
           <ScrollView
             className="flex-1 px-4"
             contentContainerClassName="py-5"
@@ -489,6 +502,7 @@ export default function MessagesScreen({
                         {message.content}
                       </Text>
                     </View>
+                    {message.listing ? <ListingCard listing={message.listing} mine={mine} /> : null}
                     <Text className="mt-1 px-1 text-[10px] text-subtle">
                       {formatTime(message.createdAt)}
                     </Text>
@@ -509,6 +523,20 @@ export default function MessagesScreen({
             <Text className="bg-danger-soft px-4 py-2 text-center text-xs text-danger">
               {messageError}
             </Text>
+          ) : null}
+
+          {activeListing ? (
+            <View className="flex-row items-center border-t border-border bg-surface px-4 pb-2 pt-2">
+              <Ionicons name="home-outline" size={16} className="text-primary" />
+              <Text className="ml-2 flex-1 text-xs text-secondary" numberOfLines={1}>
+                Đang hỏi về: {activeListing.title}
+              </Text>
+              <Pressable
+                onPress={() => onPendingListingConsumed?.()}
+                accessibilityLabel="Bỏ bài đăng đang hỏi">
+                <Ionicons name="close-circle" size={19} className="text-subtle" />
+              </Pressable>
+            </View>
           ) : null}
 
           {pendingAttachment ? (

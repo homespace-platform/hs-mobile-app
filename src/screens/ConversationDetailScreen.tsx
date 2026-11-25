@@ -22,7 +22,6 @@ import {
 } from '@/services/chatApi';
 import PresenceLabel from '@/components/PresenceLabel';
 import { useChatPresence } from '@/lib/use-chat-presence';
-import { listingImage } from '@/services/listingApi';
 import { getStorageViewUrl } from '@/services/storageApi';
 
 const ROLE_OPTIONS = [
@@ -339,29 +338,6 @@ export default function ConversationDetailScreen({
           </View>
           {error ? <Text className="mt-3 text-xs text-danger">{error}</Text> : null}
         </View>
-
-        {conversation.listing ? (
-          <View className="mt-5 rounded-3xl border border-border bg-surface p-4">
-            <Text className="text-base font-bold text-foreground">Bài đăng liên quan</Text>
-            <View className="mt-3 flex-row">
-              <Image
-                source={{ uri: listingImage(conversation.listing.image) }}
-                className="h-20 w-24 rounded-2xl bg-muted"
-              />
-              <View className="ml-3 flex-1 justify-center">
-                <Text className="text-sm font-bold text-foreground" numberOfLines={2}>
-                  {conversation.listing.title}
-                </Text>
-                <Text className="mt-1 text-xs font-bold text-primary">
-                  {conversation.listing.price}
-                </Text>
-                <Text className="mt-1 text-xs text-muted-foreground" numberOfLines={1}>
-                  {conversation.listing.location}
-                </Text>
-              </View>
-            </View>
-          </View>
-        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

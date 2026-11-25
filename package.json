@@ -16,6 +16,7 @@
     "test:theme": "node --test tests/theme.test.cjs",
     "test:auth": "node --test tests/registration.test.cjs",
     "test:api": "node --test tests/api.test.cjs",
+    "test:chat": "node --test tests/chat-threads.test.cjs",
     "test:push": "node --test tests/push-realtime.test.cjs",
     "test:pagination": "node --test tests/pagination.test.cjs",
     "test:presence": "node --test tests/presence.test.cjs",

@@ -17,7 +17,7 @@ export const gatewayBaseUrl = apiTransportUrl(
   process.env.EXPO_PUBLIC_GATEWAY_BASE_URL ?? 'http://localhost:8080'
 );
 
-// Public web origin used by KYC, membership checkout, and share links.
+// Public web origin used by KYC and share links.
 export const webBaseUrl = process.env.EXPO_PUBLIC_WEB_BASE_URL?.trim() || undefined;
 
 // Mobile's own Origin for the notification socket (independent of the web URL). It must be listed in the

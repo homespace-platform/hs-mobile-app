@@ -18,7 +18,7 @@ import {
   PoliciesCard,
   ViewingSection,
 } from '@/components/listing-detail/ListingSections';
-import { createConversation, sendMessage } from '@/services/chatApi';
+import { createConversation, sendMessage, type RelatedListing } from '@/services/chatApi';
 import {
   getAccessibleListing,
   getPublicListing,
@@ -59,7 +59,7 @@ export default function ListingDetailScreen({
 }: {
   listingId: string;
   onBack: () => void;
-  onOpenMessages: (conversationId: string) => void;
+  onOpenMessages: (conversationId: string, pendingListing?: RelatedListing) => void;
   onOpenManagement: (section: ManagementSection) => void;
   onOpenListing: (listingId: string) => void;
   own?: boolean;
@@ -246,7 +246,8 @@ export default function ListingDetailScreen({
     setOpeningChat(true);
     setChatError(null);
     try {
-      const conversation = await createConversation(participantId, chatListing, {
+      // One conversation per pair: the listing card travels on a message, not on the conversation.
+      const conversation = await createConversation(participantId, undefined, {
         displayName: property.landlord.name,
         avatarUrl: property.landlord.avatar,
       });
@@ -254,7 +255,7 @@ export default function ListingDetailScreen({
         await sendMessage(conversation.id, message, chatListing, senderProfile);
         setQuickMessage('');
       }
-      onOpenMessages(conversation.id);
+      onOpenMessages(conversation.id, message ? undefined : chatListing);
     } catch (openError) {
       setChatError(apiError(openError));
     } finally {
