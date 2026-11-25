@@ -4,6 +4,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import './global.css';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { DialogProvider } from '@/components/AppDialog';
+import BackendHealthGate from '@/components/BackendHealthGate';
+import NetworkGate from '@/components/NetworkGate';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 import type { MainTab } from '@/components/BottomTabBar';
 import type { ChatConversation } from '@/services/chatApi';
@@ -37,12 +39,9 @@ function SignedInApp() {
   const [returnScreen, setReturnScreen] = useState<
     MainTab | 'favorites' | 'history' | 'browse' | 'news' | 'notifications'
   >('home');
-  const [favoritesOrigin, setFavoritesOrigin] = useState<'home' | 'profile'>('profile');
   const [ownListing, setOwnListing] = useState(false);
   const [managementSection, setManagementSection] = useState<ManagementSection | null>(null);
-  const [managementOrigin, setManagementOrigin] = useState<
-    'profile' | 'detail' | 'notifications' | null
-  >(null);
+  const [managementOrigin, setManagementOrigin] = useState<'detail' | 'notifications' | null>(null);
   const [filters, setFilters] = useState<Record<string, string | number>>({});
   const [listingId, setListingId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -71,9 +70,7 @@ function SignedInApp() {
   };
   const openManagement = (section: ManagementSection) => {
     setManagementSection(section);
-    setManagementOrigin(
-      screen === 'profile' || screen === 'detail' || screen === 'notifications' ? screen : null
-    );
+    setManagementOrigin(screen === 'detail' || screen === 'notifications' ? screen : null);
     setScreen('management');
   };
   const browse = (nextFilters: Record<string, string | number>) => {
@@ -86,7 +83,7 @@ function SignedInApp() {
       <ListingCollectionScreen
         mode={screen}
         filters={filters}
-        onBack={() => setScreen(screen === 'favorites' ? favoritesOrigin : 'home')}
+        onBack={() => setScreen('home')}
         onOpenListing={openListing}
         onExplore={() => selectTab('search')}
       />
@@ -172,16 +169,7 @@ function SignedInApp() {
   }
 
   if (screen === 'profile') {
-    return (
-      <ProfileScreen
-        onSelectTab={selectTab}
-        onOpenManagement={openManagement}
-        onOpenFavorites={() => {
-          setFavoritesOrigin('profile');
-          setScreen('favorites');
-        }}
-      />
-    );
+    return <ProfileScreen onSelectTab={selectTab} />;
   }
 
   return (
@@ -192,10 +180,7 @@ function SignedInApp() {
       onOpenNews={() => setScreen('news')}
       onOpenManagement={openManagement}
       onOpenNotifications={() => setScreen('notifications')}
-      onOpenFavorites={() => {
-        setFavoritesOrigin('home');
-        setScreen('favorites');
-      }}
+      onOpenFavorites={() => setScreen('favorites')}
       onOpenHistory={() => setScreen('history')}
     />
   );
@@ -220,9 +205,13 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <DialogProvider>
-          <AuthProvider>
-            <AuthGate />
-          </AuthProvider>
+          <NetworkGate>
+            <BackendHealthGate>
+              <AuthProvider>
+                <AuthGate />
+              </AuthProvider>
+            </BackendHealthGate>
+          </NetworkGate>
         </DialogProvider>
       </ThemeProvider>
     </SafeAreaProvider>

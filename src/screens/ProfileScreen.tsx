@@ -12,7 +12,6 @@ import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { getUserProfileApi } from '@/services/userApi';
 import type { UserProfileResponse } from '@/types/api';
-import type { ManagementSection } from '@/services/managementApi';
 import SettingsScreen, { type SettingsSection } from '@/screens/SettingsScreen';
 import { apiError } from '@/lib/api-error';
 import { webBaseUrl } from '@/config/env';
@@ -26,31 +25,6 @@ function displayName(profile: UserProfileResponse | null) {
 }
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
-
-function Action({
-  icon,
-  label,
-  note,
-  onPress,
-}: {
-  icon: IconName;
-  label: string;
-  note: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      className="w-[48%] rounded-2xl border border-border bg-surface p-4 shadow-sm">
-      <View className="h-10 w-10 items-center justify-center rounded-xl bg-primary-soft">
-        <Ionicons name={icon} size={22} className="text-primary" />
-      </View>
-      <Text className="mt-3 text-sm font-bold text-foreground">{label}</Text>
-      <Text className="mt-1 text-xs leading-4 text-muted-foreground">{note}</Text>
-    </Pressable>
-  );
-}
 
 function MenuItem({
   icon,
@@ -75,12 +49,8 @@ function MenuItem({
 
 export default function ProfileScreen({
   onSelectTab,
-  onOpenManagement,
-  onOpenFavorites,
 }: {
   onSelectTab: (tab: MainTab) => void;
-  onOpenManagement: (section: ManagementSection) => void;
-  onOpenFavorites: () => void;
 }) {
   const { logout } = useAuth();
   const showDialog = useDialog();
@@ -165,40 +135,7 @@ export default function ProfileScreen({
           ) : null}
         </View>
 
-        <View className="-mt-4 px-5">
-          <View className="flex-row flex-wrap justify-between gap-y-3">
-            <Action
-              icon="business-outline"
-              label="Tin đăng của tôi"
-              note="Quản lý nhà đang cho thuê"
-              onPress={() => onOpenManagement('landlord-properties')}
-            />
-            <Action
-              icon="heart-outline"
-              label="Đã yêu thích"
-              note="Các căn nhà bạn đã lưu"
-              onPress={onOpenFavorites}
-            />
-            <Action
-              icon="calendar-outline"
-              label="Lịch xem nhà"
-              note="Lịch hẹn sắp tới"
-              onPress={() => onOpenManagement('tenant-appointments')}
-            />
-            <Action
-              icon="document-text-outline"
-              label="Hợp đồng"
-              note="Theo dõi hợp đồng thuê"
-              onPress={() =>
-                showDialog('Hợp đồng', 'Bạn muốn xem hợp đồng ở vai trò nào?', [
-                  { text: 'Người thuê', onPress: () => onOpenManagement('tenant-contracts') },
-                  { text: 'Chủ nhà', onPress: () => onOpenManagement('landlord-contracts') },
-                  { text: 'Đóng', style: 'cancel' },
-                ])
-              }
-            />
-          </View>
-
+        <View className="px-5">
           {profile ? <ProfileInfoCard profile={profile} /> : null}
 
           <View className="mt-6 overflow-hidden rounded-3xl border border-border bg-surface shadow-sm">

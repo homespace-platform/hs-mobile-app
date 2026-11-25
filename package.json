@@ -16,6 +16,8 @@
     "test:auth": "node --test tests/registration.test.cjs",
     "test:api": "node --test tests/api.test.cjs",
     "test:push": "node --test tests/push-realtime.test.cjs",
+    "test:health": "node --test tests/backend-health.test.cjs",
+    "test:network": "node --test tests/network-health.test.cjs",
     "run:android": "expo run:android --port 4000",
     "prerun:android": "npm run android:connect",
     "prebuild": "expo prebuild",
