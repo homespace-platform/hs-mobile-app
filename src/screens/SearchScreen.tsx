@@ -17,6 +17,7 @@ import ProfileCompletionBanner from '@/components/ProfileCompletionBanner';
 import ListingCard from '@/components/ListingCard';
 import RentFilterPanel, { Chip } from '@/components/RentFilterPanel';
 import SortDropdown from '@/components/SortDropdown';
+import PageBar from '@/components/PageBar';
 import { useDialog } from '@/components/AppDialog';
 import { ErrorNotice } from '@/components/Screen';
 import { useFavoriteListings } from '@/lib/use-favorite-listings';
@@ -36,7 +37,7 @@ import { getPublicListingsPage, type ListingSummary } from '@/services/listingAp
 import provinces from '@/data/provinces.json';
 import wardsCatalog from '@/data/wards.json';
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 10; // same page size as the web /rent list
 const DEFAULT_CITY = provinces.find((item) => item.name.includes('Hồ Chí Minh')) ?? provinces[0];
 const WARDS = Object.values(wardsCatalog) as {
   code: string;
@@ -73,7 +74,9 @@ export default function SearchScreen({
   const [rows, setRows] = useState<ListingSummary[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
+  const [totalPages, setTotalPages] = useState(1);
+  const scrollRef = useRef<ScrollView>(null);
+  const listTop = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
@@ -92,17 +95,10 @@ export default function SearchScreen({
           toQueryParams(filter, { page: nextPage, size: PAGE_SIZE, cityId: city.code, wardId })
         );
         if (ticket !== requestId.current) return;
-        setRows((current) =>
-          nextPage === 1
-            ? data.result
-            : [
-                ...current.filter((row) => !data.result.some((next) => next.id === row.id)),
-                ...data.result,
-              ]
-        );
+        setRows(data.result); // page navigation replaces the list (like the web pagination bar)
         setPage(nextPage);
         setTotal(data.totalElements);
-        setHasMore(data.hasMore);
+        setTotalPages(Math.max(1, data.totalPages ?? 1));
       } catch (cause) {
         if (ticket === requestId.current) setError(apiError(cause));
       } finally {
@@ -113,7 +109,7 @@ export default function SearchScreen({
   );
   useEffect(() => {
     setRows([]);
-    setHasMore(false);
+    setTotalPages(1);
     void load();
     return invalidateRequests;
   }, [load, invalidateRequests]);
@@ -170,6 +166,7 @@ export default function SearchScreen({
       </TabHeader>
       <ProfileCompletionBanner />
       <ScrollView
+        ref={scrollRef}
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
         contentContainerClassName="px-5 pb-10 pt-4"
@@ -265,7 +262,7 @@ export default function SearchScreen({
         />
 
         <ErrorNotice message={error} />
-        <View className="mt-4">
+        <View className="mt-4" onLayout={(event) => (listTop.current = event.nativeEvent.layout.y)}>
           {rows.map((row) => (
             <ListingCard
               key={row.id}
@@ -300,14 +297,18 @@ export default function SearchScreen({
             <Text className="font-semibold text-primary">Thử lại</Text>
           </Pressable>
         ) : null}
-        {hasMore ? (
-          <Pressable
-            onPress={() => void load(page + 1)}
-            disabled={loading}
-            className="mt-4 min-h-12 items-center justify-center rounded-xl bg-brand">
-            <Text className="font-bold text-on-brand">Tải thêm</Text>
-          </Pressable>
-        ) : null}
+        <PageBar
+          page={page}
+          totalPages={totalPages}
+          totalItems={total}
+          pageSize={PAGE_SIZE}
+          shown={rows.length}
+          disabled={loading}
+          onChange={(next) => {
+            void load(next);
+            scrollRef.current?.scrollTo({ y: Math.max(0, listTop.current - 8), animated: true });
+          }}
+        />
       </ScrollView>
       <BottomTabBar active="search" onSelect={onSelectTab} />
     </SafeAreaView>
