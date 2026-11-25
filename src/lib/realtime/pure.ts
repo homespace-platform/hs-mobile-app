@@ -7,6 +7,7 @@ import {
   type NotificationItem,
 } from '@/lib/notification';
 import type { ChatConversation, ChatMessage } from '@/services/chatApi';
+import { chatMessageCaption } from '@/lib/chat-threads';
 
 const URL_PARTS = /^(https?:\/\/[^/?#]+)(\/[^?#]*)?/i;
 
@@ -95,6 +96,24 @@ export function applyNotificationEvent(
   return items;
 }
 
+export function readChatCallHistory(value: unknown): ChatMessage['call'] {
+  if (!isRecord(value)) return;
+  const { callId, callerId, mode, status } = value;
+  if (
+    typeof callId === 'string' &&
+    callId.length > 0 &&
+    typeof callerId === 'string' &&
+    callerId.length > 0 &&
+    (mode === 'audio' || mode === 'video') &&
+    (status === 'missed' ||
+      status === 'declined' ||
+      status === 'cancelled' ||
+      status === 'ended' ||
+      status === 'failed')
+  )
+    return { callId, callerId, mode, status };
+}
+
 export function toChatMessage(value: unknown): ChatMessage | null {
   if (!isRecord(value)) return null;
   const { id, conversationId, senderId, content, createdAt } = value;
@@ -105,6 +124,7 @@ export function toChatMessage(value: unknown): ChatMessage | null {
     typeof content !== 'string'
   )
     return null;
+  const call = readChatCallHistory(value.call);
   return {
     id,
     conversationId,
@@ -115,6 +135,7 @@ export function toChatMessage(value: unknown): ChatMessage | null {
     ...(Array.isArray(value.attachments)
       ? { attachments: value.attachments as ChatMessage['attachments'] }
       : {}),
+    ...(call ? { call } : {}),
   };
 }
 
@@ -132,7 +153,7 @@ export function applyChatMessage(
   const current = conversations[index];
   const updated: ChatConversation = {
     ...current,
-    lastMessage: message.content,
+    lastMessage: chatMessageCaption(message) || message.attachments?.[0]?.fileName,
     lastMessageAt: message.createdAt,
     lastMessageSenderId: message.senderId,
     unreadCount: incoming && !open ? current.unreadCount + 1 : open ? 0 : current.unreadCount,

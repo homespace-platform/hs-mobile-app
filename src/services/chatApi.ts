@@ -41,6 +41,14 @@ export type ChatMessage = {
   listing?: RelatedListing;
   createdAt: string;
   attachments?: ChatAttachment[];
+  call?: ChatCallHistory;
+};
+
+export type ChatCallHistory = {
+  callId: string;
+  callerId: string;
+  mode: 'audio' | 'video';
+  status: 'missed' | 'declined' | 'cancelled' | 'ended' | 'failed';
 };
 
 type MessagePage = { items: ChatMessage[]; nextBefore?: string };

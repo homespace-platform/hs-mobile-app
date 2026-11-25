@@ -21,6 +21,7 @@ import {
   type ManagementDestination,
   type ManagementRole,
 } from '@/lib/dashboard-navigation';
+import { rentalRouteForDestination, type RentalRoute } from '@/lib/rental-nav/routes';
 
 const ROLE_OPTIONS = [
   { id: 'landlord', label: 'Cho thuê', icon: 'business-outline' },
@@ -32,11 +33,13 @@ export default function ManagementDashboardScreen({
   onSelectRole,
   onSelectTab,
   onOpenAppointments,
+  onOpenRental,
 }: {
   role: ManagementRole;
   onSelectRole: (role: ManagementRole) => void;
   onSelectTab: (tab: MainTab) => void;
   onOpenAppointments: (section: 'tenant-appointments' | 'landlord-appointments') => void;
+  onOpenRental: (route: RentalRoute) => void;
 }) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -58,9 +61,11 @@ export default function ManagementDashboardScreen({
     };
   }, []);
 
-  // Only the appointment screens are built; the other entries stay on the title-only placeholder.
+  // Appointments and the rental flow have screens; the rest stay on the title-only placeholder.
   function openDestination(next: ManagementDestination) {
-    if (next === 'tenant-appointments' || next === 'landlord-appointments')
+    const rentalRoute = rentalRouteForDestination(next);
+    if (rentalRoute) onOpenRental(rentalRoute);
+    else if (next === 'tenant-appointments' || next === 'landlord-appointments')
       onOpenAppointments(next);
     else setDestination(next);
   }

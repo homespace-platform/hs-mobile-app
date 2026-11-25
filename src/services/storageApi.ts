@@ -1,6 +1,5 @@
 import axiosClient from '@/lib/axios-client';
 import type { ApiResponse, PageResponse } from '@/types/api';
-import type { ChatAttachment } from '@/services/chatApi';
 
 type UploadResponse = {
   storageId: string;
@@ -81,30 +80,6 @@ export async function uploadFile(
       {}
     )
   ).data.result;
-}
-
-export async function uploadChatAttachment(
-  uri: string,
-  fileName: string,
-  contentType: string,
-  sizeBytes: number,
-  conversationId: string
-): Promise<ChatAttachment> {
-  const result = await uploadFile(
-    { uri, fileName, contentType, sizeBytes },
-    {
-      purpose: 'CHAT_ATTACHMENT',
-      visibility: 'AUTHENTICATED',
-      referenceType: 'CHAT_CONVERSATION',
-      referenceId: conversationId,
-    }
-  );
-  return {
-    storageId: result.id,
-    fileName: result.originalName,
-    contentType: result.contentType,
-    sizeBytes: result.sizeBytes,
-  };
 }
 
 export type StorageObject = { id: string; originalName: string };

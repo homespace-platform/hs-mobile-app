@@ -11,7 +11,18 @@ const source = ts.transpileModule(
 ).outputText;
 const module_ = { exports: {} };
 vm.runInNewContext(source, { exports: module_.exports, Date, Map, Number, Array });
-const { dedupeConversationsByParticipant, shouldAttachPendingListing } = module_.exports;
+const { chatMessageCaption, dedupeConversationsByParticipant, shouldAttachPendingListing } = module_.exports;
+
+test('legacy attachment text is hidden while captions and standalone text stay visible', () => {
+  const file = { fileName: 'proof.pdf' };
+  const caption = (content, attachments) => chatMessageCaption({ content, attachments });
+  assert.equal(caption('Đã gửi proof.pdf', [file]), '');
+  assert.equal(caption('Đã gửi tệp đính kèm', [file]), '');
+  assert.equal(caption('Đã gửi 2 tệp đính kèm', [file, file]), '');
+  assert.equal(caption('', [file]), '');
+  assert.equal(caption('Đã gửi proof.pdf để bạn xem', [file]), 'Đã gửi proof.pdf để bạn xem');
+  assert.equal(caption('Đã gửi proof.pdf', []), 'Đã gửi proof.pdf');
+});
 
 const conv = (id, participantId, lastMessageAt, unreadCount = 0) => ({
   id,

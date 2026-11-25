@@ -41,3 +41,12 @@ export function shouldAttachPendingListing(
   const last = [...messages].reverse().find((message) => message.listing);
   return !(last && last.senderId === myId && last.listing?.id === pending.id);
 }
+export function chatMessageCaption({ content, attachments }: ChatMessage): string {
+  if (!attachments?.length) return content;
+  if (attachments.length === 1) {
+    return content === `Đã gửi ${attachments[0].fileName}` || content === 'Đã gửi tệp đính kèm'
+      ? ''
+      : content;
+  }
+  return content === `Đã gửi ${attachments.length} tệp đính kèm` ? '' : content;
+}

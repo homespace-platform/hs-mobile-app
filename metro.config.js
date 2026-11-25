@@ -4,6 +4,7 @@ process.env.EXPO_NO_METRO_LAZY ??= '1';
 const { getDefaultConfig } = require('expo/metro-config');
 const { withNativeWind } = require('nativewind/metro');
 const path = require('node:path');
+require('./scripts/build-chat-document-viewer.cjs')();
 
 const config = getDefaultConfig(__dirname);
 const emptyModule = path.join(__dirname, 'src/lib/empty-module.js');

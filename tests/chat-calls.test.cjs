@@ -23,7 +23,7 @@ const incoming = {
 };
 const callKey = ({ conversationId, callId }) => ({ conversationId, callId });
 
-function setup(options = {}) {
+function setup({ historyAcks = [], ...options } = {}) {
   const exports = {};
   const timers = new Map();
   let nextTimer = 0;
@@ -45,6 +45,11 @@ function setup(options = {}) {
       signals.push({ event, data: JSON.parse(JSON.stringify(data)), timeoutMs });
       if (event === 'chat:call:invite') {
         return new Promise((resolve) => (acknowledge = resolve));
+      }
+      if (event === 'chat:call:history-ready') {
+        return Promise.resolve(
+          historyAcks.shift() ? { ok: true, ack: { ok: true } } : { ok: false }
+        );
       }
       return Promise.resolve({ ok: true });
     },
@@ -132,12 +137,14 @@ test('incoming offer uses gateway IDs, ignores duplicates and rejects other call
   assert.equal(session().phase, 'active');
   assert.equal(session().call.mode, incoming.mode);
   assert.equal(timers.size, 0);
-  assert.equal(signals.length, 0);
+  assert.deepEqual(signals, [
+    { event: 'chat:call:accept', data: callKey(incoming), timeoutMs: undefined },
+  ]);
 
   calls.receive('chat:call:incoming', { ...outgoing, callerId: 'other-peer' });
   assert.equal(session().call.callId, incoming.callId);
-  assert.equal(signals[0].event, 'chat:call:end');
-  assert.deepEqual(signals[0].data, callKey(outgoing));
+  assert.equal(signals[1].event, 'chat:call:end');
+  assert.deepEqual(signals[1].data, callKey(outgoing));
 });
 
 test('unanswered incoming calls expire, and decline or remote end clears their timer', () => {
@@ -187,7 +194,10 @@ test('an Android permission prompt keeps the accepted call active', () => {
   calls.setForeground(true);
 
   assert.equal(session().phase, 'active');
-  assert.equal(signals.length, 0);
+  assert.deepEqual(
+    signals.map(({ event }) => event),
+    ['chat:call:accept']
+  );
 });
 
 test('sign-out ends the active room and a stale end callback cannot close a different call', () => {
@@ -197,14 +207,14 @@ test('sign-out ends the active room and a stale end callback cannot close a diff
   calls.setForeground(false);
   calls.end();
   assert.equal(session(), null);
-  assert.equal(signals[0].event, 'chat:call:end');
-  assert.deepEqual(signals[0].data, callKey(incoming));
+  assert.equal(signals[1].event, 'chat:call:end');
+  assert.deepEqual(signals[1].data, callKey(incoming));
 
   calls.setForeground(true);
   calls.receive('chat:call:incoming', { ...outgoing, callerId: 'other-peer' });
   calls.end(incoming);
   assert.equal(session().call.callId, outgoing.callId);
-  assert.equal(signals.length, 1);
+  assert.equal(signals.length, 2);
 });
 
 test('an unavailable authenticated socket never opens an outgoing room', async () => {
@@ -213,4 +223,43 @@ test('an unavailable authenticated socket never opens an outgoing room', async (
   assert.equal(session(), null);
   assert.equal(signals.length, 0);
   assert.equal(errors.length, 1);
+});
+
+test('call history negotiates each connection, adding invite version and supported end reasons', async () => {
+  const { calls, signals, session, ack } = setup({ historyAcks: [true, false] });
+  for (const history of [true, false]) {
+    const offset = signals.length;
+    calls.receive('connect');
+    const start = calls.start(outgoing.conversationId, outgoing.mode, 'Người nhận');
+    await new Promise(setImmediate);
+    assert.equal(signals[offset].event, 'chat:call:history-ready');
+    assert.deepEqual(signals[offset].data, {});
+    assert.equal(signals[offset + 1].data.historyVersion, history ? 1 : undefined);
+    ack({
+      ok: true,
+      ack: { ...outgoing, callerId: 'me', ...(history ? { historyVersion: 1 } : {}) },
+    });
+    await start;
+    assert.equal(session().phase, 'active');
+    calls.end(outgoing, 'failed');
+    assert.deepEqual(signals[offset + 2].data, {
+      ...callKey(outgoing),
+      ...(history ? { reason: 'failed' } : {}),
+    });
+  }
+});
+
+test('tracked ringing waits for server expiry, and manual decline sends the reason', () => {
+  const { calls, signals, session, timers } = setup();
+  const tracked = { ...incoming, historyVersion: 1 };
+  calls.receive('chat:call:incoming', tracked);
+  const timer = [...timers.values()][0];
+  assert.equal(timer.ms, 45_000);
+  timer.fn();
+  assert.equal(session(), null);
+  assert.equal(signals.length, 0);
+
+  calls.receive('chat:call:incoming', tracked);
+  calls.end(tracked, 'declined');
+  assert.deepEqual(signals[0].data, { ...callKey(incoming), reason: 'declined' });
 });

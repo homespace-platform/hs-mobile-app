@@ -23,6 +23,8 @@ import NotificationsScreen from '@/screens/NotificationsScreen';
 import SearchScreen from '@/screens/SearchScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
 import ListingCollectionScreen from '@/screens/ListingCollectionScreen';
+import RentalNavigator from '@/screens/rental/RentalNavigator';
+import type { RentalRoute } from '@/lib/rental-nav/routes';
 import type { ManagementRole } from '@/lib/dashboard-navigation';
 import type { ManagementSection } from '@/services/managementApi';
 import InitialPasswordGate from '@/components/InitialPasswordGate';
@@ -52,6 +54,8 @@ function SignedInApp() {
   // Appointment of a tapped notification; the appointments screen opens it and clears it on close.
   const [linkedAppointmentId, setLinkedAppointmentId] = useState<string | null>(null);
   const [managementOrigin, setManagementOrigin] = useState<'detail' | 'notifications' | null>(null);
+  // Back stack of the rental flow, shown inside the Quản lý tab while not empty.
+  const [rentalStack, setRentalStack] = useState<RentalRoute[]>([]);
   const [filters, setFilters] = useState<Record<string, string | number>>({});
   const [listingId, setListingId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -73,6 +77,7 @@ function SignedInApp() {
     setFilters({}); // a plain tab press opens "Tìm nhà" without Home's initial filters
     setScreen(tab);
     if (tab === 'management') {
+      setRentalStack([]);
       setManagementSection(null);
       setManagementOrigin(null);
       setLinkedAppointmentId(null);
@@ -93,6 +98,7 @@ function SignedInApp() {
     if (section) setManagementSection(section);
   };
   const openManagement = (section: ManagementSection, appointmentId?: string) => {
+    setRentalStack([]);
     setManagementSection(section);
     setLinkedAppointmentId(appointmentId ?? null);
     setManagementOrigin(screen === 'detail' || screen === 'notifications' ? screen : null);
@@ -179,12 +185,23 @@ function SignedInApp() {
   }
 
   if (screen === 'management') {
+    if (rentalStack.length) {
+      return (
+        <RentalNavigator
+          stack={rentalStack}
+          onStackChange={setRentalStack}
+          onOpenListing={(id) => openListing(id)}
+          onBrowseListings={() => selectTab('search')}
+        />
+      );
+    }
     if (!managementSection) {
       return (
         <ManagementDashboardScreen
           role={managementRole}
           onSelectRole={setManagementRole}
           onOpenAppointments={openManagement}
+          onOpenRental={(route) => setRentalStack([route])}
           onSelectTab={selectTab}
         />
       );

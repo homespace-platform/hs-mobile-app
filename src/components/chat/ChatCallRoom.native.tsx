@@ -41,7 +41,7 @@ export default function ChatCallRoom({ call, participantName, onEnd }: ChatCallR
     function end(message?: string) {
       if (closed) return;
       closed = true;
-      onEndRef.current();
+      onEndRef.current(message ? 'failed' : undefined);
       if (message) showDialog('Cuộc gọi HomeSpace', message);
     }
 
@@ -202,7 +202,7 @@ export default function ChatCallRoom({ call, participantName, onEnd }: ChatCallR
       : joined ? 'Đang chờ người bên kia…' : 'Đang kết nối…';
 
   return (
-    <Modal animationType="slide" onRequestClose={onEnd}>
+    <Modal animationType="slide" onRequestClose={() => onEnd()}>
       <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
         <ScreenHeader title={video ? 'Cuộc gọi video' : 'Cuộc gọi thoại'} onBack={onEnd} />
         <View className="flex-1 gap-4 p-5">
@@ -234,7 +234,7 @@ export default function ChatCallRoom({ call, participantName, onEnd }: ChatCallR
                 <Icon name={cameraOn ? 'videocam-outline' : 'videocam-off-outline'} size={22} className="text-foreground" />
               </Pressable>
             ) : null}
-            <Pressable accessibilityRole="button" onPress={onEnd} className="min-h-12 flex-row items-center gap-2 rounded-full bg-danger-soft px-4">
+            <Pressable accessibilityRole="button" onPress={() => onEnd()} className="min-h-12 flex-row items-center gap-2 rounded-full bg-danger-soft px-4">
               <Icon name="call-outline" size={18} className="text-danger" />
               <Text className="font-bold text-danger">Kết thúc</Text>
             </Pressable>

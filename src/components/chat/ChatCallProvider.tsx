@@ -6,7 +6,11 @@ import { useDialog } from '@/components/AppDialog';
 import Icon from '@/components/Icon';
 import { Button } from '@/components/Screen';
 import ChatCallRoom from '@/components/chat/ChatCallRoom';
-import { createChatCalls, type ChatCallSession } from '@/lib/realtime/chat-calls';
+import {
+  createChatCalls,
+  type CallEndReason,
+  type ChatCallSession,
+} from '@/lib/realtime/chat-calls';
 import {
   emitChatWithAck,
   isChatSocketConnected,
@@ -59,12 +63,15 @@ export function ChatCallProvider({ children }: { children: ReactNode }) {
 
   const incoming = session?.phase === 'ringing' ? session : null;
   const activeCall = session?.phase === 'active' ? session.call : null;
-  const endActiveCall = useCallback(() => {
-    if (activeCall) calls.end(activeCall);
-  }, [activeCall, calls]);
+  const endActiveCall = useCallback(
+    (reason?: CallEndReason) => {
+      if (activeCall) calls.end(activeCall, reason);
+    },
+    [activeCall, calls]
+  );
 
   function declineIncoming() {
-    if (incoming) calls.end(incoming.call);
+    if (incoming) calls.end(incoming.call, 'declined');
   }
 
   function acceptIncoming() {

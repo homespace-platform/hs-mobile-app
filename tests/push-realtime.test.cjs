@@ -28,6 +28,7 @@ const push = load('lib/push/pure.ts');
 const { createUnreadStore, unreadReducer } = load('lib/unread-store.ts');
 const realtime = load('lib/realtime/pure.ts', {
   '@/lib/notification': load('lib/notification.ts'),
+  '@/lib/chat-threads': load('lib/chat-threads.ts'),
 });
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
@@ -229,4 +230,19 @@ test('chat:message updates list, unread count and open thread', () => {
     true
   );
   assert.equal(realtime.toChatMessage({ id: 1 }), null);
+});
+
+test('chat preserves history cards and uses the file name as a captionless preview', () => {
+  const base = { id: 'm', conversationId: 'a', senderId: 'peer', content: '', createdAt: 'T' };
+  const call = { callId: 'c', callerId: 'peer', mode: 'audio', status: 'missed' };
+  assert.deepEqual(plain(realtime.toChatMessage({ ...base, call }).call), call);
+  assert.equal(
+    realtime.toChatMessage({ ...base, call: { ...call, mode: 'voice' } }).call,
+    undefined
+  );
+  const attachment = realtime.toChatMessage({ ...base, attachments: [{ fileName: 'ảnh.png' }] });
+  const result = realtime.applyChatMessage([{ id: 'a', unreadCount: 0 }], attachment, {
+    myId: 'me',
+  });
+  assert.equal(result.conversations[0].lastMessage, 'ảnh.png');
 });

@@ -1,19 +1,10 @@
 import { useRef, useState } from 'react';
 import Ionicons from '@/components/Icon';
-import {
-  ActivityIndicator,
-  Image,
-  Linking,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import Avatar from '@/components/Avatar';
-import { useDialog } from '@/components/AppDialog';
+import ChatImageViewer, { ChatImageThumbnail } from '@/components/chat/ChatImageViewer';
 import {
   listMessages,
   updateParticipantRole,
@@ -21,8 +12,8 @@ import {
   type ChatMessage,
 } from '@/services/chatApi';
 import PresenceLabel from '@/components/PresenceLabel';
+import { chatMessageCaption } from '@/lib/chat-threads';
 import { useChatPresence } from '@/lib/use-chat-presence';
-import { getStorageViewUrl } from '@/services/storageApi';
 
 const ROLE_OPTIONS = [
   { value: 'TENANT' as const, label: 'Người hỏi thuê', icon: 'person-outline' as const },
@@ -49,12 +40,11 @@ export default function ConversationDetailScreen({
   const [keyword, setKeyword] = useState('');
   const [submittedKeyword, setSubmittedKeyword] = useState('');
   const [history, setHistory] = useState<ChatMessage[]>([]);
-  const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [nextBefore, setNextBefore] = useState<string>();
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const requestId = useRef(0);
-  const showDialog = useDialog();
   const presence = useChatPresence([conversation.participantId])[conversation.participantId];
 
   async function loadHistory(mode: 'search' | 'images', search?: string, before?: string) {
@@ -64,7 +54,6 @@ export default function ConversationDetailScreen({
     if (!before) {
       setHistory([]);
       setNextBefore(undefined);
-      setImageUrls({});
     }
     try {
       const page = await listMessages(conversation.id, {
@@ -75,26 +64,6 @@ export default function ConversationDetailScreen({
       if (currentRequest !== requestId.current) return;
       setHistory((current) => [...(before ? current : []), ...page.items.slice().reverse()]);
       setNextBefore(page.nextBefore);
-      if (mode === 'images') {
-        const images = page.items.flatMap((message) =>
-          (message.attachments ?? []).filter((attachment) =>
-            attachment.contentType.startsWith('image/')
-          )
-        );
-        const urls = await Promise.allSettled(
-          images.map((image) => getStorageViewUrl(image.storageId))
-        );
-        if (currentRequest === requestId.current) {
-          setImageUrls((current) => ({
-            ...current,
-            ...Object.fromEntries(
-              urls.flatMap((result, index) =>
-                result.status === 'fulfilled' ? [[images[index].storageId, result.value]] : []
-              )
-            ),
-          }));
-        }
-      }
     } catch (loadError) {
       if (currentRequest === requestId.current) {
         setHistoryError(loadError instanceof Error ? loadError.message : 'Không tải được lịch sử');
@@ -119,14 +88,6 @@ export default function ConversationDetailScreen({
     if (!query) return;
     setSubmittedKeyword(query);
     void loadHistory('search', query);
-  }
-
-  async function openImage(storageId: string) {
-    try {
-      await Linking.openURL(await getStorageViewUrl(storageId));
-    } catch {
-      showDialog('Không mở được ảnh', 'Vui lòng thử lại.');
-    }
   }
 
   async function handleRoleChange(nextRole: 'TENANT' | 'LANDLORD') {
@@ -188,18 +149,14 @@ export default function ConversationDetailScreen({
         <ScrollView className="flex-1" contentContainerClassName="px-4 py-5">
           {historyMode === 'images' ? (
             <View className="flex-row flex-wrap gap-2">
-              {images.map((image) => (
-                <Pressable
+              {images.map((image, index) => (
+                <ChatImageThumbnail
                   key={`${image.messageId}-${image.storageId}`}
-                  onPress={() => void openImage(image.storageId)}
-                  className="aspect-square w-[31%] items-center justify-center overflow-hidden rounded-xl bg-muted"
-                  accessibilityLabel={`Mở ảnh ${image.fileName}`}>
-                  {imageUrls[image.storageId] ? (
-                    <Image source={{ uri: imageUrls[image.storageId] }} className="h-full w-full" />
-                  ) : (
-                    <Ionicons name="image-outline" size={30} className="text-subtle" />
-                  )}
-                </Pressable>
+                  conversationId={conversation.id}
+                  image={image}
+                  onPress={() => setViewerIndex(index)}
+                  className="aspect-square w-[31%]"
+                />
               ))}
             </View>
           ) : (
@@ -214,7 +171,9 @@ export default function ConversationDetailScreen({
                   {' · '}
                   {new Date(message.createdAt).toLocaleString('vi-VN')}
                 </Text>
-                <Text className="mt-2 text-sm leading-5 text-foreground">{message.content}</Text>
+                <Text className="mt-2 text-sm leading-5 text-foreground">
+                  {chatMessageCaption(message) || message.attachments?.[0]?.fileName}
+                </Text>
               </View>
             ))
           )}
@@ -248,6 +207,14 @@ export default function ConversationDetailScreen({
             </Pressable>
           ) : null}
         </ScrollView>
+        {viewerIndex !== null ? (
+          <ChatImageViewer
+            conversationId={conversation.id}
+            images={images}
+            initialIndex={viewerIndex}
+            onClose={() => setViewerIndex(null)}
+          />
+        ) : null}
       </SafeAreaView>
     );
   }

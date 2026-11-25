@@ -5,7 +5,11 @@ import { gatewayBaseUrl, realtimeOrigin } from '@/config/env';
 import { chatPresenceStore, type ChatPresenceUpdate } from '@/lib/chat-presence';
 import { createPresenceSync } from '@/lib/realtime/presence-sync';
 import { gatewaySocketTarget, normalizeOrigin } from '@/lib/realtime/pure';
-import { createManagedSocket, type SocketListener } from '@/lib/realtime/socket-manager';
+import {
+  createManagedSocket,
+  type EmitResult,
+  type SocketListener,
+} from '@/lib/realtime/socket-manager';
 import { notificationUnreadStore } from '@/lib/unread-store';
 import {
   refreshChatUnread,
@@ -42,7 +46,11 @@ const chatSocket = chatTarget
     })
   : null;
 
-export function emitChatWithAck(event: string, payload: unknown, timeoutMs?: number) {
+export function emitChatWithAck(
+  event: string,
+  payload: unknown,
+  timeoutMs?: number
+): Promise<EmitResult> {
   return chatSocket?.emitWithAck(event, payload, timeoutMs) ?? Promise.resolve({ ok: false });
 }
 

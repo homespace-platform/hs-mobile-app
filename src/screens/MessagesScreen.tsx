@@ -6,8 +6,8 @@ import {
   ActivityIndicator,
   AppState,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
-  Linking,
   Platform,
   Pressable,
   RefreshControl,
@@ -22,6 +22,8 @@ import Avatar from '@/components/Avatar';
 import TabHeader from '@/components/TabHeader';
 import ProfileCompletionBanner from '@/components/ProfileCompletionBanner';
 import { useDialog } from '@/components/AppDialog';
+import ChatDocument from '@/components/chat/ChatDocument';
+import ChatImageViewer, { ChatImageThumbnail } from '@/components/chat/ChatImageViewer';
 import { useChatCalls } from '@/components/chat/ChatCallProvider';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import {
@@ -29,18 +31,34 @@ import {
   listMessages,
   markConversationRead,
   sendMessage,
+  type ChatAttachment,
+  type ChatCallHistory,
   type ChatConversation,
   type ChatMessage,
   type RelatedListing,
 } from '@/services/chatApi';
-import { dedupeConversationsByParticipant, shouldAttachPendingListing } from '@/lib/chat-threads';
-import { applyChatMessage, toChatMessage } from '@/lib/realtime/pure';
+import {
+  chatMessageCaption,
+  dedupeConversationsByParticipant,
+  shouldAttachPendingListing,
+} from '@/lib/chat-threads';
+import { applyChatMessage, readChatCallHistory, toChatMessage } from '@/lib/realtime/pure';
 import PresenceLabel from '@/components/PresenceLabel';
 import { useChatPresence } from '@/lib/use-chat-presence';
-import { isChatSocketConnected, subscribeChatEvents } from '@/lib/realtime/connections';
+import {
+  emitChatWithAck,
+  isChatSocketConnected,
+  subscribeChatEvents,
+} from '@/lib/realtime/connections';
 import { chatUnreadStore } from '@/lib/unread-store';
 import { listingImage } from '@/services/listingApi';
-import { getStorageViewUrl, uploadChatAttachment } from '@/services/storageApi';
+import {
+  CHAT_DOCUMENT_TYPES,
+  chatAttachmentIcon,
+  prepareChatAttachment,
+  uploadChatAttachment,
+} from '@/services/chatMediaApi';
+import type { LocalFile } from '@/services/storageApi';
 import { getUserProfileApi } from '@/services/userApi';
 import type { UserProfileResponse } from '@/types/api';
 
@@ -70,57 +88,22 @@ function formatTime(value?: string) {
   return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
 }
 
-type PendingAttachment = {
-  uri: string;
-  fileName: string;
-  contentType: string;
-  sizeBytes: number;
+const MAX_ATTACHMENTS = 5;
+const CALL_STATUS: Record<ChatCallHistory['status'], string> = {
+  missed: 'Cuộc gọi nhỡ',
+  declined: 'Đã từ chối',
+  cancelled: 'Đã hủy',
+  ended: 'Đã kết thúc',
+  failed: 'Không kết nối được',
 };
 
-function MessageAttachment({
-  storageId,
-  fileName,
-  contentType,
-  mine,
-}: {
-  storageId: string;
-  fileName: string;
-  contentType: string;
-  mine: boolean;
-}) {
-  const showDialog = useDialog();
-  const [opening, setOpening] = useState(false);
+type ComposerDraft = {
+  text: string;
+  attachments: (LocalFile & { uploaded?: ChatAttachment })[];
+  error?: string;
+};
 
-  async function open() {
-    if (opening) return;
-    setOpening(true);
-    try {
-      await Linking.openURL(await getStorageViewUrl(storageId));
-    } catch {
-      showDialog('Không mở được tệp', 'Vui lòng thử lại.');
-    } finally {
-      setOpening(false);
-    }
-  }
-
-  return (
-    <Pressable
-      disabled={opening}
-      onPress={() => void open()}
-      className={`mb-2 flex-row items-center rounded-xl px-2 py-1 ${mine ? 'bg-on-brand/15' : 'bg-primary-soft'}`}>
-      <Ionicons
-        name={contentType.startsWith('image/') ? 'image' : 'document'}
-        size={18}
-        className={mine ? 'text-on-brand' : 'text-primary'}
-      />
-      <Text
-        className={`ml-2 max-w-[180px] text-xs ${mine ? 'text-on-brand' : 'text-secondary'}`}
-        numberOfLines={1}>
-        {fileName}
-      </Text>
-    </Pressable>
-  );
-}
+const EMPTY_DRAFT: ComposerDraft = { text: '', attachments: [] };
 
 function ListingCard({ listing, mine }: { listing: RelatedListing; mine: boolean }) {
   return (
@@ -160,14 +143,16 @@ export default function MessagesScreen({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [search, setSearch] = useState('');
-  const [draft, setDraft] = useState('');
+  const [drafts, setDrafts] = useState<Record<string, ComposerDraft>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
+  const pickingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [messageError, setMessageError] = useState<string | null>(null);
-  const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
+  const [viewer, setViewer] = useState<{ images: ChatAttachment[]; index: number } | null>(null);
   const initialOpenedId = useRef<string | null>(null);
   const initialIdRef = useRef(initialConversationId);
   initialIdRef.current = initialConversationId;
@@ -219,7 +204,6 @@ export default function MessagesScreen({
 
   // Silent reload (no spinner) used by chat pushes, socket reconnects and the polling fallback.
   const selectedIdRef = useRef(selectedId);
-  selectedIdRef.current = selectedId;
   const quietRefresh = useCallback(async () => {
     lastLoadAt.current = Date.now();
     try {
@@ -235,6 +219,7 @@ export default function MessagesScreen({
       );
       if (openId) {
         const page = await listMessages(openId);
+        if (selectedIdRef.current !== openId) return;
         setMessages(page.items ?? []);
         await markConversationRead(openId).catch(() => undefined);
       }
@@ -288,25 +273,34 @@ export default function MessagesScreen({
   );
 
   const selected = conversations.find((conversation) => conversation.id === selectedId) ?? null;
+  const draft = (selected && drafts[selected.id]) || EMPTY_DRAFT;
+  const canSend = Boolean(draft.text.trim() || draft.attachments.length) && !sending;
+
+  function updateDraft(id: string, update: (draft: ComposerDraft) => ComposerDraft) {
+    setDrafts((current) => ({ ...current, [id]: update(current[id] ?? EMPTY_DRAFT) }));
+  }
 
   const openConversation = useCallback(async (conversation: ChatConversation) => {
+    selectedIdRef.current = conversation.id;
     setSelectedId(conversation.id);
     setMessages([]);
     setMessageError(null);
     setMessagesLoading(true);
     try {
       const page = await listMessages(conversation.id);
+      if (selectedIdRef.current !== conversation.id) return;
       setMessages(page.items ?? []);
       await markConversationRead(conversation.id).catch(() => undefined);
       setConversations((current) =>
         current.map((item) => (item.id === conversation.id ? { ...item, unreadCount: 0 } : item))
       );
     } catch (loadError) {
-      setMessageError(
-        loadError instanceof Error ? loadError.message : 'Không tải được nội dung cuộc trò chuyện'
-      );
+      if (selectedIdRef.current === conversation.id)
+        setMessageError(
+          loadError instanceof Error ? loadError.message : 'Không tải được nội dung cuộc trò chuyện'
+        );
     } finally {
-      setMessagesLoading(false);
+      if (selectedIdRef.current === conversation.id) setMessagesLoading(false);
     }
   }, []);
 
@@ -333,103 +327,190 @@ export default function MessagesScreen({
       : null;
 
   async function handleSend() {
-    const content = draft.trim();
-    if ((!content && !pendingAttachment) || !selected || sending) return;
+    if (!selected || !canSend || sendingRef.current || pickingRef.current) return;
+    const conversationId = selected.id;
+    const content = draft.text.trim();
+    sendingRef.current = true;
     setSending(true);
-    setMessageError(null);
+    updateDraft(conversationId, (current) => ({ ...current, error: undefined }));
     try {
       const name = profile
         ? [profile.lastName, profile.firstName].filter(Boolean).join(' ') || profile.username
         : undefined;
       const listing = activeListing ?? undefined;
-      const attachment = pendingAttachment
-        ? await uploadChatAttachment(
-            pendingAttachment.uri,
-            pendingAttachment.fileName,
-            pendingAttachment.contentType,
-            pendingAttachment.sizeBytes,
-            selected.id
-          )
-        : undefined;
-      const message = await sendMessage(
-        selected.id,
-        content || `Đã gửi ${pendingAttachment?.fileName ?? 'tệp đính kèm'}`,
-        listing,
-        {
-          displayName: name,
-          email: profile?.email,
-          avatarUrl: profile?.avatarUrl ?? undefined,
-        },
-        attachment ? [attachment] : undefined
-      );
+      const senderProfile = {
+        displayName: name,
+        email: profile?.email,
+        avatarUrl: profile?.avatarUrl ?? undefined,
+      };
+      const attachments: ChatAttachment[] = [];
+      for (const file of draft.attachments) {
+        const uploaded = file.uploaded ?? (await uploadChatAttachment(conversationId, file));
+        attachments.push(uploaded);
+        if (!file.uploaded) {
+          updateDraft(conversationId, (current) => ({
+            ...current,
+            attachments: current.attachments.map((item) =>
+              item.uri === file.uri ? { ...item, uploaded } : item
+            ),
+          }));
+        }
+      }
+
+      let message: ChatMessage | null;
+      if (isChatSocketConnected()) {
+        const { ok, ack } = await emitChatWithAck(
+          'chat:send',
+          {
+            conversationId,
+            content,
+            senderProfile,
+            ...(listing ? { listing } : {}),
+            ...(attachments.length ? { attachments } : {}),
+          },
+          15_000
+        );
+        message = ok ? toChatMessage(ack) : null;
+      } else {
+        message = await sendMessage(conversationId, content, listing, senderProfile, attachments);
+      }
+      if (!message || message.conversationId !== conversationId)
+        throw new Error('Chưa xác nhận được tin nhắn. Vui lòng thử lại.');
       if (listing) onPendingListingConsumed?.();
       // The chat socket may deliver the same message first.
-      setMessages((current) =>
-        current.some((item) => item.id === message.id) ? current : [...current, message]
-      );
+      const confirmed = message;
+      if (selectedIdRef.current === conversationId) {
+        setMessages((current) =>
+          current.some((item) => item.id === confirmed.id) ? current : [...current, confirmed]
+        );
+      }
       setConversations((current) =>
         current.map((conversation) =>
-          conversation.id === selected.id
+          conversation.id === conversationId &&
+          (!conversation.lastMessageAt || conversation.lastMessageAt <= confirmed.createdAt)
             ? {
                 ...conversation,
-                lastMessage: message.content,
-                lastMessageAt: message.createdAt,
-                lastMessageSenderId: message.senderId,
+                lastMessage: chatMessageCaption(confirmed) || confirmed.attachments?.[0]?.fileName,
+                lastMessageAt: confirmed.createdAt,
+                lastMessageSenderId: confirmed.senderId,
               }
             : conversation
         )
       );
-      setDraft('');
-      setPendingAttachment(null);
+      updateDraft(conversationId, () => EMPTY_DRAFT);
     } catch (sendError) {
-      setMessageError(sendError instanceof Error ? sendError.message : 'Không gửi được tin nhắn');
+      updateDraft(conversationId, (current) => ({
+        ...current,
+        error: sendError instanceof Error ? sendError.message : 'Không gửi được tin nhắn',
+      }));
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   }
 
   function chooseAttachment() {
+    if (
+      !selected ||
+      sendingRef.current ||
+      pickingRef.current ||
+      draft.attachments.length >= MAX_ATTACHMENTS
+    )
+      return;
+    const conversationId = selected.id;
+    const available = MAX_ATTACHMENTS - draft.attachments.length;
     showDialog('Đính kèm tin nhắn', 'Chọn loại tệp muốn gửi', [
-      { text: 'Ảnh', onPress: () => void pickImage() },
-      { text: 'Tệp', onPress: () => void pickDocument() },
+      { text: 'Ảnh', onPress: () => void pickAttachments('images', conversationId, available) },
+      { text: 'Tệp', onPress: () => void pickAttachments('documents', conversationId, available) },
       { text: 'Hủy', style: 'cancel' },
     ]);
   }
 
-  async function pickImage() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setMessageError('Cần cấp quyền thư viện ảnh để gửi ảnh');
+  async function pickAttachments(
+    kind: 'images' | 'documents',
+    conversationId: string,
+    available: number
+  ) {
+    if (pickingRef.current || sendingRef.current || selectedIdRef.current !== conversationId)
       return;
+    pickingRef.current = true;
+    try {
+      let files: (Omit<LocalFile, 'sizeBytes'> & { sizeBytes?: number })[];
+      if (kind === 'images') {
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsMultipleSelection: available > 1,
+          selectionLimit: available,
+          preferredAssetRepresentationMode:
+            ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+          // Android's lossy export can re-encode WebP as JPEG while reporting the original MIME type.
+          quality: Platform.OS === 'android' ? 1 : 0.85,
+        });
+        if (result.canceled) return;
+        files = result.assets.map((asset, index) => ({
+          uri: asset.uri,
+          fileName:
+            asset.fileName ||
+            `image-${Date.now()}-${index}.${asset.mimeType?.split('/')[1] || 'jpg'}`,
+          contentType: asset.mimeType ?? '',
+          sizeBytes: asset.fileSize,
+        }));
+      } else {
+        const result = await DocumentPicker.getDocumentAsync({
+          copyToCacheDirectory: true,
+          multiple: available > 1,
+          type: CHAT_DOCUMENT_TYPES,
+        });
+        if (result.canceled) return;
+        files = result.assets.map((asset) => ({
+          uri: asset.uri,
+          fileName: asset.name,
+          contentType: asset.mimeType ?? '',
+          sizeBytes: asset.size,
+        }));
+      }
+      const results = await Promise.allSettled(
+        files.slice(0, available).map(prepareChatAttachment)
+      );
+      const rejected = results.find((result) => result.status === 'rejected');
+      const picked = results.flatMap((result) =>
+        result.status === 'fulfilled' ? [result.value] : []
+      );
+      updateDraft(conversationId, (current) => ({
+        ...current,
+        attachments: [...current.attachments, ...picked]
+          .filter((file, index, all) => all.findIndex((item) => item.uri === file.uri) === index)
+          .slice(0, MAX_ATTACHMENTS),
+        error:
+          rejected?.reason instanceof Error
+            ? rejected.reason.message
+            : files.length > available
+              ? 'Chỉ có thể gửi tối đa 5 tệp mỗi tin nhắn.'
+              : undefined,
+      }));
+    } catch {
+      updateDraft(conversationId, (current) => ({
+        ...current,
+        error: 'Không chọn được tệp. Vui lòng thử lại.',
+      }));
+    } finally {
+      pickingRef.current = false;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.85,
-    });
-    if (result.canceled || !result.assets[0]) return;
-    const asset = result.assets[0];
-    setPendingAttachment({
-      uri: asset.uri,
-      fileName: asset.fileName || `image-${Date.now()}.jpg`,
-      contentType: asset.mimeType || 'image/jpeg',
-      sizeBytes: asset.fileSize || 1,
-    });
   }
 
-  async function pickDocument() {
-    const result = await DocumentPicker.getDocumentAsync({
-      copyToCacheDirectory: true,
-      multiple: false,
-      type: '*/*',
-    });
-    if (result.canceled || !result.assets[0]) return;
-    const asset = result.assets[0];
-    setPendingAttachment({
-      uri: asset.uri,
-      fileName: asset.name,
-      contentType: asset.mimeType || 'application/octet-stream',
-      sizeBytes: asset.size || 1,
-    });
+  function openImage(messageId: string, storageId: string) {
+    const images = messages.flatMap((message) =>
+      (message.attachments ?? [])
+        .filter((file) => file.contentType.startsWith('image/'))
+        .map((file) => ({ ...file, messageId: message.id }))
+    );
+    const index = images.findIndex(
+      (file) => file.messageId === messageId && file.storageId === storageId
+    );
+    if (index >= 0) {
+      Keyboard.dismiss();
+      setViewer({ images, index });
+    }
   }
 
   if (selected) {
@@ -440,7 +521,15 @@ export default function MessagesScreen({
           behavior="padding"
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}>
           <View className="flex-row items-center border-b border-border bg-surface px-4 py-3">
-            <Pressable onPress={() => setSelectedId(null)} className="mr-3 px-1 py-2">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Quay lại danh sách tin nhắn"
+              onPress={() => {
+                selectedIdRef.current = null;
+                setSelectedId(null);
+                setViewer(null);
+              }}
+              className="mr-3 px-1 py-2">
               <Ionicons name="chevron-back" size={26} className="text-foreground" />
             </Pressable>
             <Avatar
@@ -472,7 +561,9 @@ export default function MessagesScreen({
                         accessibilityLabel={label}
                         accessibilityState={{ disabled: Boolean(session), busy }}
                         disabled={Boolean(session)}
-                        onPress={() => void startCall(selected.id, mode, conversationName(selected))}
+                        onPress={() =>
+                          void startCall(selected.id, mode, conversationName(selected))
+                        }
                         className={`h-11 w-11 items-center justify-center rounded-full ${session ? 'bg-disabled' : 'bg-primary-soft'}`}>
                         {busy ? (
                           <ActivityIndicator className="text-on-disabled" />
@@ -521,26 +612,65 @@ export default function MessagesScreen({
             ) : messages.length ? (
               messages.map((message) => {
                 const mine = message.senderId === profile?.id;
+                const caption = chatMessageCaption(message);
+                const call = readChatCallHistory(message.call);
+                const callback = call?.mode === 'video' ? CALL_OPTIONS[1] : CALL_OPTIONS[0];
                 return (
                   <View
                     key={message.id}
                     className={`mb-3 max-w-[82%] ${mine ? 'items-end self-end' : 'items-start self-start'}`}>
-                    <View
-                      className={`rounded-2xl px-4 py-3 ${mine ? 'rounded-br-sm bg-brand' : 'rounded-bl-sm border border-border bg-surface'}`}>
-                      {message.attachments?.map((attachment) => (
-                        <MessageAttachment
-                          key={attachment.storageId}
-                          storageId={attachment.storageId}
-                          fileName={attachment.fileName}
-                          contentType={attachment.contentType}
-                          mine={mine}
-                        />
-                      ))}
-                      <Text
-                        className={`text-sm leading-5 ${mine ? 'text-on-brand' : 'text-foreground'}`}>
-                        {message.content}
-                      </Text>
-                    </View>
+                    {call ? (
+                      <View className="flex-row items-center gap-3 rounded-2xl border border-border bg-surface p-3">
+                        <Ionicons name={callback.icon} size={23} className="text-primary" />
+                        <View className="shrink">
+                          <Text className="font-semibold text-foreground">
+                            {CALL_STATUS[call.status]}
+                          </Text>
+                          <Text className="text-xs text-muted-foreground">
+                            {callback.label} ·{' '}
+                            {call.callerId === myId ? 'Cuộc gọi đi' : 'Cuộc gọi đến'}
+                          </Text>
+                        </View>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Gọi lại · ${callback.label}`}
+                          disabled={Boolean(session)}
+                          onPress={() =>
+                            void startCall(selected.id, callback.mode, conversationName(selected))
+                          }
+                          className="min-h-12 justify-center rounded-xl bg-primary-soft px-3 active:opacity-70 disabled:opacity-50">
+                          <Text className="text-xs font-semibold text-primary">Gọi lại</Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <View
+                        className={`gap-2 rounded-2xl px-4 py-3 ${mine ? 'rounded-br-sm bg-brand' : 'rounded-bl-sm border border-border bg-surface'}`}>
+                        {message.attachments?.map((attachment) =>
+                          attachment.contentType.startsWith('image/') ? (
+                            <ChatImageThumbnail
+                              key={attachment.storageId}
+                              conversationId={message.conversationId}
+                              image={attachment}
+                              onPress={() => openImage(message.id, attachment.storageId)}
+                              className="h-40 w-56 max-w-full"
+                            />
+                          ) : (
+                            <ChatDocument
+                              key={attachment.storageId}
+                              conversationId={message.conversationId}
+                              document={attachment}
+                              mine={mine}
+                            />
+                          )
+                        )}
+                        {caption ? (
+                          <Text
+                            className={`text-sm leading-5 ${mine ? 'text-on-brand' : 'text-foreground'}`}>
+                            {caption}
+                          </Text>
+                        ) : null}
+                      </View>
+                    )}
                     {message.listing ? <ListingCard listing={message.listing} mine={mine} /> : null}
                     <Text className="mt-1 px-1 text-[10px] text-subtle">
                       {formatTime(message.createdAt)}
@@ -578,53 +708,113 @@ export default function MessagesScreen({
             </View>
           ) : null}
 
-          {pendingAttachment ? (
-            <View className="flex-row items-center border-t border-border bg-surface px-4 pb-2 pt-2">
-              <Ionicons name="attach" size={16} className="text-primary" />
-              <Text className="ml-2 flex-1 text-xs text-secondary" numberOfLines={1}>
-                {pendingAttachment.fileName}
+          {draft.attachments.length ? (
+            <View className="border-t border-border bg-surface">
+              <Text className="px-4 pt-2 text-xs text-muted-foreground">
+                {draft.attachments.length}/{MAX_ATTACHMENTS} tệp đính kèm
               </Text>
-              <Pressable onPress={() => setPendingAttachment(null)}>
-                <Ionicons name="close-circle" size={19} className="text-subtle" />
-              </Pressable>
+              <ScrollView
+                horizontal
+                keyboardShouldPersistTaps="handled"
+                contentContainerClassName="gap-2 px-4 py-2">
+                {draft.attachments.map((file) => (
+                  <View
+                    key={file.uri}
+                    className="flex-row items-center gap-2 rounded-xl bg-muted pl-2">
+                    {file.contentType.startsWith('image/') ? (
+                      <Image
+                        source={{ uri: file.uri }}
+                        className="h-10 w-10 rounded-lg bg-surface"
+                      />
+                    ) : (
+                      <Ionicons
+                        name={chatAttachmentIcon(file)}
+                        size={23}
+                        className="text-primary"
+                      />
+                    )}
+                    <Text className="max-w-[120px] text-xs text-foreground" numberOfLines={1}>
+                      {file.fileName}
+                    </Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Bỏ tệp ${file.fileName}`}
+                      disabled={sending}
+                      onPress={() =>
+                        updateDraft(selected.id, (current) => ({
+                          ...current,
+                          error: undefined,
+                          attachments: current.attachments.filter((item) => item.uri !== file.uri),
+                        }))
+                      }
+                      className="h-12 w-12 items-center justify-center disabled:opacity-40">
+                      <Ionicons
+                        name="close-circle-outline"
+                        size={20}
+                        className="text-muted-foreground"
+                      />
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
             </View>
+          ) : null}
+
+          {draft.error ? (
+            <Text
+              accessibilityLiveRegion="polite"
+              className="bg-danger-soft px-4 py-2 text-center text-xs text-danger">
+              {draft.error}
+            </Text>
           ) : null}
 
           <View className="flex-row items-end gap-2 border-t border-border bg-surface px-4 py-3">
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Đính kèm tệp"
+              disabled={sending || draft.attachments.length >= MAX_ATTACHMENTS}
               onPress={chooseAttachment}
-              className="h-11 w-11 items-center justify-center rounded-full bg-muted">
+              className="h-12 w-12 items-center justify-center rounded-full bg-muted disabled:opacity-50">
               <Ionicons name="add" size={24} className="text-muted-foreground" />
             </Pressable>
             <TextInput
-              value={draft}
-              onChangeText={setDraft}
+              value={draft.text}
+              onChangeText={(text) => updateDraft(selected.id, (current) => ({ ...current, text }))}
               onSubmitEditing={handleSend}
-              placeholder="Nhập tin nhắn..."
+              placeholder={
+                draft.attachments.length ? 'Thêm chú thích (không bắt buộc)' : 'Nhập tin nhắn...'
+              }
               multiline
               editable={!sending}
+              maxLength={5000}
               className="max-h-28 flex-1 rounded-2xl bg-muted px-4 py-3 text-sm text-foreground selection:text-primary placeholder:text-subtle"
             />
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Gửi tin nhắn"
               onPress={handleSend}
-              disabled={(!draft.trim() && !pendingAttachment) || sending}
-              className={`h-11 w-11 items-center justify-center rounded-full ${(draft.trim() || pendingAttachment) && !sending ? 'bg-brand' : 'bg-disabled'}`}>
+              disabled={!canSend}
+              className={`h-12 w-12 items-center justify-center rounded-full ${canSend ? 'bg-brand' : 'bg-disabled'}`}>
               {sending ? (
                 <ActivityIndicator size="small" className="text-on-disabled" />
               ) : (
                 <Ionicons
                   name="send"
                   size={19}
-                  className={
-                    (draft.trim() || pendingAttachment) && !sending
-                      ? 'text-on-brand'
-                      : 'text-on-disabled'
-                  }
+                  className={canSend ? 'text-on-brand' : 'text-on-disabled'}
                 />
               )}
             </Pressable>
           </View>
         </KeyboardAvoidingView>
+        {viewer ? (
+          <ChatImageViewer
+            conversationId={selected.id}
+            images={viewer.images}
+            initialIndex={viewer.index}
+            onClose={() => setViewer(null)}
+          />
+        ) : null}
       </SafeAreaView>
     );
   }
