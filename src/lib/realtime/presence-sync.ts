@@ -29,12 +29,6 @@ export function createPresenceSync(deps: {
         .emitWithAck('chat:presence:subscribe', { userIds }, PRESENCE_ACK_TIMEOUT_MS)
         .then((result) => {
           const presences = (result.ack as { presences?: unknown } | undefined)?.presences;
-          if (__DEV__)
-            console.warn(
-              `[presence] subscribe ${userIds.length} ids -> ok=${result.ok} presences=${
-                Array.isArray(presences) ? JSON.stringify(presences) : 'none'
-              }`
-            );
           if (run === epoch && result.ok && Array.isArray(presences)) deps.apply(presences);
         })
         .catch(() => undefined);

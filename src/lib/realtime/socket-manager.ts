@@ -55,7 +55,6 @@ export function createManagedSocket(options: {
     });
     socket = next;
     next.on('connect', () => {
-      if (__DEV__) console.warn(`[realtime] ${options.path} connected`);
       attempt = 0;
       connected = true;
       emit('connect');
@@ -67,12 +66,7 @@ export function createManagedSocket(options: {
       if (__DEV__)
         console.warn(
           `[realtime] ${options.path} lost:`,
-          String((reason as Error)?.message ?? reason ?? ''),
-          // Engine.IO puts the transport's own error (e.g. the HTTP status of a refused upgrade) here.
-          JSON.stringify(
-            (reason as { description?: unknown })?.description,
-            Object.getOwnPropertyNames((reason as { description?: object })?.description ?? {})
-          )
+          String((reason as Error)?.message ?? reason ?? '')
         );
       teardown();
       retry();
