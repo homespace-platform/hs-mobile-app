@@ -8,8 +8,7 @@ export type ManagementDestination =
   | ManagementSection
   | 'landlord-analytics'
   | 'landlord-customers'
-  | 'landlord-membership'
-  | 'landlord-create-listing';
+  | 'landlord-membership';
 
 type ManagementNavItem = {
   id: ManagementDestination | 'dashboard';
@@ -27,7 +26,6 @@ export const MANAGEMENT_TITLES: Record<ManagementDestination, string> = {
   'landlord-requests': 'Yêu cầu thuê',
   'landlord-contracts': 'Hợp đồng cho thuê',
   'landlord-payments': 'Lịch sử thanh toán',
-  'landlord-create-listing': 'Đăng tin mới',
   'tenant-appointments': 'Lịch đi xem',
   'tenant-requests': 'Yêu cầu đã gửi',
   'tenant-contracts': 'Hợp đồng đi thuê',

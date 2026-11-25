@@ -8,13 +8,13 @@ const GAP = 4;
 const MENU_MIN_WIDTH = 220;
 const MARGIN = 12;
 
-// A select-like control (like the web "Tin mới nhất ▾"): the menu opens right under the button and closes on
+// A select-like control (like the web <select>, e.g. "Tin mới nhất ▾" or the property type): the menu opens right under the button and closes on
 // pick or outside tap. Measured in window coordinates; statusBarTranslucent keeps Android's y offset consistent.
-export default function SortDropdown({
+export default function Dropdown({
   options,
   value,
   onChange,
-  accessibilityLabel = 'Sắp xếp',
+  accessibilityLabel = 'Chọn',
 }: {
   options: RentOption[];
   value: string;
@@ -63,7 +63,7 @@ export default function SortDropdown({
         <Pressable
           onPress={close}
           accessibilityRole="button"
-          accessibilityLabel="Đóng danh sách sắp xếp"
+          accessibilityLabel={`Đóng danh sách ${accessibilityLabel.toLowerCase()}`}
           className="flex-1">
           {anchor ? (
             <View

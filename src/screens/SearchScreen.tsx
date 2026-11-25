@@ -15,8 +15,8 @@ import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import TabHeader from '@/components/TabHeader';
 import ProfileCompletionBanner from '@/components/ProfileCompletionBanner';
 import ListingCard from '@/components/ListingCard';
-import RentFilterPanel, { Chip } from '@/components/RentFilterPanel';
-import SortDropdown from '@/components/SortDropdown';
+import RentFilterPanel from '@/components/RentFilterPanel';
+import Dropdown from '@/components/Dropdown';
 import PageBar from '@/components/PageBar';
 import { useDialog } from '@/components/AppDialog';
 import { ErrorNotice } from '@/components/Screen';
@@ -200,19 +200,28 @@ export default function SearchScreen({
             </Pressable>
           </View>
 
-          <View className="mt-3 flex-row flex-wrap">
-            {RENT_CATEGORIES.map((item) => (
-              <Chip
-                key={item.id}
-                label={item.label}
-                selected={filter.category === item.id}
-                onPress={() => applyNow((current) => changeCategory(current, item.id))}
+          <View className="mt-3 flex-row items-center gap-2">
+            <Dropdown
+              options={RENT_CATEGORIES}
+              value={filter.category}
+              accessibilityLabel="Loại nhà"
+              onChange={(id) => applyNow((current) => changeCategory(current, id))}
+            />
+            <View className="flex-row items-center">
+              <Text className="mr-1.5 text-xs font-medium text-muted-foreground">Tin có video</Text>
+              <Switch
+                value={filter.hasVideoOnly}
+                onValueChange={(hasVideoOnly) =>
+                  applyNow((current) => ({ ...current, hasVideoOnly }))
+                }
+                accessibilityLabel="Tin có video"
               />
-            ))}
+            </View>
           </View>
 
-          <View className="mt-1 flex-row items-center gap-2">
-            <SortDropdown
+          <View className="mt-2 flex-row items-center gap-2">
+            <Dropdown
+              accessibilityLabel="Sắp xếp"
               options={SORT_OPTIONS}
               value={filter.sortBy}
               onChange={(id) =>
@@ -232,17 +241,6 @@ export default function SearchScreen({
                 </View>
               ) : null}
             </Pressable>
-          </View>
-
-          <View className="mt-2 flex-row items-center">
-            <Switch
-              value={filter.hasVideoOnly}
-              onValueChange={(hasVideoOnly) =>
-                applyNow((current) => ({ ...current, hasVideoOnly }))
-              }
-              accessibilityLabel="Tin có video"
-            />
-            <Text className="ml-2 text-sm font-medium text-muted-foreground">Tin có video</Text>
           </View>
         </View>
 
