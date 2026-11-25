@@ -77,7 +77,7 @@ export default function ManagementDashboardScreen({
       ) : (
         <>
           <TabHeader
-            title="Quản lý"
+            title={role === 'landlord' ? 'Cho Thuê' : 'Người Thuê'}
             right={
               <Pressable
                 accessibilityRole="button"
