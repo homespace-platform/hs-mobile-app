@@ -38,7 +38,10 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.homespace.mobile"
+      "bundleIdentifier": "com.homespace.mobile",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": ["metamask"]
+      }
     },
     "android": {
       "package": "com.homespace.mobile",

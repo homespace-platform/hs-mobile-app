@@ -963,9 +963,16 @@ test('membership card status follows the web rules and /membership/me failures d
   assert.equal(status('FREE', me).label, 'Gói khởi đầu mặc định');
   assert.equal(status('FREE', null).label, 'Đang áp dụng (Còn 3 lượt)');
   assert.equal(status('STARTER', me).label, 'Đang sử dụng gói cao hơn');
-  assert.equal(status('PRO', me).current, true);
+  assert.deepEqual({ ...status('PRO', me) }, {
+    current: true,
+    kind: 'info',
+    label: 'Đang kích hoạt (Có thể nâng cấp gói cao hơn)',
+  });
+  assert.equal(status('BUSINESS', { ...me, tier: 'BUSINESS' }).label, 'Đang kích hoạt');
   assert.match(status('BUSINESS', me).label, /^Nâng cấp lên Business/);
-  assert.match(status('STARTER', null).label, /^Mua gói Starter/);
+  assert.equal(status('STARTER', null).kind, 'info');
+  assert.equal(status('STARTER', { ...me, tier: 'FREE' }).label, 'Mua gói Starter');
+  assert.equal(status('PRO', { ...me, expiresAt: '2000-01-01T00:00:00Z' }).label, 'Mua gói Pro');
   assert.equal(status('PRO', me, true).label, 'ADMIN: Đã có lượt không giới hạn');
 });
 
@@ -1036,6 +1043,59 @@ test('membership checkout submits only a matching signed Sandbox form', () => {
   assert.throws(() => buildSandboxCheckout({
     ...checkout, formFields: { ...checkout.formFields, success_url: returnUrl.replace(id, 'other') + '&sepayReturn=success' },
   }, 49000), /trả kết quả/);
+});
+
+test('membership Sepolia uses the same signed quote and settlement endpoints as web', async () => {
+  const { client, calls } = mockApi({ result: {} });
+  const api = load('services/membershipApi.ts', { '@/lib/axios-client': client });
+  const id = 'a'.repeat(32);
+  const wallet = '0x' + '1'.repeat(40);
+  const paymentId = '0x' + '2'.repeat(64);
+  const hash = '0x' + '3'.repeat(64);
+  await api.createMembershipCheckout('PRO', 'ETH');
+  await api.getMembershipEthChallenge(id, wallet);
+  await api.getMembershipEthQuote(id, 'challenge', 'signature');
+  await api.settleMembershipEth(id, paymentId, hash);
+  assert.equal(calls[0].args[1].provider, 'ETH');
+  assert.equal(calls[1].args[0], `/api/v1/membership/orders/${id}/eth/challenge`);
+  assert.equal(calls[1].args[1].params.wallet, wallet);
+  assert.equal(calls[2].args[0], `/api/v1/membership/orders/${id}/eth/quote`);
+  assert.deepEqual({ ...calls[2].args[1] }, { challengeId: 'challenge', signature: 'signature' });
+  assert.equal(calls[3].args[0], `/api/v1/membership/orders/${id}/eth/settle`);
+  assert.deepEqual({ ...calls[3].args[1] }, { paymentId, txHash: hash });
+});
+
+test('membership Sepolia signs exact contract calldata and guards against wrong chain, wallet or amount', () => {
+  const eth = load('lib/membership-eth-payment.ts', {});
+  const payer = '0x' + '1'.repeat(40);
+  const recipient = '0x' + '2'.repeat(40);
+  const contractAddress = '0x' + '3'.repeat(40);
+  const paymentId = '0x' + 'a'.repeat(64);
+  const quote = {
+    payer, recipient, contractAddress, paymentId,
+    chainId: 11155111, amountVnd: 49000, amountWei: '12345678900000000',
+    expiresAt: new Date(Date.now() + 60000).toISOString(), signature: '0x' + 'b'.repeat(130),
+  };
+  const tx = eth.buildMembershipEthTransaction(quote, payer, 49000);
+  assert.equal(tx.chainId, '0xaa36a7');
+  assert.equal(tx.from, payer);
+  assert.equal(tx.to, contractAddress);
+  assert.equal(BigInt(tx.value), BigInt(quote.amountWei));
+  assert.equal(tx.data.slice(0, 74), '0xfe908b7a' + paymentId.slice(2));
+  assert.equal(tx.data.slice(74, 138), payer.slice(2).padStart(64, '0'));
+  assert.equal(tx.data.slice(138, 202), recipient.slice(2).padStart(64, '0'));
+  assert.equal(BigInt(`0x${tx.data.slice(202, 266)}`), BigInt(quote.amountWei));
+  assert.equal(BigInt(`0x${tx.data.slice(330, 394)}`), 192n);
+  assert.equal(BigInt(`0x${tx.data.slice(394, 458)}`), 65n);
+  assert.equal(eth.formatSepoliaEth(quote.amountWei), '0.0123456789');
+  assert.throws(() => eth.buildMembershipEthTransaction({ ...quote, chainId: 1 }, payer, 49000), /Sepolia/);
+  assert.throws(() => eth.buildMembershipEthTransaction(quote, recipient, 49000), /Sepolia/);
+  assert.throws(() => eth.buildMembershipEthTransaction(quote, payer, 129000), /Số tiền/);
+  assert.throws(() => eth.buildMembershipEthTransaction({ ...quote, expiresAt: '2000-01-01' }, payer, 49000), /hết hạn/);
+  assert.throws(() => eth.buildMembershipEthTransaction({ ...quote, amountWei: (1n << 256n).toString() }, payer, 49000), /giới hạn/);
+  assert.throws(() => eth.assertPayableEthOrder({ id: 'order', provider: 'ETH', status: 'PAID', amountVnd: 49000 }, 'order', 49000), /đã thay đổi/);
+  assert.equal(eth.readEthSubmission(JSON.stringify({ paymentId })).paymentId, paymentId);
+  assert.throws(() => eth.readEthSubmission(JSON.stringify({ paymentId, txHash: 'untrusted' })), /giao dịch/);
 });
 
 test('notification API uses the same endpoints and params as the web service', async () => {

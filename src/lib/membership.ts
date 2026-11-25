@@ -114,7 +114,7 @@ export type PlanCardStatus = {
   label: string;
 };
 
-/** Mirrors the web `getCardState` + `MembershipPlanCard` footer (no server quotes on mobile). */
+/** Card states for buying a new plan or upgrading an active plan. */
 export function planCardStatus(
   plan: MembershipPlanInfo,
   me: MembershipView | null,
@@ -135,12 +135,20 @@ export function planCardStatus(
     };
   }
   if (unlimited) return { current, kind: 'unlimited', label: 'ADMIN: Đã có lượt không giới hạn' };
+  if (!me) return { current, kind: 'info', label: 'Chưa tải được trạng thái gói' };
+  if (current) {
+    return {
+      current,
+      kind: 'info',
+      label: plan.code === 'BUSINESS'
+        ? 'Đang kích hoạt'
+        : 'Đang kích hoạt (Có thể nâng cấp gói cao hơn)',
+    };
+  }
   if (!expired && tier !== 'FREE' && TIER_RANK[plan.code] < TIER_RANK[tier])
     return { current, kind: 'info', label: 'Đang sử dụng gói cao hơn' };
-  const action = current
-    ? `Mua lại / Gia hạn ${plan.shortName}`
-    : TIER_RANK[plan.code] > TIER_RANK[tier] && tier !== 'FREE'
-      ? `Nâng cấp lên ${plan.shortName}`
-      : `Mua gói ${plan.shortName}`;
+  const action = !expired && tier !== 'FREE'
+    ? `Nâng cấp lên ${plan.shortName}`
+    : `Mua gói ${plan.shortName}`;
   return { current, kind: 'purchase', label: action };
 }

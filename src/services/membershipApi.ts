@@ -40,6 +40,7 @@ export async function getMyMembership(): Promise<MembershipView> {
 }
 
 export type PaidMembershipTier = 'STARTER' | 'PRO' | 'BUSINESS';
+export type MembershipPaymentMethod = 'SEPAY' | 'ETH';
 
 export type MembershipQuote = {
   tier: PaidMembershipTier;
@@ -58,7 +59,21 @@ export type MembershipCheckout = {
 
 export type MembershipOrder = {
   id: string;
+  provider: string;
+  amountVnd: number;
   status: 'PENDING' | 'PAID' | 'FAILED' | 'EXPIRED' | 'CANCELLED' | 'REVIEW';
+};
+
+export type MembershipEthQuote = {
+  paymentId: string;
+  payer: string;
+  recipient: string;
+  amountVnd: number;
+  amountWei: string;
+  expiresAt: string;
+  chainId: number;
+  contractAddress: string;
+  signature: string;
 };
 
 const membershipPath = '/api/v1/membership';
@@ -71,10 +86,10 @@ export async function getMembershipQuote(tier: PaidMembershipTier) {
   return data.result;
 }
 
-export async function createMembershipCheckout(tier: PaidMembershipTier) {
+export async function createMembershipCheckout(tier: PaidMembershipTier, provider: MembershipPaymentMethod = 'SEPAY') {
   const { data } = await axiosClient.post<ApiResponse<MembershipCheckout>>(`${membershipPath}/checkout`, {
     tier,
-    provider: 'SEPAY',
+    provider,
   });
   return data.result;
 }
@@ -86,5 +101,28 @@ export async function getMembershipOrder(id: string) {
 
 export async function cancelMembershipOrder(id: string) {
   const { data } = await axiosClient.post<ApiResponse<MembershipOrder>>(`${orderPath(id)}/cancel`);
+  return data.result;
+}
+
+export async function getMembershipEthChallenge(id: string, wallet: string) {
+  const { data } = await axiosClient.get<ApiResponse<{ challengeId: string; message: string }>>(
+    `${orderPath(id)}/eth/challenge`, { params: { wallet } }
+  );
+  return data.result;
+}
+
+export async function getMembershipEthQuote(id: string, challengeId: string, signature: string) {
+  const { data } = await axiosClient.post<ApiResponse<MembershipEthQuote>>(`${orderPath(id)}/eth/quote`, {
+    challengeId,
+    signature,
+  });
+  return data.result;
+}
+
+export async function settleMembershipEth(id: string, paymentId: string, txHash: string) {
+  const { data } = await axiosClient.post<ApiResponse<MembershipOrder>>(`${orderPath(id)}/eth/settle`, {
+    paymentId,
+    txHash,
+  });
   return data.result;
 }
