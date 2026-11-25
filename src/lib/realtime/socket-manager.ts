@@ -12,6 +12,7 @@ export function createManagedSocket(options: {
   url: string;
   path: string;
   tokenInAuth?: boolean;
+  transports?: ('polling' | 'websocket')[];
   headers: (token: string) => Record<string, string>;
 }) {
   const listeners = new Set<SocketListener>();
@@ -39,12 +40,14 @@ export function createManagedSocket(options: {
   async function connect() {
     const run = generation;
     const token = await getAccessToken().catch(() => null);
-    // No token means signed out (or refresh failed): stay disconnected.
-    if (!running || run !== generation || !token) return;
+    if (!running || run !== generation) return;
+    // No token: signed out stops this socket via stop(); a failed refresh (network blip) must not leave it
+    // dead until the next foreground, so back off and try again.
+    if (!token) return retry();
     teardown();
     const next = io(options.url, {
       path: options.path,
-      transports: ['websocket'],
+      transports: options.transports ?? ['websocket'],
       reconnection: false,
       forceNew: true,
       ...(options.tokenInAuth ? { auth: { token } } : {}),
@@ -52,6 +55,7 @@ export function createManagedSocket(options: {
     });
     socket = next;
     next.on('connect', () => {
+      if (__DEV__) console.warn(`[realtime] ${options.path} connected`);
       attempt = 0;
       connected = true;
       emit('connect');
@@ -63,7 +67,12 @@ export function createManagedSocket(options: {
       if (__DEV__)
         console.warn(
           `[realtime] ${options.path} lost:`,
-          String((reason as Error)?.message ?? reason ?? '')
+          String((reason as Error)?.message ?? reason ?? ''),
+          // Engine.IO puts the transport's own error (e.g. the HTTP status of a refused upgrade) here.
+          JSON.stringify(
+            (reason as { description?: unknown })?.description,
+            Object.getOwnPropertyNames((reason as { description?: object })?.description ?? {})
+          )
         );
       teardown();
       retry();

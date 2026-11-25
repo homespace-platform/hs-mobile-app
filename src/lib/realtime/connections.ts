@@ -35,6 +35,9 @@ const chatSocket = chatTarget
   ? createManagedSocket({
       url: chatTarget.origin,
       path: chatTarget.path,
+      // Like the web app: start with long-polling (Gateway authenticates the Bearer header on every request),
+      // then upgrade when the Gateway lets a WebSocket through. A WebSocket-only connection was refused.
+      transports: ['polling', 'websocket'],
       headers: (token) => ({ Authorization: `Bearer ${token}` }),
     })
   : null;

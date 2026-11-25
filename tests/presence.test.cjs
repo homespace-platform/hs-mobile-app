@@ -35,7 +35,7 @@ function load(file, dependencies = {}, globals = {}) {
 }
 
 const presence = load('lib/chat-presence.ts');
-const { createPresenceSync } = load('lib/realtime/presence-sync.ts');
+const { createPresenceSync } = load('lib/realtime/presence-sync.ts', {}, { __DEV__: false, console });
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
