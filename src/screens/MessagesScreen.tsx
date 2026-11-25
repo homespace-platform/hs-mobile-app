@@ -32,6 +32,8 @@ import {
   type ChatMessage,
 } from '@/services/chatApi';
 import { applyChatMessage, toChatMessage } from '@/lib/realtime/pure';
+import PresenceLabel from '@/components/PresenceLabel';
+import { useChatPresence } from '@/lib/use-chat-presence';
 import { isChatSocketConnected, subscribeChatEvents } from '@/lib/realtime/connections';
 import { chatUnreadStore } from '@/lib/unread-store';
 import { listingImage } from '@/services/listingApi';
@@ -140,6 +142,7 @@ export default function MessagesScreen({
   const seenMessageIds = useRef(new Set<string>());
   const conversationsRef = useRef(conversations);
   conversationsRef.current = conversations;
+  const presence = useChatPresence(conversations.map((item) => item.participantId));
   const lastLoadAt = useRef(0);
 
   const load = useCallback(async (refresh = false) => {
@@ -403,12 +406,20 @@ export default function MessagesScreen({
             <Pressable onPress={() => setSelectedId(null)} className="mr-3 px-1 py-2">
               <Ionicons name="chevron-back" size={26} className="text-foreground" />
             </Pressable>
-            <Avatar uri={selected.participantAvatar} name={conversationName(selected)} size={46} />
+            <Avatar
+              uri={selected.participantAvatar}
+              name={conversationName(selected)}
+              size={46}
+              online={presence[selected.participantId]?.online ?? false}
+            />
             <View className="ml-3 flex-1">
               <Text className="font-bold text-foreground" numberOfLines={1}>
                 {conversationName(selected)}
               </Text>
-              <Text className="mt-0.5 text-xs text-muted-foreground">Người dùng HomeSpace</Text>
+              <PresenceLabel
+                presence={presence[selected.participantId]}
+                className="mt-0.5 text-xs"
+              />
             </View>
             <Pressable
               onPress={() => onOpenConversationDetails(selected)}
@@ -596,6 +607,7 @@ export default function MessagesScreen({
                 uri={conversation.participantAvatar}
                 name={conversationName(conversation)}
                 size={50}
+                online={presence[conversation.participantId]?.online ?? false}
               />
               <View className="ml-3 flex-1">
                 <View className="flex-row items-center justify-between">

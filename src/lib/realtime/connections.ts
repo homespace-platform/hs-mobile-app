@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
 import { gatewayBaseUrl, realtimeOrigin } from '@/config/env';
+import { chatPresenceStore, type ChatPresenceUpdate } from '@/lib/chat-presence';
+import { createPresenceSync } from '@/lib/realtime/presence-sync';
 import { gatewaySocketTarget, normalizeOrigin } from '@/lib/realtime/pure';
 import { createManagedSocket, type SocketListener } from '@/lib/realtime/socket-manager';
 import { notificationUnreadStore } from '@/lib/unread-store';
@@ -37,6 +39,19 @@ const chatSocket = chatTarget
     })
   : null;
 
+const presenceSync = createPresenceSync({
+  emitWithAck: (event, payload, timeoutMs) =>
+    chatSocket?.emitWithAck(event, payload, timeoutMs) ?? Promise.resolve({ ok: false }),
+  isConnected: () => chatSocket?.isConnected() ?? false,
+  apply: chatPresenceStore.apply,
+});
+// Ask for the presence of these users (the server only answers for people sharing a conversation with us).
+export const watchChatPresence = presenceSync.watch;
+function resetChatPresence() {
+  presenceSync.reset();
+  chatPresenceStore.clear();
+}
+
 const notificationListeners = new Set<SocketListener>();
 
 function dispatchNotificationEvent(event: string, payload?: unknown) {
@@ -53,7 +68,9 @@ function dispatchNotificationEvent(event: string, payload?: unknown) {
   notificationListeners.forEach((listener) => listener(event, payload));
 }
 notificationSocket?.subscribe(dispatchNotificationEvent);
-chatSocket?.subscribe((event) => {
+chatSocket?.subscribe((event, payload) => {
+  if (event === 'connect') presenceSync.onConnect();
+  else if (event === 'chat:presence') chatPresenceStore.apply([payload as ChatPresenceUpdate]);
   // Badge on the Messages tab; the delay lets an open conversation mark itself read first.
   if (event === 'chat:message' || event === 'connect')
     setTimeout(() => void refreshChatUnread(), 1000);
@@ -99,6 +116,7 @@ export function useRealtimeConnections() {
     const stop = () => {
       notificationSocket?.stop();
       chatSocket?.stop();
+      resetChatPresence();
     };
     if (AppState.currentState === 'active') start();
     const subscription = AppState.addEventListener('change', (state) => {

@@ -4,6 +4,7 @@ import { getAccessToken } from '@/features/auth/session';
 import { reconnectDelay } from '@/lib/realtime/pure';
 
 export type SocketListener = (event: string, payload?: unknown) => void;
+export type EmitResult = { ok: boolean; ack?: unknown };
 
 // One Socket.IO connection that reconnects itself with a FRESH access token each attempt (Socket.IO's own
 // reconnection would reuse the old handshake headers). Listeners survive reconnects; 'connect' is forwarded.
@@ -84,6 +85,22 @@ export function createManagedSocket(options: {
       teardown();
     },
     isConnected: () => connected,
+    // Emits with an ack callback. Never rejects: not connected, timeout or error all resolve { ok: false }.
+    emitWithAck(event: string, payload: unknown, timeoutMs = 5_000) {
+      const current = socket;
+      if (!current || !connected) return Promise.resolve<EmitResult>({ ok: false });
+      return new Promise<EmitResult>((resolve) => {
+        try {
+          current
+            .timeout(timeoutMs)
+            .emit(event, payload, (error: unknown, ack?: unknown) =>
+              resolve(error ? { ok: false } : { ok: true, ack })
+            );
+        } catch {
+          resolve({ ok: false });
+        }
+      });
+    },
     subscribe(listener: SocketListener) {
       listeners.add(listener);
       return () => {

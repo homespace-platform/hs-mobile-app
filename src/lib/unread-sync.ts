@@ -1,3 +1,4 @@
+import { chatPresenceStore } from '@/lib/chat-presence';
 import { chatUnreadStore, notificationUnreadStore } from '@/lib/unread-store';
 import { listConversations } from '@/services/chatApi';
 import { getUnreadNotificationCount } from '@/services/notificationApi';
@@ -48,4 +49,5 @@ export function resetUnreadCounts() {
   chatFetchedAt = 0;
   notificationUnreadStore.dispatch({ type: 'reset' });
   chatUnreadStore.dispatch({ type: 'reset' });
+  chatPresenceStore.clear();
 }

@@ -17,6 +17,7 @@
     "test:auth": "node --test tests/registration.test.cjs",
     "test:api": "node --test tests/api.test.cjs",
     "test:push": "node --test tests/push-realtime.test.cjs",
+    "test:presence": "node --test tests/presence.test.cjs",
     "test:kyc": "node --test tests/kyc.test.cjs",
     "test:profile-gate": "node --test tests/profile-gate.test.cjs",
     "test:health": "node --test tests/backend-health.test.cjs",

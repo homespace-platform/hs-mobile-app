@@ -20,6 +20,8 @@ import {
   type ChatConversation,
   type ChatMessage,
 } from '@/services/chatApi';
+import PresenceLabel from '@/components/PresenceLabel';
+import { useChatPresence } from '@/lib/use-chat-presence';
 import { listingImage } from '@/services/listingApi';
 import { getStorageViewUrl } from '@/services/storageApi';
 
@@ -54,6 +56,7 @@ export default function ConversationDetailScreen({
   const [historyError, setHistoryError] = useState<string | null>(null);
   const requestId = useRef(0);
   const showDialog = useDialog();
+  const presence = useChatPresence([conversation.participantId])[conversation.participantId];
 
   async function loadHistory(mode: 'search' | 'images', search?: string, before?: string) {
     const currentRequest = before ? requestId.current : ++requestId.current;
@@ -265,6 +268,7 @@ export default function ConversationDetailScreen({
             uri={conversation.participantAvatar}
             name={conversation.participantName || conversation.participantEmail || 'HomeSpace'}
             size={76}
+            online={presence?.online ?? false}
           />
           <Text className="mt-3 text-xl font-bold text-foreground">
             {conversation.participantName ||
@@ -276,6 +280,7 @@ export default function ConversationDetailScreen({
               {conversation.participantEmail}
             </Text>
           ) : null}
+          <PresenceLabel presence={presence} className="mt-1 text-xs" />
           <View className="mt-3 rounded-full bg-primary-soft px-3 py-1.5">
             <Text className="text-xs font-bold text-primary">{roleLabel(role)}</Text>
           </View>
