@@ -1,5 +1,5 @@
 import axiosClient from '@/lib/axios-client';
-import type { ApiResponse, PageResponse } from '@/types/api';
+import type { ApiResponse, PageResponse, VietmapAddress } from '@/types/api';
 
 export const MOCK_LISTING_IMAGE =
   'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267d?auto=format&fit=crop&w=1200&q=80';
@@ -93,18 +93,7 @@ export type ListingDetail = {
     includedInRent: boolean;
     customName?: string | null;
   }[];
-  address?: {
-    fullAddress?: string;
-    refId?: string | null;
-    display?: string | null;
-    addressNote?: string | null;
-    provinceName: string;
-    cityId?: string;
-    wardName: string;
-    streetLine: string;
-    latitude?: number | null;
-    longitude?: number | null;
-  } | null;
+  address?: (VietmapAddress & { id?: string; listingId?: string }) | null;
   owner?: {
     id: string;
     displayName: string;
@@ -124,6 +113,8 @@ export type ListingDetail = {
   viewingDays?: string[];
   viewingSlots?: string[];
   publishedAt?: string | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
   viewCount?: number;
 };
 

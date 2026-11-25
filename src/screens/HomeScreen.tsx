@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshControl, ScrollView, View } from 'react-native';
+import { AppState, Linking, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import HomeAiPanel from '@/components/HomeAiPanel';
+import { useDialog } from '@/components/AppDialog';
 import ProfileCompletionBanner from '@/components/ProfileCompletionBanner';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import FeaturedListings from '@/components/home/FeaturedListings';
@@ -12,7 +13,12 @@ import type { City } from '@/components/home/LocationPicker';
 import MembershipSection from '@/components/home/MembershipSection';
 import PopularAreas from '@/components/home/PopularAreas';
 import PriceExplorer from '@/components/home/PriceExplorer';
-import { mergeMembershipPlans, type MembershipPlanInfo } from '@/lib/membership';
+import { gatewayBaseUrl, webBaseUrl } from '@/config/env';
+import {
+  buildMembershipCheckoutUrl,
+  mergeMembershipPlans,
+  type MembershipPlanInfo,
+} from '@/lib/membership';
 import { useFavoriteListings } from '@/lib/use-favorite-listings';
 import { wardsOfCity } from '@/lib/wards';
 import { getPublicListings, type ListingSummary } from '@/services/listingApi';
@@ -41,11 +47,13 @@ export default function HomeScreen({
   onOpenNotifications: () => void;
   onOpenHistory: () => void;
 }) {
+  const showDialog = useDialog();
   const [listings, setListings] = useState<ListingSummary[]>([]);
   const [category, setCategory] = useState<string | undefined>();
   const [profile, setProfile] = useState<UserProfileResponse | null>(null);
   const [membershipPlans, setMembershipPlans] = useState<MembershipPlanInfo[] | null>(null);
   const [membership, setMembership] = useState<MembershipView | null>(null);
+  const openedCheckout = useRef(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -109,15 +117,42 @@ export default function HomeScreen({
       .catch(() => undefined);
   }, []);
 
+  const refreshMembership = useCallback(() => {
+    void getMyMembership().then(setMembership).catch(() => undefined);
+  }, []);
+
   useEffect(() => {
     getMembershipPlans()
       .then((plans) => setMembershipPlans(mergeMembershipPlans(plans)))
       .catch(() => setMembershipPlans(mergeMembershipPlans(null)));
-    // A failed lookup just means "no plan info": the cards still render.
-    getMyMembership()
-      .then(setMembership)
-      .catch(() => undefined);
-  }, []);
+    void refreshMembership();
+
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active' || !openedCheckout.current) return;
+      openedCheckout.current = false;
+      void refreshMembership();
+    });
+    return () => subscription.remove();
+  }, [refreshMembership]);
+
+  async function openMembershipCheckout(tier: string) {
+    const url = buildMembershipCheckoutUrl(tier, gatewayBaseUrl, webBaseUrl);
+    if (!url) {
+      showDialog(
+        'Chưa thể mở thanh toán',
+        'Cần cấu hình URL HTTPS của website HomeSpace cho môi trường hiện tại.'
+      );
+      return;
+    }
+
+    openedCheckout.current = true;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      openedCheckout.current = false;
+      showDialog('Không mở được website', 'Vui lòng thử lại để tiếp tục thanh toán gói hội viên.');
+    }
+  }
 
   // One favorite set for the cards and the header heart count.
   const { favoriteIds, toggle: toggleFavoriteListing } = useFavoriteListings();
@@ -148,7 +183,13 @@ export default function HomeScreen({
       <ScrollView
         keyboardShouldPersistTaps="handled"
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => loadListings(true)} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              void loadListings(true);
+              void refreshMembership();
+            }}
+          />
         }
         contentContainerClassName="pb-6"
         showsVerticalScrollIndicator={false}>
@@ -199,6 +240,7 @@ export default function HomeScreen({
           membership={membership}
           role={profile?.role}
           onPostListing={() => onOpenManagement('landlord-properties')}
+          onPurchase={openMembershipCheckout}
         />
       </ScrollView>
 

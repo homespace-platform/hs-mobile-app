@@ -188,7 +188,7 @@ export function mapListingForEdit(listing: ListingDetail) {
     },
     location: {
       refId: listing.address?.refId ?? '',
-      display: listing.address?.display ?? listing.address?.fullAddress ?? '',
+      display: listing.address?.display ?? '',
       note: listing.address?.addressNote ?? '',
     },
     details,

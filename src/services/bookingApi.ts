@@ -80,6 +80,23 @@ export async function getMyRentalRequestByListing(listingId: string) {
   ).data.result;
 }
 
+export type MyBooking = { id: string; status: string };
+
+// Same endpoint as web appointmentService.getMyBookingByListing; errors mean "no booking".
+export async function getMyBookingByListing(listingId: string) {
+  try {
+    return (
+      (
+        await axiosClient.get<ApiResponse<MyBooking | null>>(
+          `/api/v1/appointments/my-bookings/by-listing/${encodeURIComponent(listingId)}`
+        )
+      ).data.result ?? null
+    );
+  } catch {
+    return null;
+  }
+}
+
 export async function createRentalRequest(
   payload: RentalEstimateInput & {
     renterName: string;

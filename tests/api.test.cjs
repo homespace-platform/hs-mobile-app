@@ -969,6 +969,26 @@ test('membership card status follows the web rules and /membership/me failures d
   assert.equal(status('PRO', me, true).label, 'ADMIN: Đã có lượt không giới hạn');
 });
 
+test('membership checkout opens a paid tier on the configured HTTPS web origin', () => {
+  const { buildMembershipCheckoutUrl } = load('lib/membership.ts', {});
+  const productionGateway = 'https://api.homespace.id.vn';
+  const devGateway = 'http://127.0.0.1:8080';
+  assert.equal(
+    buildMembershipCheckoutUrl('STARTER', productionGateway),
+    'https://www.homespace.id.vn/membership?tier=STARTER'
+  );
+  assert.equal(
+    buildMembershipCheckoutUrl('PRO', devGateway, 'https://web.example.com/'),
+    'https://web.example.com/membership?tier=PRO'
+  );
+  assert.equal(buildMembershipCheckoutUrl('FREE', productionGateway), null);
+  assert.equal(buildMembershipCheckoutUrl('ADMIN', productionGateway), null);
+  assert.equal(buildMembershipCheckoutUrl('BUSINESS', devGateway), null);
+  for (const origin of ['http://web.example.com', 'https://web.example.com@other.example.com', 'https://web.example.com?next=somewhere']) {
+    assert.equal(buildMembershipCheckoutUrl('BUSINESS', productionGateway, origin), null);
+  }
+});
+
 test('notification API uses the same endpoints and params as the web service', async () => {
   const { client, calls } = mockApi({
     result: { items: [{ id: 'n/1' }], nextCursor: 'c1', hasMore: true, count: 7 },

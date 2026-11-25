@@ -13,10 +13,12 @@ function PlanCard({
   plan,
   membership,
   unlimited,
+  onPurchase,
 }: {
   plan: MembershipPlanInfo;
   membership: MembershipView | null;
   unlimited: boolean;
+  onPurchase: (tier: string) => void;
 }) {
   const oneTime = plan.durationDays <= 0;
   const status = planCardStatus(plan, membership, unlimited);
@@ -74,16 +76,28 @@ function PlanCard({
         ))}
       </View>
       <View className="mt-5 border-t border-border pt-4">
-        <View
-          className={`flex-row items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 ${status.kind === 'unlimited' ? 'border-primary-border bg-primary-soft' : 'border-border bg-muted'}`}>
-          {status.kind === 'unlimited' ? (
-            <Ionicons name="infinite" size={16} className="text-primary" />
-          ) : null}
-          <Text
-            className={`shrink text-center text-xs font-bold ${status.kind === 'unlimited' ? 'text-primary' : 'text-muted-foreground'}`}>
-            {status.label}
-          </Text>
-        </View>
+        {status.kind === 'purchase' ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => onPurchase(plan.code)}
+            className="min-h-12 flex-row items-center justify-center gap-2 rounded-xl bg-brand px-3 py-2.5 active:opacity-80">
+            <Text className="shrink text-center text-xs font-bold text-on-brand">
+              {status.label}
+            </Text>
+            <Ionicons name="open-outline" size={16} className="text-on-brand" />
+          </Pressable>
+        ) : (
+          <View
+            className={`flex-row items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 ${status.kind === 'unlimited' ? 'border-primary-border bg-primary-soft' : 'border-border bg-muted'}`}>
+            {status.kind === 'unlimited' ? (
+              <Ionicons name="infinite" size={16} className="text-primary" />
+            ) : null}
+            <Text
+              className={`shrink text-center text-xs font-bold ${status.kind === 'unlimited' ? 'text-primary' : 'text-muted-foreground'}`}>
+              {status.label}
+            </Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -95,11 +109,13 @@ export default function MembershipSection({
   membership,
   role,
   onPostListing,
+  onPurchase,
 }: {
   plans: MembershipPlanInfo[] | null;
   membership: MembershipView | null;
   role?: string | null;
   onPostListing: () => void;
+  onPurchase: (tier: string) => void;
 }) {
   const unlimited = isUnlimitedMembership(membership, role);
   return (
@@ -119,6 +135,9 @@ export default function MembershipSection({
         lần. Tạo nháp và chỉnh sửa bài đăng hoàn toàn miễn phí — linh hoạt mua hoặc nâng cấp gói 30
         ngày qua SePay khi cần mở rộng quy mô.
       </Text>
+      <Text className="mt-2 text-xs leading-5 text-muted-foreground">
+        Khi thanh toán trên website, hãy dùng cùng tài khoản HomeSpace.
+      </Text>
       <Pressable
         onPress={onPostListing}
         accessibilityRole="button"
@@ -130,7 +149,13 @@ export default function MembershipSection({
       <View className="mt-5 gap-4">
         {plans ? (
           plans.map((plan) => (
-            <PlanCard key={plan.code} plan={plan} membership={membership} unlimited={unlimited} />
+            <PlanCard
+              key={plan.code}
+              plan={plan}
+              membership={membership}
+              unlimited={unlimited}
+              onPurchase={onPurchase}
+            />
           ))
         ) : (
           <ActivityIndicator className="text-primary" />

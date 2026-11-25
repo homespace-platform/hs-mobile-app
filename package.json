@@ -22,6 +22,7 @@
     "test:kyc": "node --test tests/kyc.test.cjs",
     "test:profile-gate": "node --test tests/profile-gate.test.cjs",
     "test:rent-filter": "node --test tests/rent-filter.test.cjs",
+    "test:rent-detail": "node --test tests/rent-detail.test.cjs",
     "test:health": "node --test tests/backend-health.test.cjs",
     "test:network": "node --test tests/network-health.test.cjs",
     "run:android": "expo run:android --port 4000",

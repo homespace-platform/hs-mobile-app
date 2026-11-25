@@ -7,6 +7,9 @@ export type RelatedListing = {
   price: string;
   location: string;
   image: string;
+  bedrooms?: number;
+  area?: number;
+  verified?: boolean;
 };
 
 export type ChatConversation = {

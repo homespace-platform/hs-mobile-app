@@ -1,140 +1,53 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Ionicons from '@/components/Icon';
-import { ActivityIndicator, Image, Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { WebView } from 'react-native-webview';
 
-import Avatar from '@/components/Avatar';
 import ListingCard from '@/components/ListingCard';
-import { createConversation, type RelatedListing } from '@/services/chatApi';
+import { Button } from '@/components/Screen';
+import ContactCta from '@/components/listing-detail/ContactCta';
+import { OwnListingCard, VisitorOwnerCard } from '@/components/listing-detail/OwnerCard';
+import MediaGallery from '@/components/listing-detail/MediaGallery';
+import NearbyPlaces from '@/components/listing-detail/NearbyPlaces';
+import OverviewCard from '@/components/listing-detail/OverviewCard';
 import {
+  AmenitiesSection,
+  DescriptionSection,
+  DetailSections,
+  FurnishingSection,
+  PoliciesCard,
+  ViewingSection,
+} from '@/components/listing-detail/ListingSections';
+import { createConversation, sendMessage } from '@/services/chatApi';
+import {
+  getAccessibleListing,
   getPublicListing,
   getPublicListings,
   listingImage,
   type ListingDetail,
   type ListingSummary,
 } from '@/services/listingApi';
-import { getAccessibleListing } from '@/services/listingApi';
 import { getFavoriteIds, toggleFavorite, recordListingHistory } from '@/services/favoriteApi';
 import { getUserProfileApi } from '@/services/userApi';
-import BookingForm from '@/components/BookingForm';
-import RentalRequestForm from '@/components/RentalRequestForm';
-import { Button } from '@/components/Screen';
-import { PolicyNotice } from '@/components/PolicyDialog';
 import ListingDraftScreen from '@/screens/ListingDraftScreen';
 import { apiError } from '@/lib/api-error';
+import {
+  formatPrice,
+  getQuickMetrics,
+  getRentDetailExtras,
+  getRentDetailSections,
+  toChatListing,
+  toRentProperty,
+} from '@/lib/rent-detail';
 import { useFavoriteListings } from '@/lib/use-favorite-listings';
-import { getMyRentalRequestByListing, type ActiveRentalRequest } from '@/services/bookingApi';
+import {
+  getMyBookingByListing,
+  getMyRentalRequestByListing,
+  type ActiveRentalRequest,
+} from '@/services/bookingApi';
 import type { ManagementSection } from '@/services/managementApi';
 
-const LABELS: Record<string, string> = {
-  projectName: 'Dự án',
-  buildingBlock: 'Tòa nhà',
-  unitCode: 'Mã căn',
-  floorNumber: 'Tầng',
-  buildingTotalFloors: 'Tổng số tầng',
-  bedroomCount: 'Phòng ngủ',
-  bathroomCount: 'Phòng tắm',
-  livingRoomCount: 'Phòng khách',
-  kitchenCount: 'Nhà bếp',
-  furnishingStatus: 'Nội thất',
-  mainDoorDirection: 'Hướng cửa',
-  balconyDirection: 'Hướng ban công',
-  maxOccupants: 'Số người tối đa',
-  legalStatus: 'Pháp lý',
-  totalFloors: 'Số tầng',
-  expectedSeats: 'Chỗ ngồi',
-  frontageWidthM: 'Mặt tiền',
-  landAreaM2: 'Diện tích đất',
-  lengthM: 'Chiều dài',
-  accessRoadWidthM: 'Đường trước nhà',
-  accessType: 'Loại đường vào',
-  frontageCount: 'Số mặt tiền',
-  maxVehicles: 'Số xe tối đa',
-  hasGarage: 'Có gara',
-  hasRooftop: 'Có sân thượng',
-  rentalScopeDescription: 'Phạm vi cho thuê',
-  rentedFloorFrom: 'Cho thuê từ tầng',
-  rentedFloorTo: 'Cho thuê đến tầng',
-  restroomCount: 'Số WC',
-  restroomType: 'Loại WC',
-  positionType: 'Vị trí',
-};
-
-const VALUE_LABELS: Record<string, string> = {
-  FULLY_FURNISHED: 'Đầy đủ nội thất',
-  PARTIALLY_FURNISHED: 'Nội thất một phần',
-  UNFURNISHED: 'Không nội thất',
-  BASIC: 'Nội thất cơ bản',
-  SOUTH: 'Nam',
-  NORTH: 'Bắc',
-  EAST: 'Đông',
-  WEST: 'Tây',
-  PINK_BOOK: 'Sổ hồng',
-  PRIVATE: 'Riêng',
-  SHARED: 'Dùng chung',
-};
-
-const DAY_LABELS: Record<string, string> = {
-  MONDAY: 'Thứ 2',
-  TUESDAY: 'Thứ 3',
-  WEDNESDAY: 'Thứ 4',
-  THURSDAY: 'Thứ 5',
-  FRIDAY: 'Thứ 6',
-  SATURDAY: 'Thứ 7',
-  SUNDAY: 'Chủ nhật',
-};
-
-const SLOT_LABELS: Record<string, string> = {
-  MORNING: 'Buổi sáng',
-  AFTERNOON: 'Buổi chiều',
-  EVENING: 'Buổi tối',
-};
-
-const CHARGE_LABELS: Record<string, string> = {
-  ELECTRICITY: 'Điện',
-  WATER: 'Nước',
-  MANAGEMENT: 'Phí quản lý',
-  INTERNET: 'Internet',
-  SERVICE_OR_GARBAGE: 'Dịch vụ / rác',
-  MOTORBIKE_PARKING: 'Gửi xe máy',
-  CAR_PARKING: 'Gửi ô tô',
-};
-
-function formatMoney(value?: number | null) {
-  return value ? `${value.toLocaleString('vi-VN')} đ` : 'Thỏa thuận';
-}
-
-function formatValue(value: string | number | boolean) {
-  if (typeof value === 'boolean') return value ? 'Có' : 'Không';
-  return VALUE_LABELS[String(value)] ?? String(value).replace(/_/g, ' ');
-}
-
-function formatDetailValue(key: string, value: string | number | boolean) {
-  const units: Record<string, string> = {
-    landAreaM2: 'm²',
-    frontageWidthM: 'm',
-    lengthM: 'm',
-    accessRoadWidthM: 'm',
-    bedroomCount: 'phòng',
-    bathroomCount: 'phòng',
-    livingRoomCount: 'phòng',
-    kitchenCount: 'phòng',
-    maxOccupants: 'người',
-    maxVehicles: 'xe',
-    totalFloors: 'tầng',
-  };
-  return typeof value === 'number' && units[key] ? `${value} ${units[key]}` : formatValue(value);
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <View className="w-[48%] rounded-2xl bg-background p-3">
-      <Text className="text-xs text-muted-foreground">{label}</Text>
-      <Text className="mt-1 text-sm font-bold text-foreground">{value}</Text>
-    </View>
-  );
-}
+type SenderProfile = { displayName?: string; email?: string; avatarUrl?: string };
 
 export default function ListingDetailScreen({
   listingId,
@@ -160,36 +73,37 @@ export default function ListingDetailScreen({
   const [favoriteReady, setFavoriteReady] = useState(false);
   const [favoriteSaving, setFavoriteSaving] = useState(false);
   const [userId, setUserId] = useState('');
-  const [form, setForm] = useState<'booking' | 'rental' | 'edit' | null>(null);
+  const [senderProfile, setSenderProfile] = useState<SenderProfile | undefined>();
+  const [editing, setEditing] = useState(false);
+  const [quickMessage, setQuickMessage] = useState('');
   const [rentalRequest, setRentalRequest] = useState<ActiveRentalRequest | null>(null);
-  const [rentalLoading, setRentalLoading] = useState(true);
-  const [rentalError, setRentalError] = useState<string | null>(null);
-  const [rentalReload, setRentalReload] = useState(0);
+  const [hasActiveBooking, setHasActiveBooking] = useState(false);
   const { favoriteIds: similarFavoriteIds, toggle: toggleSimilarFavorite } = useFavoriteListings();
   const [similarListings, setSimilarListings] = useState<ListingSummary[]>([]);
+  const scrollRef = useRef<ScrollView>(null);
+  const bodyY = useRef(0);
+  const contactY = useRef(0);
+
+  // Same as web: an unavailable lookup simply means "no request / no booking".
   useEffect(() => {
-    if (own) {
-      setRentalLoading(false);
-      return;
-    }
-    let active = true;
-    setRentalLoading(true);
     setRentalRequest(null);
-    setRentalError(null);
+    setHasActiveBooking(false);
+    if (own) return;
+    let active = true;
     getMyRentalRequestByListing(listingId)
       .then((request) => {
         if (active) setRentalRequest(request);
       })
-      .catch((error) => {
-        if (active) setRentalError(apiError(error));
-      })
-      .finally(() => {
-        if (active) setRentalLoading(false);
-      });
+      .catch(() => undefined);
+    getMyBookingByListing(listingId).then((booking) => {
+      if (active)
+        setHasActiveBooking(Boolean(booking && ['PENDING', 'CONFIRMED'].includes(booking.status)));
+    });
     return () => {
       active = false;
     };
-  }, [listingId, own, rentalReload]);
+  }, [listingId, own]);
+
   const loadInteractions = useCallback(async () => {
     setFavoriteReady(false);
     setChatError(null);
@@ -197,6 +111,12 @@ export default function ListingDetailScreen({
       const [ids, profile] = await Promise.all([getFavoriteIds(), getUserProfileApi()]);
       setFavorite(ids.includes(listingId));
       setUserId(profile.id);
+      setSenderProfile({
+        displayName:
+          [profile.lastName, profile.firstName].filter(Boolean).join(' ') || profile.username,
+        email: profile.email,
+        avatarUrl: profile.avatarUrl ?? undefined,
+      });
       setFavoriteReady(true);
     } catch (e) {
       setChatError(apiError(e));
@@ -205,6 +125,7 @@ export default function ListingDetailScreen({
   useEffect(() => {
     void loadInteractions();
   }, [loadInteractions]);
+
   async function saveFavorite() {
     if (!favoriteReady || favoriteSaving) return;
     setFavoriteSaving(true);
@@ -255,46 +176,15 @@ export default function ListingDetailScreen({
     };
   }, [listing, own]);
 
-  const detailValues = useMemo(() => {
-    if (!listing) return [];
-    const values =
-      listing.apartmentDetail ??
-      listing.houseDetail ??
-      listing.officeDetail ??
-      listing.commercialDetail ??
-      listing.roomDetail ??
-      {};
-    return Object.entries(values).filter(
-      ([key, value]) => LABELS[key] && value !== null && value !== undefined && value !== ''
-    ) as [string, string | number | boolean][];
-  }, [listing]);
+  const property = useMemo(() => (listing ? toRentProperty(listing) : null), [listing]);
 
-  if (form === 'booking')
-    return (
-      <BookingForm
-        listingId={listingId}
-        onBack={() => setForm(null)}
-        onSuccess={() => setForm(null)}
-      />
-    );
-  if (form === 'rental')
-    return (
-      <RentalRequestForm
-        listingId={listingId}
-        onBack={() => setForm(null)}
-        onSuccess={(request) => {
-          setRentalRequest(request);
-          setForm(null);
-        }}
-      />
-    );
-  if (form === 'edit')
+  if (editing)
     return (
       <ListingDraftScreen
         listingId={listingId}
-        onBack={() => setForm(null)}
+        onBack={() => setEditing(false)}
         onSaved={() => {
-          setForm(null);
+          setEditing(false);
           void load();
         }}
       />
@@ -309,7 +199,7 @@ export default function ListingDetailScreen({
     );
   }
 
-  if (!listing || error) {
+  if (!listing || !property || error) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-background px-6">
         <Text className="text-center text-base font-semibold text-foreground">
@@ -325,54 +215,48 @@ export default function ListingDetailScreen({
     );
   }
 
-  const images = Array.from(
-    new Set(
-      listing.media
-        .filter((item) => item.mediaType === 'IMAGE')
-        .sort((a, b) => a.sortOrder - b.sortOrder)
-        .map((item) => listingImage(item.url))
-    )
-  );
-  const latitude = listing.address?.latitude;
-  const longitude = listing.address?.longitude;
-  const hasCoordinates =
-    typeof latitude === 'number' &&
-    Number.isFinite(latitude) &&
-    Math.abs(latitude) <= 90 &&
-    typeof longitude === 'number' &&
-    Number.isFinite(longitude) &&
-    Math.abs(longitude) <= 180;
-  const mapUrl = hasCoordinates
-    ? `https://www.google.com/maps?q=${latitude},${longitude}&z=16&output=embed`
-    : null;
-  const categoryDetails = detailValues;
-  const currentListing = listing;
-  const relatedListing: RelatedListing = {
-    id: currentListing.id,
-    title: currentListing.title,
-    price: `${formatMoney(currentListing.pricing.amount)}/${currentListing.pricing.unit || 'tháng'}`,
-    location: currentListing.address?.fullAddress || 'Đang cập nhật địa chỉ',
-    image: listingImage(
-      currentListing.media.find((item) => item.mediaType === 'IMAGE')?.url || null
-    ),
-  };
+  const isOwnerView = own || (Boolean(userId) && userId === property.ownerId);
+  const showVisitorCta = !isOwnerView && Boolean(userId);
+  const extras = getRentDetailExtras(property);
+  const gallery = property.mediaItems.length
+    ? property.mediaItems.map((item) => ({
+        type: item.type,
+        url: item.type === 'image' ? listingImage(item.url) : item.url,
+      }))
+    : [{ type: 'image' as const, url: listingImage(null) }];
+  const status = String(property.status || '')
+    .trim()
+    .toUpperCase();
+  const canEdit =
+    ['APARTMENT', 'HOUSE', 'ROOM'].includes(listing.category) &&
+    status !== 'RENTED_EXTERNALLY' &&
+    status !== 'VIOLATION';
+  const address = listing.address;
 
-  async function handleOpenMessages() {
-    const participantId = currentListing.owner?.id || currentListing.ownerId;
+  // Same flow as web openPropertyChat: create/reuse the conversation, optionally send the quick
+  // message (with the listing card), then open it.
+  async function openPropertyChat(message?: string) {
+    if (!property) return;
+    const participantId = property.ownerId || property.landlord.id;
     if (!participantId) {
       setChatError('Bài đăng chưa có thông tin chủ nhà');
       return;
     }
+    const chatListing = toChatListing(property, listingImage(property.images[0] ?? null));
     setOpeningChat(true);
     setChatError(null);
     try {
-      const conversation = await createConversation(participantId, relatedListing, {
-        displayName: currentListing.owner?.displayName,
-        avatarUrl: currentListing.owner?.avatarUrl || undefined,
+      const conversation = await createConversation(participantId, chatListing, {
+        displayName: property.landlord.name,
+        avatarUrl: property.landlord.avatar,
       });
+      if (message) {
+        await sendMessage(conversation.id, message, chatListing, senderProfile);
+        setQuickMessage('');
+      }
       onOpenMessages(conversation.id);
     } catch (openError) {
-      setChatError(openError instanceof Error ? openError.message : 'Không thể mở cuộc trò chuyện');
+      setChatError(apiError(openError));
     } finally {
       setOpeningChat(false);
     }
@@ -383,6 +267,8 @@ export default function ListingDetailScreen({
       <View className="absolute left-0 right-0 top-12 z-10 flex-row justify-between px-4">
         <Pressable
           onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel="Quay lại"
           className="h-11 w-11 items-center justify-center rounded-full bg-surface/95 shadow">
           <Ionicons name="chevron-back" size={25} className="text-foreground" />
         </Pressable>
@@ -401,321 +287,86 @@ export default function ListingDetailScreen({
         </Pressable>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-28">
-        <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
-          {(images.length ? images : [listingImage(null)]).map((url, index) => (
-            <Image
-              key={`${url}-${index}`}
-              source={{ uri: url }}
-              className="h-72 w-screen bg-muted"
+      <ScrollView
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        contentContainerClassName={showVisitorCta ? 'pb-28' : 'pb-8'}>
+        <MediaGallery items={gallery} />
+
+        <View
+          className="gap-4 bg-background p-4"
+          onLayout={(event) => {
+            bodyY.current = event.nativeEvent.layout.y;
+          }}>
+          <View
+            onLayout={(event) => {
+              contactY.current = event.nativeEvent.layout.y;
+            }}>
+            <OverviewCard
+              property={property}
+              metrics={getQuickMetrics(property)}
+              highlights={extras.highlights}
+              isNegotiable={extras.isNegotiable}>
+              {showVisitorCta ? (
+                <ContactCta
+                  status={property.status}
+                  acceptsNewRequests={extras.acceptsNewRequests}
+                  publicListing={extras.publicListing}
+                  isNegotiable={extras.isNegotiable}
+                  isOwner={isOwnerView}
+                  rentalRequest={rentalRequest}
+                  hasActiveBooking={hasActiveBooking}
+                  chatting={openingChat}
+                  onChat={() => void openPropertyChat()}
+                  onOpenRequests={() => onOpenManagement('tenant-requests')}
+                  onOpenBookings={() => onOpenManagement('tenant-appointments')}
+                />
+              ) : null}
+            </OverviewCard>
+          </View>
+
+          {chatError ? (
+            <View accessibilityRole="alert" className="rounded-2xl bg-danger-soft p-4">
+              <Text className="text-center text-sm text-danger">{chatError}</Text>
+              {!favoriteReady ? (
+                <Button label="Thử tải lại thao tác" onPress={loadInteractions} />
+              ) : null}
+            </View>
+          ) : null}
+
+          {isOwnerView ? (
+            <OwnListingCard
+              landlord={property.landlord}
+              canEdit={canEdit}
+              onEdit={() => setEditing(true)}
+              onManage={() => onOpenManagement('landlord-properties')}
             />
-          ))}
-        </ScrollView>
-
-        <View className="px-5 py-5">
-          <View className="flex-row items-center justify-between">
-            <Text className="rounded-full bg-primary-soft px-3 py-1 text-xs font-bold text-primary">
-              {listing.category.replace(/_/g, ' ')}
-            </Text>
-            <View className="flex-row items-center">
-              <Ionicons name="eye-outline" size={15} className="text-muted-foreground" />
-              <Text className="ml-1 text-xs text-muted-foreground">
-                {listing.viewCount ?? 0} lượt xem
-              </Text>
-            </View>
-          </View>
-          <Text className="mt-3 text-2xl font-bold leading-8 text-foreground">{listing.title}</Text>
-          <View className="mt-2 flex-row items-start">
-            <Ionicons name="location-outline" size={17} className="text-muted-foreground" />
-            <Text className="ml-1 flex-1 text-sm leading-5 text-muted-foreground">
-              {listing.address?.fullAddress || 'Đang cập nhật địa chỉ'}
-            </Text>
-          </View>
-          {mapUrl ? (
-            <View className="mt-4 overflow-hidden rounded-2xl border border-border bg-surface">
-              <View className="flex-row items-center justify-between border-b border-border px-4 py-3">
-                <Text className="text-sm font-bold text-foreground">Vị trí trên bản đồ</Text>
-                <Pressable
-                  onPress={() =>
-                    void Linking.openURL(`https://www.google.com/maps?q=${latitude},${longitude}`)
-                  }
-                  accessibilityRole="link"
-                  accessibilityLabel="Mở vị trí trên Google Maps"
-                  className="flex-row items-center gap-1">
-                  <Text className="text-xs font-semibold text-primary">Mở Google Maps</Text>
-                  <Ionicons name="open-outline" size={14} className="text-primary" />
-                </Pressable>
-              </View>
-              <WebView
-                key={`${latitude},${longitude}`}
-                source={{ uri: mapUrl }}
-                originWhitelist={['https://*']}
-                javaScriptEnabled
-                scrollEnabled={false}
-                style={{ height: 190 }}
-                accessibilityLabel="Bản đồ vị trí nhà"
-              />
-            </View>
-          ) : null}
-          <Text className="mt-4 text-2xl font-extrabold text-primary">
-            {formatMoney(listing.pricing.amount)}/tháng
-          </Text>
-          {own &&
-          ['APARTMENT', 'HOUSE', 'ROOM'].includes(listing.category) &&
-          !['RENTED', 'RENTED_EXTERNALLY', 'VIOLATION'].includes(listing.status) ? (
-            <Button label="Chỉnh sửa tin đăng" onPress={() => setForm('edit')} />
-          ) : null}
-          {!own && userId && userId !== listing.ownerId ? (
-            <>
-              <Button label="Đặt lịch xem nhà" onPress={() => setForm('booking')} />
-              {rentalLoading ? (
-                <Button label="Đang kiểm tra yêu cầu thuê..." onPress={() => {}} disabled />
-              ) : rentalError ? (
-                <View className="mt-3 rounded-2xl bg-danger-soft p-4">
-                  <Text className="text-sm text-danger">
-                    Chưa kiểm tra được yêu cầu thuê của bạn.
-                  </Text>
-                  <Button
-                    label="Thử kiểm tra lại"
-                    onPress={() => setRentalReload((value) => value + 1)}
-                  />
-                </View>
-              ) : rentalRequest ? (
-                <View className="mt-3 rounded-2xl border border-border bg-primary-soft p-4">
-                  <View className="flex-row items-center gap-2">
-                    <Ionicons
-                      name={
-                        rentalRequest.status === 'PENDING'
-                          ? 'time-outline'
-                          : 'checkmark-circle-outline'
-                      }
-                      size={20}
-                      className="text-primary"
-                    />
-                    <Text className="flex-1 text-sm font-bold text-foreground">
-                      {rentalRequest.status === 'PENDING'
-                        ? 'Đã gửi yêu cầu thuê · Chờ duyệt'
-                        : 'Yêu cầu thuê đã được chấp thuận'}
-                    </Text>
-                  </View>
-                  <Button
-                    label="Xem yêu cầu của tôi"
-                    onPress={() => onOpenManagement('tenant-requests')}
-                  />
-                </View>
-              ) : listing.status !== 'PUBLISHED' ? (
-                <Button label="Nhà hiện không nhận yêu cầu thuê" onPress={() => {}} disabled />
-              ) : (
-                <Button label="Gửi yêu cầu thuê" onPress={() => setForm('rental')} />
-              )}
-            </>
-          ) : null}
-          {!favoriteReady && chatError ? (
-            <Button label="Thử tải lại thao tác" onPress={loadInteractions} />
-          ) : null}
-          {listing.pricing.negotiable ? (
-            <Text className="mt-1 text-xs font-semibold text-success">Có thể thương lượng</Text>
-          ) : null}
-
-          <View className="mt-5 flex-row flex-wrap justify-between gap-y-3 rounded-3xl border border-border bg-surface p-4 shadow-sm">
-            <Metric label="Diện tích" value={`${listing.areaM2} m²`} />
-            <Metric
-              label="Phòng ngủ"
-              value={`${listing.apartmentDetail?.bedroomCount ?? listing.houseDetail?.bedroomCount ?? '—'} phòng`}
+          ) : showVisitorCta ? (
+            <VisitorOwnerCard
+              landlord={property.landlord}
+              message={quickMessage}
+              onChangeMessage={setQuickMessage}
+              sending={openingChat}
+              onSend={() => quickMessage.trim() && void openPropertyChat(quickMessage)}
             />
-            <Metric
-              label="Phòng tắm"
-              value={`${listing.apartmentDetail?.bathroomCount ?? listing.houseDetail?.bathroomCount ?? '—'} phòng`}
-            />
-            <Metric label="Có thể vào ở" value={listing.availableFrom || 'Liên hệ'} />
-          </View>
-
-          {categoryDetails.length ? (
-            <View className="mt-7">
-              <Text className="text-lg font-bold text-foreground">Thông tin chi tiết</Text>
-              <View className="mt-3 overflow-hidden rounded-2xl border border-border bg-surface">
-                {categoryDetails.map(([key, value], index) => (
-                  <View
-                    key={key}
-                    className={`flex-row justify-between px-4 py-3 ${index ? 'border-t border-border' : ''}`}>
-                    <Text className="text-sm text-muted-foreground">{LABELS[key]}</Text>
-                    <Text className="max-w-[55%] text-right text-sm font-semibold text-foreground">
-                      {formatDetailValue(key, value)}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </View>
           ) : null}
 
-          {listing.furnishings?.length ? (
-            <View className="mt-7">
-              <Text className="text-lg font-bold text-foreground">Nội thất bàn giao</Text>
-              <View className="mt-3 overflow-hidden rounded-2xl border border-border bg-surface">
-                {listing.furnishings.map((item, index) => (
-                  <View
-                    key={`${item.itemCode}-${item.assetName}-${index}`}
-                    className={`flex-row items-center justify-between px-4 py-3 ${index ? 'border-t border-border' : ''}`}>
-                    <View className="flex-1 pr-3">
-                      <Text className="text-sm font-semibold text-foreground">
-                        {item.assetName}
-                      </Text>
-                      {item.conditionNote ? (
-                        <Text className="mt-1 text-xs text-muted-foreground">
-                          {item.conditionNote}
-                        </Text>
-                      ) : null}
-                    </View>
-                    <Text className="text-right text-xs text-secondary">
-                      {item.quantity} ·{' '}
-                      {item.handoverConditionLabel || formatValue(item.handoverCondition)}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          ) : null}
-
-          {listing.policies?.length ? (
-            <View className="mt-7">
-              <Text className="text-lg font-bold text-foreground">Nội quy và chính sách</Text>
-              <PolicyNotice
-                tone="neutral"
-                icon="document-text-outline"
-                className="mt-3"
-                title="Nội quy và chính sách"
-                summary={`${listing.policies.length} nội quy và chính sách áp dụng cho tin này.`}>
-                <View className="gap-3">
-                  {listing.policies.map((policy) => (
-                    <View
-                      key={policy.code}
-                      className="rounded-2xl border border-border bg-surface p-4">
-                      <Text className="text-sm font-bold text-foreground">
-                        {policy.label || formatValue(policy.code)}
-                      </Text>
-                      <Text className="mt-1 text-sm text-secondary">
-                        {policy.displayValue || formatValue(policy.value)}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              </PolicyNotice>
-            </View>
-          ) : null}
-
-          <View className="mt-7">
-            <Text className="text-lg font-bold text-foreground">Điều khoản thuê</Text>
-            <View className="mt-3 flex-row flex-wrap justify-between gap-y-3">
-              <Metric
-                label="Tiền cọc"
-                value={
-                  listing.pricing.depositMonths
-                    ? `${listing.pricing.depositMonths} tháng`
-                    : formatMoney(listing.pricing.depositAmount)
-                }
-              />
-              <Metric
-                label="Thuê tối thiểu"
-                value={`${listing.pricing.minimumLeaseMonths} tháng`}
-              />
-              <Metric label="Thanh toán" value={formatValue(listing.pricing.paymentCycle)} />
-              <Metric
-                label="Phí quản lý"
-                value={listing.pricing.managementFeeIncluded ? 'Đã bao gồm' : 'Chưa bao gồm'}
-              />
-            </View>
-          </View>
-
-          {listing.amenities.length || listing.customAmenities.length ? (
-            <View className="mt-7">
-              <Text className="text-lg font-bold text-foreground">Tiện ích</Text>
-              <View className="mt-3 flex-row flex-wrap gap-2">
-                {[...listing.amenities.map((item) => item.name), ...listing.customAmenities].map(
-                  (item) => (
-                    <View
-                      key={item}
-                      className="flex-row items-center rounded-xl border border-primary-border bg-primary-soft px-3 py-2">
-                      <Ionicons name="checkmark-circle" size={14} className="text-primary" />
-                      <Text className="ml-1 text-xs font-semibold text-primary">{item}</Text>
-                    </View>
-                  )
-                )}
-              </View>
-            </View>
-          ) : null}
-
-          {listing.charges.length ? (
-            <View className="mt-7">
-              <Text className="text-lg font-bold text-foreground">Chi phí khác</Text>
-              <View className="mt-3 overflow-hidden rounded-2xl border border-border">
-                {listing.charges.map((charge, index) => (
-                  <View
-                    key={`${charge.chargeType}-${index}`}
-                    className={`flex-row justify-between px-4 py-3 ${index ? 'border-t border-border' : ''}`}>
-                    <Text className="text-sm text-muted-foreground">
-                      {charge.customName || CHARGE_LABELS[charge.chargeType] || charge.chargeType}
-                    </Text>
-                    <Text className="text-sm font-semibold text-foreground">
-                      {charge.includedInRent
-                        ? 'Đã bao gồm'
-                        : charge.amount
-                          ? `${formatMoney(charge.amount)}${charge.unit ? `/${charge.unit}` : ''}`
-                          : formatValue(charge.billingMethod)}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          ) : null}
-
-          {listing.viewingDays?.length || listing.viewingSlots?.length ? (
-            <View className="mt-7 rounded-2xl bg-success-soft p-4">
-              <Text className="text-lg font-bold text-foreground">Lịch xem nhà</Text>
-              <Text className="mt-2 text-sm text-secondary">
-                {(listing.viewingDays ?? []).map((day) => DAY_LABELS[day] ?? day).join(', ')}
-              </Text>
-              <Text className="mt-1 text-sm font-semibold text-success">
-                {(listing.viewingSlots ?? []).map((slot) => SLOT_LABELS[slot] ?? slot).join(' · ')}
-              </Text>
-            </View>
-          ) : null}
-
-          <View className="mt-7">
-            <Text className="text-lg font-bold text-foreground">Mô tả chi tiết</Text>
-            <Text className="mt-3 text-sm leading-6 text-secondary">
-              {listing.description || 'Chủ nhà chưa thêm mô tả.'}
-            </Text>
-          </View>
-
-          {listing.address?.addressNote ? (
-            <View className="mt-5 rounded-2xl bg-primary-soft p-4">
-              <Text className="text-sm font-bold text-foreground">Ghi chú địa chỉ</Text>
-              <Text className="mt-1 text-sm leading-5 text-secondary">
-                {listing.address.addressNote}
-              </Text>
-            </View>
-          ) : null}
-
-          <View className="mt-7 flex-row items-center rounded-2xl border border-border p-4">
-            <Avatar
-              uri={listing.owner?.avatarUrl}
-              name={listing.owner?.displayName || 'HomeSpace'}
-              size={48}
-            />
-            <View className="ml-3 flex-1">
-              <Text className="text-xs text-muted-foreground">Chủ nhà</Text>
-              <Text className="mt-0.5 font-bold text-foreground">
-                {listing.owner?.displayName || 'Người đăng tin'}
-              </Text>
-              <View className="mt-0.5 flex-row items-center">
-                <Ionicons name="checkmark-circle" size={13} className="text-success" />
-                <Text className="ml-1 text-xs text-success">Tài khoản đã xác thực</Text>
-              </View>
-            </View>
-          </View>
+          <DetailSections sections={getRentDetailSections(property)} />
+          <PoliciesCard
+            rows={Array.isArray(property.details.policies) ? listing.policies : undefined}
+          />
+          <AmenitiesSection amenities={extras.amenities} />
+          <FurnishingSection furnishing={extras.furnishing} />
+          <ViewingSection days={extras.viewingDays} slots={extras.viewingSlots} />
+          <DescriptionSection description={property.description} />
+          <NearbyPlaces
+            listingId={property.id}
+            latitude={address?.latitude}
+            longitude={address?.longitude}
+          />
 
           {similarListings.length ? (
-            <View className="mt-8">
+            <View className="mt-4">
               <Text className="text-lg font-bold text-foreground">Nhà tương tự</Text>
               <Text className="mt-1 text-xs text-muted-foreground">
                 Cùng loại nhà trong khu vực
@@ -723,7 +374,7 @@ export default function ListingDetailScreen({
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                className="-mx-5 mt-3 px-5">
+                className="-mx-4 mt-3 px-4">
                 {similarListings.map((item) => (
                   <ListingCard
                     key={item.id}
@@ -739,28 +390,21 @@ export default function ListingDetailScreen({
         </View>
       </ScrollView>
 
-      <View className="absolute bottom-0 left-0 right-0 flex-row gap-3 border-t border-border bg-surface px-5 pb-5 pt-3">
-        <Pressable
-          onPress={() => listing.owner?.phone && Linking.openURL(`tel:${listing.owner.phone}`)}
-          disabled={!listing.owner?.phone}
-          className="flex-1 flex-row items-center justify-center rounded-2xl border border-primary py-3.5">
-          <Ionicons name="call-outline" size={18} className="text-primary" />
-          <Text className="ml-2 font-bold text-primary">Gọi điện</Text>
-        </Pressable>
-        <Pressable
-          onPress={handleOpenMessages}
-          disabled={openingChat || userId === listing.ownerId || !userId}
-          className="flex-1 flex-row items-center justify-center rounded-2xl bg-brand py-3.5">
-          <Ionicons name="chatbubble-outline" size={18} className="text-on-brand" />
-          <Text className="ml-2 font-bold text-on-brand">
-            {openingChat ? 'Đang mở...' : 'Nhắn tin'}
+      {showVisitorCta ? (
+        <View className="absolute bottom-0 left-0 right-0 flex-row items-center justify-between gap-3 border-t border-border bg-surface px-4 pb-5 pt-3">
+          <Text numberOfLines={1} className="min-w-0 flex-1 text-lg font-bold text-primary">
+            {formatPrice(property.priceMillion)}
+            <Text className="text-xs font-normal text-muted-foreground"> /tháng</Text>
           </Text>
-        </Pressable>
-      </View>
-      {chatError ? (
-        <Text className="absolute bottom-20 left-5 right-5 rounded-xl bg-danger-soft px-3 py-2 text-center text-xs text-danger">
-          {chatError}
-        </Text>
+          <Pressable
+            onPress={() =>
+              scrollRef.current?.scrollTo({ y: bodyY.current + contactY.current, animated: true })
+            }
+            accessibilityRole="button"
+            className="min-h-11 items-center justify-center rounded-xl bg-brand px-6">
+            <Text className="text-sm font-bold text-on-brand">Liên hệ</Text>
+          </Pressable>
+        </View>
       ) : null}
     </SafeAreaView>
   );
