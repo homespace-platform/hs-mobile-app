@@ -68,8 +68,20 @@ export function subscribeNotificationEvents(listener: SocketListener) {
 }
 
 // Events: connect, chat:message, chat:message:updated, chat:message:deleted, ...
-export const subscribeChatEvents = (listener: SocketListener) =>
-  chatSocket?.subscribe(listener) ?? (() => undefined);
+const chatLocalListeners = new Set<SocketListener>();
+export function subscribeChatEvents(listener: SocketListener) {
+  const off = chatSocket?.subscribe(listener);
+  chatLocalListeners.add(listener);
+  return () => {
+    off?.();
+    chatLocalListeners.delete(listener);
+  };
+}
+
+// A chat push arrived while the app is open: screens refresh from REST even if the chat socket is down.
+export const notifyChatChanged = () =>
+  chatLocalListeners.forEach((listener) => listener('chat:refresh'));
+export const isChatSocketConnected = () => chatSocket?.isConnected() ?? false;
 
 // A foreground push arrived: same effect as a socket event, so it also works without the socket.
 export const notifyNotificationsChanged = () => dispatchNotificationEvent('notifications:changed');

@@ -19,6 +19,7 @@ export function createManagedSocket(options: {
   let attempt = 0;
   let running = false;
   let generation = 0;
+  let connected = false;
 
   const emit: SocketListener = (event, payload) => listeners.forEach((l) => l(event, payload));
   const teardown = () => {
@@ -26,6 +27,7 @@ export function createManagedSocket(options: {
     socket?.removeAllListeners();
     socket?.disconnect();
     socket = null;
+    connected = false;
   };
   const retry = () => {
     if (!running) return;
@@ -50,11 +52,18 @@ export function createManagedSocket(options: {
     socket = next;
     next.on('connect', () => {
       attempt = 0;
+      connected = true;
       emit('connect');
     });
     next.onAny((event: string, payload?: unknown) => emit(event, payload));
-    const lost = () => {
+    const lost = (reason?: unknown) => {
       if (socket !== next) return;
+      // Dev diagnostics only: the reason/message, never the token or headers.
+      if (__DEV__)
+        console.warn(
+          `[realtime] ${options.path} lost:`,
+          String((reason as Error)?.message ?? reason ?? '')
+        );
       teardown();
       retry();
     };
@@ -74,6 +83,7 @@ export function createManagedSocket(options: {
       generation++;
       teardown();
     },
+    isConnected: () => connected,
     subscribe(listener: SocketListener) {
       listeners.add(listener);
       return () => {

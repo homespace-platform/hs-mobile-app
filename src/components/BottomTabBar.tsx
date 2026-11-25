@@ -69,9 +69,12 @@ export default function BottomTabBar({
                 <View className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-surface bg-danger" />
               ) : null}
               {tab.id === 'messages' && chatUnread > 0 ? (
-                <View className="absolute -right-2.5 -top-1.5 min-w-4 items-center rounded-full border-2 border-surface bg-danger-solid px-1">
-                  <Text className="text-[9px] font-bold leading-3 text-on-danger-solid">
-                    {chatUnread > 99 ? '99+' : chatUnread}
+                <View className="absolute -right-2.5 -top-1.5 h-5 w-6 items-center justify-center rounded-full border-2 border-surface bg-danger-solid">
+                  <Text
+                    numberOfLines={1}
+                    allowFontScaling={false}
+                    className="text-[9px] font-bold leading-3 text-on-danger-solid">
+                    {chatUnread > 9 ? '9+' : chatUnread}
                   </Text>
                 </View>
               ) : null}

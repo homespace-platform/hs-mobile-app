@@ -2,7 +2,7 @@ import * as Notifications from 'expo-notifications';
 import { useEffect, useRef } from 'react';
 
 import { pushDataFromRequest, pushRouteFromData, type PushRoute } from '@/lib/push/pure';
-import { notifyNotificationsChanged } from '@/lib/realtime/connections';
+import { notifyChatChanged, notifyNotificationsChanged } from '@/lib/realtime/connections';
 import { refreshChatUnread } from '@/lib/unread-sync';
 
 // App in foreground: still show the banner (no sound) so a push is never silently lost.
@@ -36,7 +36,10 @@ export function usePushEvents(onOpen: (route: PushRoute) => void) {
     const received = Notifications.addNotificationReceivedListener((notification) => {
       const data = pushDataFromRequest(notification.request) as { category?: unknown } | undefined;
       notifyNotificationsChanged();
-      if (data?.category === 'CHAT') void refreshChatUnread();
+      if (data?.category === 'CHAT') {
+        void refreshChatUnread();
+        notifyChatChanged();
+      }
     });
     return () => {
       tapped.remove();

@@ -4,6 +4,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import {
   ActivityIndicator,
+  AppState,
   Image,
   KeyboardAvoidingView,
   Linking,
@@ -30,7 +31,7 @@ import {
   type ChatMessage,
 } from '@/services/chatApi';
 import { applyChatMessage, toChatMessage } from '@/lib/realtime/pure';
-import { subscribeChatEvents } from '@/lib/realtime/connections';
+import { isChatSocketConnected, subscribeChatEvents } from '@/lib/realtime/connections';
 import { chatUnreadStore } from '@/lib/unread-store';
 import { listingImage } from '@/services/listingApi';
 import { getStorageViewUrl, uploadChatAttachment } from '@/services/storageApi';
@@ -181,18 +182,45 @@ export default function MessagesScreen({
       });
   }, [conversations, loading]);
 
+  // Silent reload (no spinner) used by chat pushes, socket reconnects and the polling fallback.
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
+  const quietRefresh = useCallback(async () => {
+    lastLoadAt.current = Date.now();
+    try {
+      const items = await listConversations();
+      const openId = selectedIdRef.current;
+      setConversations(
+        openId
+          ? items.map((item) => (item.id === openId ? { ...item, unreadCount: 0 } : item))
+          : items
+      );
+      if (openId) {
+        const page = await listMessages(openId);
+        setMessages(page.items ?? []);
+        await markConversationRead(openId).catch(() => undefined);
+      }
+    } catch {
+      // Keep what is on screen; the next event or poll retries.
+    }
+  }, []);
+
+  // Fallback: while the chat socket is down, poll every 15s so the screen never needs a manual refresh.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (AppState.currentState === 'active' && !isChatSocketConnected()) void quietRefresh();
+    }, 15_000);
+    return () => clearInterval(timer);
+  }, [quietRefresh]);
+
   // Realtime chat (Gateway chat socket): new messages update the list/unread count and the open thread.
   const myId = profile?.id;
   useEffect(
     () =>
       subscribeChatEvents((event, payload) => {
-        if (event === 'connect') {
-          if (Date.now() - lastLoadAt.current < 2000) return;
-          void load(true);
-          if (selectedId)
-            void listMessages(selectedId)
-              .then((page) => setMessages(page.items ?? []))
-              .catch(() => undefined);
+        if (event === 'connect' || event === 'chat:refresh') {
+          if (Date.now() - lastLoadAt.current < 1500) return;
+          void quietRefresh();
           return;
         }
         if (event !== 'chat:message') return;
@@ -218,7 +246,7 @@ export default function MessagesScreen({
         if (result.markRead)
           void markConversationRead(message.conversationId).catch(() => undefined);
       }),
-    [load, myId, selectedId]
+    [load, myId, quietRefresh, selectedId]
   );
 
   const selected = conversations.find((conversation) => conversation.id === selectedId) ?? null;
@@ -524,15 +552,7 @@ export default function MessagesScreen({
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <TabHeader
-        title="Tin nhắn"
-        right={
-          <View className="h-9 min-w-9 items-center justify-center rounded-full bg-primary-soft px-2">
-            <Text className="text-xs font-bold text-primary">
-              {conversations.reduce((total, item) => total + item.unreadCount, 0)}
-            </Text>
-          </View>
-        }>
+      <TabHeader title="Tin nhắn">
         <View className="mt-4 flex-row items-center rounded-2xl bg-muted px-4">
           <Ionicons name="search-outline" size={19} className="text-subtle" />
           <TextInput
@@ -598,9 +618,13 @@ export default function MessagesScreen({
                     {conversation.lastMessage || 'Chưa có tin nhắn'}
                   </Text>
                   {conversation.unreadCount ? (
-                    <View className="ml-2 h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1">
-                      <Text className="text-[10px] font-bold text-on-brand">
-                        {conversation.unreadCount}
+                    <View className="ml-2 h-5 w-6 shrink-0 items-center justify-center rounded-full bg-brand">
+                      <Text
+                        accessibilityLabel={`${conversation.unreadCount} tin chưa đọc`}
+                        numberOfLines={1}
+                        allowFontScaling={false}
+                        className="text-[10px] font-bold text-on-brand">
+                        {conversation.unreadCount > 9 ? '9+' : conversation.unreadCount}
                       </Text>
                     </View>
                   ) : null}
