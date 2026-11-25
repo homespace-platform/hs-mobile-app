@@ -23,6 +23,10 @@ function load(file, dependencies = {}, globals = {}) {
     ...globals,
     require(name) {
       if (name in dependencies) return dependencies[name];
+      // Real module over the same mocked client: bookingApi and managementApi delegate to it.
+      if (name === '@/services/appointmentApi')
+        return load('services/appointmentApi.ts', dependencies, globals);
+      if (name === 'date-fns') return require('date-fns');
       if (name === 'expo-secure-store')
         return { getItemAsync: async () => null, setItemAsync: async () => {} };
       if (name === '@/services/userApi') return { getUserProfileApi: async () => ({ id: 'user' }) };
@@ -74,8 +78,6 @@ const appointment = {
 
 test('each management menu calls its real endpoint and preserves pagination', async () => {
   const paths = {
-    'tenant-appointments': '/api/v1/appointments/my-bookings',
-    'landlord-appointments': '/api/v1/appointments/owner',
     'tenant-requests': '/api/v1/rental-requests/my-requests',
     'landlord-requests': '/api/v1/rental-requests/owner',
     'tenant-contracts': '/api/v1/contracts',
@@ -139,7 +141,7 @@ test('rental request tabs count all statuses with paginated requests and fetch t
     );
     assert.equal(counts.find((item) => item.status === 'PENDING').count, 1);
     assert.equal(counts.find((item) => item.status === 'ACCEPTED').count, 2);
-    await api.getManagementPage(section, 2, 'user', 'ALL', 'ACCEPTED');
+    await api.getManagementPage(section, 2, 'user', 'ACCEPTED');
     assert.deepEqual({ ...calls.at(-1).params }, { page: 2, size: 12, status: 'ACCEPTED' });
   }
 });
@@ -243,40 +245,6 @@ test('only payee may confirm a reported transfer, including tenant refunds', () 
   assert.ok(!actions('tenant').includes('confirm-receipt'));
   assert.equal(actions('stranger').length, 0);
   assert.equal(api.paymentEntry({ ...payment, status: 'CONFIRMED' }, 'owner').actions.length, 0);
-});
-
-test('appointment transitions require reasons and use the correct owner/renter paths', async () => {
-  const { client, calls } = mockApi();
-  const api = load('services/managementApi.ts', { '@/lib/axios-client': client });
-  const row = api.appointmentEntry(appointment, false);
-  assert.deepEqual(
-    Array.from(row.actions, (action) => action.action),
-    ['cancel']
-  );
-  await assert.rejects(api.performManagementAction('tenant-appointments', row, 'cancel', ' '));
-  await assert.rejects(api.performManagementAction('tenant-appointments', row, 'approve', ''));
-  assert.equal(calls.length, 0);
-  await api.performManagementAction('tenant-appointments', row, 'cancel', 'Đổi kế hoạch');
-  assert.equal(calls[0].args[0], '/api/v1/appointments/a%2F1/cancel');
-  await api.performManagementAction(
-    'landlord-appointments',
-    api.appointmentEntry(appointment, true),
-    'cancel',
-    'Bận'
-  );
-  assert.equal(calls[1].args[0], '/api/v1/appointments/a%2F1/owner-cancel');
-  const pendingChange = api.appointmentEntry({ ...appointment, rescheduleRequested: true }, true);
-  await api.performManagementAction(
-    'landlord-appointments',
-    pendingChange,
-    'approve-reschedule',
-    ''
-  );
-  assert.equal(calls[2].args[0], '/api/v1/appointments/a%2F1/reschedule/approve');
-  assert.equal(
-    api.appointmentEntry({ ...appointment, status: 'CANCELLED' }, true).actions.length,
-    0
-  );
 });
 
 test('accepted rental requests with reported or confirmed money cannot be canceled in UI', () => {
@@ -697,114 +665,6 @@ test('initial passwords omit old credentials and existing passwords use the upda
   assert.equal(calls[1].args[1].oldPassword, 'OldPassword1!');
 });
 
-test('appointment calendar fetches every confirmed/completed page for both roles without duplicate events', async () => {
-  for (const owner of [false, true]) {
-    const calls = [];
-    const client = {
-      get: async (url, { params }) => {
-        calls.push({ url, params });
-        const rows =
-          params.status === 'COMPLETED'
-            ? [{ ...appointment, status: 'COMPLETED' }]
-            : [
-                {
-                  ...appointment,
-                  id: params.page === 1 ? appointment.id : 'second',
-                  status: 'CONFIRMED',
-                },
-              ];
-        return {
-          data: { result: rows, hasMore: params.status === 'CONFIRMED' && params.page === 1 },
-        };
-      },
-    };
-    const api = load('services/managementApi.ts', { '@/lib/axios-client': client });
-    const result = await api.getAppointmentCalendar(owner);
-    assert.equal(calls.length, 3);
-    assert.ok(
-      calls.every((call) => call.url === `/api/v1/appointments/${owner ? 'owner' : 'my-bookings'}`)
-    );
-    assert.equal(calls[1].params.page, 2);
-    assert.equal(calls[2].params.page, 1);
-    assert.equal(calls[2].params.status, 'COMPLETED');
-    assert.equal(calls[0].params.size, 50);
-    assert.equal(result.length, 2);
-    assert.equal(result.find((row) => row.id === appointment.id).status, 'COMPLETED');
-  }
-});
-
-test('unviewed appointments include all pending/confirmed pages and sort both groups together for each role', async () => {
-  for (const section of ['tenant-appointments', 'landlord-appointments']) {
-    const calls = [];
-    const client = {
-      get: async (url, { params }) => {
-        calls.push({ url, params });
-        const row = {
-          ...appointment,
-          id: `${params.status}-${params.page}`,
-          status: params.status,
-          appointmentDate:
-            params.status === 'CONFIRMED'
-              ? '2026-11-05'
-              : params.page === 1
-                ? '2026-11-03'
-                : '2026-11-01',
-        };
-        return {
-          data: { result: [row], hasMore: params.status === 'PENDING' && params.page === 1 },
-        };
-      },
-    };
-    const api = load('services/managementApi.ts', { '@/lib/axios-client': client });
-    const result = await api.getManagementPage(section, 1, 'user', 'UNVIEWED');
-    assert.equal(calls.length, 3);
-    assert.ok(
-      calls.every((call) =>
-        call.url.endsWith(section.startsWith('landlord') ? '/owner' : '/my-bookings')
-      )
-    );
-    assert.equal(calls[1].params.page, 2);
-    assert.equal(calls[2].params.status, 'CONFIRMED');
-    assert.equal(result.total, 3);
-    assert.equal(result.hasMore, false);
-    assert.deepEqual(
-      Array.from(result.items, (row) => row.id),
-      ['CONFIRMED-1', 'PENDING-1', 'PENDING-2']
-    );
-    assert.ok(result.items.every((row) => ['PENDING', 'CONFIRMED'].includes(row.status)));
-  }
-});
-
-test('completed appointments filter on the server with correct totals/pagination and all clears the filter', async () => {
-  for (const section of ['tenant-appointments', 'landlord-appointments']) {
-    const { client, calls } = mockApi({
-      result: [{ ...appointment, status: 'COMPLETED' }],
-      hasMore: true,
-      totalElements: 40,
-    });
-    const api = load('services/managementApi.ts', { '@/lib/axios-client': client });
-    const result = await api.getManagementPage(section, 2, 'user', 'COMPLETED');
-    assert.equal(calls[0].args[1].params.status, 'COMPLETED');
-    assert.equal(calls[0].args[1].params.page, 2);
-    assert.equal(result.total, 40);
-    assert.equal(result.hasMore, true);
-    await api.getManagementPage(section, 1, 'user', 'ALL');
-    assert.equal(calls[1].args[1].params.status, undefined);
-    assert.equal(calls[1].args[1].params.page, 1);
-  }
-});
-
-test('calendar loading rejects partial data if a later page fails', async () => {
-  const client = {
-    get: async (url, { params }) => {
-      if (params.page === 2) throw new Error('Connection lost');
-      return { data: { result: [appointment], hasMore: true } };
-    },
-  };
-  const api = load('services/managementApi.ts', { '@/lib/axios-client': client });
-  await assert.rejects(api.getAppointmentCalendar(false), /Connection lost/);
-});
-
 test('calendar starts Monday, includes leap day, and crosses month/year boundaries without date drift', () => {
   const api = load('lib/appointment-calendar.ts');
   const leap = api.calendarDays(new Date(2028, 1, 29), 'month');
@@ -940,6 +800,32 @@ test('avatar uploads reject files above the server limit of 5 MB', async () => {
     /5 MB/
   );
   assert.equal(calls.length, 0);
+});
+
+test('chat call token preserves the web Agora channel and signed string account', async () => {
+  const callId = 'c76a3534-ccb4-4f8f-8eb2-959e5fe36254';
+  const token = {
+    appId: 'agora-app',
+    channel: 'hs_c76a3534ccb44f8f8eb2959e5fe36254',
+    token: 'signed-token',
+    uid: 'user-id-string',
+  };
+  const { client, calls } = mockApi({ result: token });
+  const api = load('services/chatCallApi.ts', { '@/lib/axios-client': client });
+  assert.equal(await api.getChatCallToken('thread/id', callId), token);
+  assert.equal(calls[0].method, 'post');
+  assert.equal(calls[0].args[0], '/api/v1/chat/conversations/thread%2Fid/call-token');
+  assert.equal(calls[0].args[1].callId, callId);
+
+  for (const invalid of [
+    { ...token, channel: 'other-room' },
+    { ...token, uid: 123 },
+    { ...token, token: '' },
+  ]) {
+    const { client: invalidClient } = mockApi({ result: invalid });
+    const invalidApi = load('services/chatCallApi.ts', { '@/lib/axios-client': invalidClient });
+    await assert.rejects(() => invalidApi.getChatCallToken('thread/id', callId), /không hợp lệ/);
+  }
 });
 
 test('membership card status follows the web rules and /membership/me failures degrade safely', async () => {
@@ -1197,6 +1083,11 @@ test('notification actionPath is validated and mapped only to existing mobile sc
   assert.equal(target('/rent/not-a-uuid').kind, 'none');
   assert.equal(target('/news/tin-moi').kind, 'news');
   assert.deepEqual(target('/dashboard/viewing-schedules?appointmentId=b1'), {
+    kind: 'management',
+    section: 'landlord-appointments',
+    query: 'appointmentId=b1',
+  });
+  assert.deepEqual(target('/dashboard/viewing-schedules'), {
     kind: 'management',
     section: 'landlord-appointments',
   });

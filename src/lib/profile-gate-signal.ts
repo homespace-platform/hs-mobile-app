@@ -9,6 +9,12 @@ export const setProfileGateDeniedHandler = (next: typeof denied) => {
 };
 export const notifyProfileGateDenied = (denial: ProfileGateDenial) => denied?.(denial);
 
+let permissionDenied: (() => void) | undefined;
+export const setPermissionDeniedHandler = (next: typeof permissionDenied) => {
+  permissionDenied = next;
+};
+export const notifyPermissionDenied = () => permissionDenied?.();
+
 let openSettingsHandler: ((section: ProfileGateSection) => void) | undefined;
 export const setOpenSettingsHandler = (next: typeof openSettingsHandler) => {
   openSettingsHandler = next;

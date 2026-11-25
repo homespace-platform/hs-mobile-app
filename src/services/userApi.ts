@@ -34,6 +34,13 @@ export const getUserProfileApi = async (forceRefresh = false) => {
   return request;
 };
 
+export async function getMyPermissions() {
+  const response = await axiosClient.get<ApiResponse<{ permissions?: string[] }>>(
+    '/api/v1/users/me/permissions'
+  );
+  return response.data.result?.permissions ?? [];
+}
+
 export type ProfileUpdate = {
   username: string;
   email: string;

@@ -1,43 +1,16 @@
 import axiosClient from '@/lib/axios-client';
 import type { ApiResponse } from '@/types/api';
+import type { ListingAvailabilityResponse } from '@/types/appointment';
 
-export type Availability = {
-  isDayAvailable: boolean;
-  hasExistingActiveBooking: boolean;
-  allowedViewingDays?: string[];
-  slots: { startTime: string; endTime: string; status: string; slotType?: string }[];
-};
-export async function getAvailability(listingId: string, date: string, signal?: AbortSignal) {
-  return (
-    await axiosClient.get<ApiResponse<Availability>>(
-      `/api/v1/appointments/availability/${encodeURIComponent(listingId)}`,
-      { params: { date }, signal }
-    )
-  ).data.result;
-}
-export async function createAppointment(payload: {
-  listingId: string;
-  appointmentDate: string;
-  startTime: string;
-  endTime: string;
-  renterName: string;
-  renterPhone: string;
-  visitorCount: number;
-  renterNote: string;
-}) {
-  await axiosClient.post('/api/v1/appointments', payload);
-}
-export async function rescheduleAppointment(
-  id: string,
-  payload: {
-    proposedDate: string;
-    proposedStartTime: string;
-    proposedEndTime: string;
-    rescheduleReason: string;
-  }
-) {
-  await axiosClient.put(`/api/v1/appointments/${encodeURIComponent(id)}/reschedule`, payload);
-}
+// Appointment calls live in appointmentApi; these names remain for the older booking screens.
+export {
+  createAppointment,
+  getAvailability,
+  getMyBookingByListing,
+  requestReschedule as rescheduleAppointment,
+} from '@/services/appointmentApi';
+export type Availability = ListingAvailabilityResponse;
+
 export type RentalEstimateInput = {
   listingId: string;
   moveInDate: string;
@@ -78,23 +51,6 @@ export async function getMyRentalRequestByListing(listingId: string) {
       `/api/v1/rental-requests/by-listing/${encodeURIComponent(listingId)}`
     )
   ).data.result;
-}
-
-export type MyBooking = { id: string; status: string };
-
-// Same endpoint as web appointmentService.getMyBookingByListing; errors mean "no booking".
-export async function getMyBookingByListing(listingId: string) {
-  try {
-    return (
-      (
-        await axiosClient.get<ApiResponse<MyBooking | null>>(
-          `/api/v1/appointments/my-bookings/by-listing/${encodeURIComponent(listingId)}`
-        )
-      ).data.result ?? null
-    );
-  } catch {
-    return null;
-  }
 }
 
 export async function createRentalRequest(

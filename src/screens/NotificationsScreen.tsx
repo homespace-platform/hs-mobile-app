@@ -17,6 +17,7 @@ import Ionicons from '@/components/Icon';
 import NotificationCard from '@/components/notification/NotificationCard';
 import { ScreenHeader } from '@/components/Screen';
 import { apiError } from '@/lib/api-error';
+import { parseDeepLink } from '@/lib/appointment';
 import {
   FEED_DEFAULT_LIMIT,
   getNotificationTag,
@@ -49,7 +50,7 @@ export default function NotificationsScreen({
 }: {
   onBack: () => void;
   onOpenListing: (id: string, own?: boolean) => void;
-  onOpenManagement: (section: ManagementSection) => void;
+  onOpenManagement: (section: ManagementSection, appointmentId?: string) => void;
   onOpenNews: () => void;
 }) {
   const showDialog = useDialog();
@@ -200,7 +201,8 @@ export default function NotificationsScreen({
     }
     const target = notificationTarget(item.actionPath);
     if (target.kind === 'listing') onOpenListing(target.id, target.own);
-    else if (target.kind === 'management') onOpenManagement(target.section);
+    else if (target.kind === 'management')
+      onOpenManagement(target.section, parseDeepLink(target.query ?? '')?.id);
     else if (target.kind === 'news') onOpenNews();
     else if (target.kind === 'management-choice')
       showDialog(item.title, `${item.body}\n\nBạn đang xem với vai trò nào?`, [

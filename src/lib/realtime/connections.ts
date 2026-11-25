@@ -42,9 +42,12 @@ const chatSocket = chatTarget
     })
   : null;
 
+export function emitChatWithAck(event: string, payload: unknown, timeoutMs?: number) {
+  return chatSocket?.emitWithAck(event, payload, timeoutMs) ?? Promise.resolve({ ok: false });
+}
+
 const presenceSync = createPresenceSync({
-  emitWithAck: (event, payload, timeoutMs) =>
-    chatSocket?.emitWithAck(event, payload, timeoutMs) ?? Promise.resolve({ ok: false }),
+  emitWithAck: emitChatWithAck,
   isConnected: () => chatSocket?.isConnected() ?? false,
   apply: chatPresenceStore.apply,
 });

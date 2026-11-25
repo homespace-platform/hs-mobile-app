@@ -31,10 +31,12 @@ export default function ManagementDashboardScreen({
   role,
   onSelectRole,
   onSelectTab,
+  onOpenAppointments,
 }: {
   role: ManagementRole;
   onSelectRole: (role: ManagementRole) => void;
   onSelectTab: (tab: MainTab) => void;
+  onOpenAppointments: (section: 'tenant-appointments' | 'landlord-appointments') => void;
 }) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -56,6 +58,13 @@ export default function ManagementDashboardScreen({
     };
   }, []);
 
+  // Only the appointment screens are built; the other entries stay on the title-only placeholder.
+  function openDestination(next: ManagementDestination) {
+    if (next === 'tenant-appointments' || next === 'landlord-appointments')
+      onOpenAppointments(next);
+    else setDestination(next);
+  }
+
   function closeDrawer(next?: ManagementDestination) {
     Animated.timing(progress, {
       toValue: 0,
@@ -64,7 +73,7 @@ export default function ManagementDashboardScreen({
     }).start(({ finished }) => {
       if (!finished) return;
       setDrawerOpen(false);
-      if (next) setDestination(next);
+      if (next) openDestination(next);
     });
   }
 
@@ -90,7 +99,7 @@ export default function ManagementDashboardScreen({
             }
           />
           <ScrollView className="flex-1" contentContainerClassName="px-5 pb-6 pt-5">
-            <ManagementOverview role={role} onOpen={setDestination} />
+            <ManagementOverview role={role} onOpen={openDestination} />
           </ScrollView>
           <BottomTabBar
             active="management"

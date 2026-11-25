@@ -4,6 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import './global.css';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { DialogProvider } from '@/components/AppDialog';
+import { ChatCallProvider } from '@/components/chat/ChatCallProvider';
 import BackendHealthGate from '@/components/BackendHealthGate';
 import NetworkGate from '@/components/NetworkGate';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
@@ -29,7 +30,6 @@ import { setOpenSettingsHandler } from '@/lib/profile-gate-signal';
 import type { ProfileGateSection } from '@/lib/profile-gate';
 import { useOnboardingSync } from '@/lib/use-onboarding';
 import { usePushEvents } from '@/lib/push/use-push-events';
-import { useRealtimeConnections } from '@/lib/realtime/connections';
 import { useKycDeepLink } from '@/lib/kyc/use-kyc-deep-link';
 
 function SignedInApp() {
@@ -49,6 +49,8 @@ function SignedInApp() {
   const [ownListing, setOwnListing] = useState(false);
   const [managementRole, setManagementRole] = useState<ManagementRole>('tenant');
   const [managementSection, setManagementSection] = useState<ManagementSection | null>(null);
+  // Appointment of a tapped notification; the appointments screen opens it and clears it on close.
+  const [linkedAppointmentId, setLinkedAppointmentId] = useState<string | null>(null);
   const [managementOrigin, setManagementOrigin] = useState<'detail' | 'notifications' | null>(null);
   const [filters, setFilters] = useState<Record<string, string | number>>({});
   const [listingId, setListingId] = useState<string | null>(null);
@@ -73,10 +75,10 @@ function SignedInApp() {
     if (tab === 'management') {
       setManagementSection(null);
       setManagementOrigin(null);
+      setLinkedAppointmentId(null);
     }
   };
 
-  useRealtimeConnections();
   useKycDeepLink();
   // Push taps (also from a killed app): chat opens the Messages tab, everything else the notification center.
   usePushEvents((route) =>
@@ -90,8 +92,9 @@ function SignedInApp() {
     setScreen('detail');
     if (section) setManagementSection(section);
   };
-  const openManagement = (section: ManagementSection) => {
+  const openManagement = (section: ManagementSection, appointmentId?: string) => {
     setManagementSection(section);
+    setLinkedAppointmentId(appointmentId ?? null);
     setManagementOrigin(screen === 'detail' || screen === 'notifications' ? screen : null);
     setScreen('management');
   };
@@ -181,6 +184,7 @@ function SignedInApp() {
         <ManagementDashboardScreen
           role={managementRole}
           onSelectRole={setManagementRole}
+          onOpenAppointments={openManagement}
           onSelectTab={selectTab}
         />
       );
@@ -191,6 +195,8 @@ function SignedInApp() {
         onSelectTab={selectTab}
         onOpenListing={openListing}
         initialSection={managementSection}
+        linkedAppointmentId={linkedAppointmentId}
+        onLinkConsumed={() => setLinkedAppointmentId(null)}
         onExit={() => {
           setManagementSection(null);
           if (managementOrigin) setScreen(managementOrigin);
@@ -227,10 +233,10 @@ function SignedInApp() {
 function SignedInRoot() {
   useOnboardingSync();
   return (
-    <>
+    <ChatCallProvider>
       <SignedInApp />
       <InitialPasswordGate />
-    </>
+    </ChatCallProvider>
   );
 }
 

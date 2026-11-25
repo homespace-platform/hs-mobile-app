@@ -3,6 +3,7 @@ import Ionicons from '@/components/Icon';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import BookingAppointmentModal from '@/components/appointment/BookingAppointmentModal';
 import ListingCard from '@/components/ListingCard';
 import { Button } from '@/components/Screen';
 import ContactCta from '@/components/listing-detail/ContactCta';
@@ -31,6 +32,7 @@ import { getFavoriteIds, toggleFavorite, recordListingHistory } from '@/services
 import { getUserProfileApi } from '@/services/userApi';
 import ListingDraftScreen from '@/screens/ListingDraftScreen';
 import { apiError } from '@/lib/api-error';
+import { isActiveBooking } from '@/lib/appointment';
 import {
   formatPrice,
   getQuickMetrics,
@@ -40,11 +42,8 @@ import {
   toRentProperty,
 } from '@/lib/rent-detail';
 import { useFavoriteListings } from '@/lib/use-favorite-listings';
-import {
-  getMyBookingByListing,
-  getMyRentalRequestByListing,
-  type ActiveRentalRequest,
-} from '@/services/bookingApi';
+import { getMyBookingByListing } from '@/services/appointmentApi';
+import { getMyRentalRequestByListing, type ActiveRentalRequest } from '@/services/bookingApi';
 import type { ManagementSection } from '@/services/managementApi';
 
 type SenderProfile = { displayName?: string; email?: string; avatarUrl?: string };
@@ -78,6 +77,7 @@ export default function ListingDetailScreen({
   const [quickMessage, setQuickMessage] = useState('');
   const [rentalRequest, setRentalRequest] = useState<ActiveRentalRequest | null>(null);
   const [hasActiveBooking, setHasActiveBooking] = useState(false);
+  const [bookingOpen, setBookingOpen] = useState(false);
   const { favoriteIds: similarFavoriteIds, toggle: toggleSimilarFavorite } = useFavoriteListings();
   const [similarListings, setSimilarListings] = useState<ListingSummary[]>([]);
   const scrollRef = useRef<ScrollView>(null);
@@ -88,6 +88,7 @@ export default function ListingDetailScreen({
   useEffect(() => {
     setRentalRequest(null);
     setHasActiveBooking(false);
+    setBookingOpen(false);
     if (own) return;
     let active = true;
     getMyRentalRequestByListing(listingId)
@@ -95,14 +96,22 @@ export default function ListingDetailScreen({
         if (active) setRentalRequest(request);
       })
       .catch(() => undefined);
-    getMyBookingByListing(listingId).then((booking) => {
-      if (active)
-        setHasActiveBooking(Boolean(booking && ['PENDING', 'CONFIRMED'].includes(booking.status)));
-    });
     return () => {
       active = false;
     };
   }, [listingId, own]);
+
+  // On entry and again each time the booking modal closes.
+  useEffect(() => {
+    if (own || bookingOpen) return;
+    let active = true;
+    getMyBookingByListing(listingId).then((booking) => {
+      if (active) setHasActiveBooking(isActiveBooking(booking));
+    });
+    return () => {
+      active = false;
+    };
+  }, [listingId, own, bookingOpen]);
 
   const loadInteractions = useCallback(async () => {
     setFavoriteReady(false);
@@ -321,6 +330,7 @@ export default function ListingDetailScreen({
                   onChat={() => void openPropertyChat()}
                   onOpenRequests={() => onOpenManagement('tenant-requests')}
                   onOpenBookings={() => onOpenManagement('tenant-appointments')}
+                  onBook={() => setBookingOpen(true)}
                 />
               ) : null}
             </OverviewCard>
@@ -407,6 +417,18 @@ export default function ListingDetailScreen({
           </Pressable>
         </View>
       ) : null}
+
+      <BookingAppointmentModal
+        isOpen={bookingOpen}
+        onClose={() => setBookingOpen(false)}
+        onViewMyBookings={() => onOpenManagement('tenant-appointments')}
+        listingId={property.id}
+        listingTitle={property.title}
+        listingAddress={property.location}
+        listingPrice={property.priceMillion * 1_000_000}
+        listingThumbnail={property.images[0] ? listingImage(property.images[0]) : null}
+        ownerId={property.ownerId || property.landlord.id}
+      />
     </SafeAreaView>
   );
 }

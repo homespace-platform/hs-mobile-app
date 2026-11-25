@@ -22,6 +22,7 @@ import Avatar from '@/components/Avatar';
 import TabHeader from '@/components/TabHeader';
 import ProfileCompletionBanner from '@/components/ProfileCompletionBanner';
 import { useDialog } from '@/components/AppDialog';
+import { useChatCalls } from '@/components/chat/ChatCallProvider';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import {
   listConversations,
@@ -42,6 +43,11 @@ import { listingImage } from '@/services/listingApi';
 import { getStorageViewUrl, uploadChatAttachment } from '@/services/storageApi';
 import { getUserProfileApi } from '@/services/userApi';
 import type { UserProfileResponse } from '@/types/api';
+
+const CALL_OPTIONS = [
+  { mode: 'voice', label: 'Gọi thoại', icon: 'call-outline' },
+  { mode: 'video', label: 'Gọi video', icon: 'videocam-outline' },
+] as const;
 
 function conversationName(conversation: ChatConversation) {
   return (
@@ -148,6 +154,7 @@ export default function MessagesScreen({
   onOpenConversationDetails: (conversation: ChatConversation) => void;
 }) {
   const showDialog = useDialog();
+  const { session, startCall } = useChatCalls();
   const [profile, setProfile] = useState<UserProfileResponse | null>(null);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -451,11 +458,43 @@ export default function MessagesScreen({
                 className="mt-0.5 text-xs"
               />
             </View>
-            <Pressable
-              onPress={() => onOpenConversationDetails(selected)}
-              className="h-10 w-10 items-center justify-center rounded-full bg-primary-soft">
-              <Ionicons name="information-circle-outline" size={23} className="text-primary" />
-            </Pressable>
+            <View className="ml-2 flex-row items-center gap-1">
+              {selected.participantId
+                ? CALL_OPTIONS.map(({ mode, label, icon }) => {
+                    const busy =
+                      session?.phase === 'inviting' &&
+                      session.call.conversationId === selected.id &&
+                      session.call.mode === mode;
+                    return (
+                      <Pressable
+                        key={mode}
+                        accessibilityRole="button"
+                        accessibilityLabel={label}
+                        accessibilityState={{ disabled: Boolean(session), busy }}
+                        disabled={Boolean(session)}
+                        onPress={() => void startCall(selected.id, mode, conversationName(selected))}
+                        className={`h-11 w-11 items-center justify-center rounded-full ${session ? 'bg-disabled' : 'bg-primary-soft'}`}>
+                        {busy ? (
+                          <ActivityIndicator className="text-on-disabled" />
+                        ) : (
+                          <Ionicons
+                            name={icon}
+                            size={21}
+                            className={session ? 'text-on-disabled' : 'text-primary'}
+                          />
+                        )}
+                      </Pressable>
+                    );
+                  })
+                : null}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Thông tin cuộc trò chuyện"
+                onPress={() => onOpenConversationDetails(selected)}
+                className="h-11 w-11 items-center justify-center rounded-full bg-primary-soft">
+                <Ionicons name="information-circle-outline" size={23} className="text-primary" />
+              </Pressable>
+            </View>
           </View>
 
           <ScrollView

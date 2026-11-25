@@ -21,12 +21,10 @@ import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import TabHeader from '@/components/TabHeader';
 import ProfileCompletionBanner from '@/components/ProfileCompletionBanner';
 import { Button, ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
-import BookingForm from '@/components/BookingForm';
-import AppointmentCalendar, { type CalendarState } from '@/components/AppointmentCalendar';
+import AppointmentsScreen from '@/components/appointment/manage/AppointmentsScreen';
 import ListingDraftScreen from '@/screens/ListingDraftScreen';
 import BranchManagementScreen from '@/screens/BranchManagementScreen';
 import BillingScreen from '@/screens/BillingScreen';
-import { dateKey } from '@/lib/appointment-calendar';
 import { getDatePeriodRange, toLocalDateKey, type DatePeriod } from '@/lib/date-period';
 import { apiError } from '@/lib/api-error';
 import { getUserProfileApi } from '@/services/userApi';
@@ -34,9 +32,7 @@ import {
   getContractDocuments,
   getManagementPage,
   getRentalRequestCounts,
-  getAppointmentCalendar,
   getManagementAttentionCounts,
-  markAppointmentNoticeSeen,
   markRentalNoticeSeen,
   performManagementAction,
   paymentEntry,
@@ -52,7 +48,6 @@ import {
   type ManagementSection,
   type Payment,
   type RentalOnboarding,
-  type AppointmentListFilter,
   type RentalRequestStatus,
 } from '@/services/managementApi';
 import { getStorageViewUrl, uploadFile, type LocalFile } from '@/services/storageApi';
@@ -92,14 +87,6 @@ function requestTone(status: string) {
   if (status === 'ACCEPTED') return REQUEST_TONES.success;
   if (status === 'COMPLETED') return REQUEST_TONES.primary;
   if (status === 'REJECTED') return REQUEST_TONES.danger;
-  return REQUEST_TONES.neutral;
-}
-
-function appointmentTone(status: string) {
-  if (status === 'PENDING') return REQUEST_TONES.warning;
-  if (status === 'CONFIRMED') return REQUEST_TONES.primary;
-  if (status === 'COMPLETED') return REQUEST_TONES.success;
-  if (status === 'REJECTED' || status === 'CANCELLED') return REQUEST_TONES.danger;
   return REQUEST_TONES.neutral;
 }
 
@@ -143,7 +130,6 @@ function EntryDetail({
   const [reason, setReason] = useState('');
   const [proof, setProof] = useState<LocalFile | null>(null);
   const [reference, setReference] = useState('');
-  const [rescheduling, setRescheduling] = useState(false);
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -242,15 +228,6 @@ function EntryDetail({
       setError(apiError(e));
     }
   }
-  if (rescheduling && entry.appointment)
-    return (
-      <BookingForm
-        listingId={entry.appointment.listingId}
-        appointment={entry.appointment}
-        onBack={() => setRescheduling(false)}
-        onSuccess={onChanged}
-      />
-    );
   if (activePayment)
     return (
       <EntryDetail
@@ -471,14 +448,6 @@ function EntryDetail({
             />
           </View>
         ) : null}
-        {!loading &&
-        !error &&
-        entry.appointment &&
-        section === 'tenant-appointments' &&
-        ['PENDING', 'CONFIRMED'].includes(entry.status) &&
-        !entry.appointment.rescheduleRequested ? (
-          <Button label="Đề xuất đổi lịch" disabled={busy} onPress={() => setRescheduling(true)} />
-        ) : null}
         {entry.actions.some((action) => action.needsReason) ? (
           <Field
             label="Lý do (bắt buộc khi từ chối/hủy)"
@@ -526,11 +495,15 @@ export default function ManagementScreen({
   onOpenListing,
   initialSection,
   onExit,
+  linkedAppointmentId,
+  onLinkConsumed,
 }: {
   onSelectTab: (tab: MainTab) => void;
   onOpenListing: (id: string, own?: boolean, section?: ManagementSection) => void;
   initialSection?: ManagementSection | null;
   onExit?: () => void;
+  linkedAppointmentId?: string | null;
+  onLinkConsumed?: () => void;
 }) {
   const [role, setRole] = useState<'tenant' | 'landlord'>(
     initialSection?.startsWith('landlord-') ? 'landlord' : 'tenant'
@@ -562,8 +535,6 @@ export default function ManagementScreen({
   const [requestCountsLoading, setRequestCountsLoading] = useState(false);
   const [requestCountsError, setRequestCountsError] = useState<string | null>(null);
   const [requestCountsVersion, setRequestCountsVersion] = useState(0);
-  const [appointmentView, setAppointmentView] = useState<'calendar' | 'list'>('calendar');
-  const [appointmentFilter, setAppointmentFilter] = useState<AppointmentListFilter>('ALL');
   const [listQuery, setListQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [paymentTypeFilter, setPaymentTypeFilter] = useState<string | null>(null);
@@ -572,18 +543,10 @@ export default function ManagementScreen({
   );
   const [datePeriod, setDatePeriod] = useState<DatePeriod>('ALL');
   const [dateAnchor, setDateAnchor] = useState(() => new Date());
-  const [calendarState, setCalendarState] = useState<CalendarState>(() => ({
-    view: 'month',
-    anchor: new Date(),
-    selected: dateKey(new Date()),
-  }));
-  const isAppointments = Boolean(section?.endsWith('-appointments'));
   const isRequests = Boolean(section?.endsWith('-requests'));
   const requestStatus = requestSelection?.section === section ? requestSelection.status : null;
   const visibleRequestTabs =
     requestCounts?.section === section ? requestCounts.items.filter((item) => item.count > 0) : [];
-  const showCalendar = isAppointments && appointmentView === 'calendar';
-  const listFilter = isAppointments && !showCalendar ? appointmentFilter : 'ALL';
   const tenantHasAttention =
     (attentionCounts['tenant-appointments'] ?? 0) > 0 ||
     (attentionCounts['tenant-requests'] ?? 0) > 0;
@@ -625,11 +588,7 @@ export default function ManagementScreen({
     setEntry(row);
     if (!userId) return;
     const owner = section?.startsWith('landlord-') ?? false;
-    const seen = row.appointment
-      ? markAppointmentNoticeSeen(row.appointment, owner, userId)
-      : row.rentalRequest
-        ? markRentalNoticeSeen(row.rentalRequest, owner, userId)
-        : null;
+    const seen = row.rentalRequest ? markRentalNoticeSeen(row.rentalRequest, owner, userId) : null;
     if (seen)
       void seen.then((changed) => {
         if (changed) setAttentionRefresh((current) => current + 1);
@@ -674,23 +633,24 @@ export default function ManagementScreen({
   const load = useCallback(
     async (nextPage = 1) => {
       const ticket = ++requestId.current;
-      if (!section || section === 'landlord-branches' || (isRequests && !requestStatus)) return;
+      if (
+        !section ||
+        section === 'landlord-branches' ||
+        section === 'tenant-appointments' ||
+        section === 'landlord-appointments' ||
+        (isRequests && !requestStatus)
+      )
+        return;
       setLoading(true);
       setError(null);
       try {
         const profile = await getUserProfileApi();
-        const items = showCalendar
-          ? await getAppointmentCalendar(section.startsWith('landlord-'))
-          : null;
-        const data = items
-          ? { items, hasMore: false, total: items.length }
-          : await getManagementPage(
-              section,
-              nextPage,
-              profile.id,
-              listFilter,
-              requestStatus ?? undefined
-            );
+        const data = await getManagementPage(
+          section,
+          nextPage,
+          profile.id,
+          requestStatus ?? undefined
+        );
         if (ticket !== requestId.current) return;
         setUserId(profile.id);
         setRows((current) =>
@@ -710,7 +670,7 @@ export default function ManagementScreen({
         if (ticket === requestId.current) setLoading(false);
       }
     },
-    [section, showCalendar, listFilter, isRequests, requestStatus]
+    [section, isRequests, requestStatus]
   );
   useEffect(() => {
     setRows([]);
@@ -753,6 +713,20 @@ export default function ManagementScreen({
     );
   if (section === 'landlord-branches')
     return <BranchManagementScreen onBack={onExit ?? (() => setSection(null))} />;
+  if (section === 'tenant-appointments' || section === 'landlord-appointments') {
+    const owner = section === 'landlord-appointments';
+    return (
+      <AppointmentsScreen
+        key={section}
+        role={owner ? 'OWNER' : 'RENTER'}
+        linkedAppointmentId={linkedAppointmentId}
+        onLinkConsumed={onLinkConsumed}
+        onBack={onExit ?? (() => setSection(null))}
+        onSelectTab={onSelectTab}
+        onOpenListing={(id) => onOpenListing(id, owner, section)}
+      />
+    );
+  }
   if (billingOpen && section?.endsWith('-payments'))
     return (
       <BillingScreen
@@ -877,66 +851,6 @@ export default function ManagementScreen({
                 <Text className="ml-2 font-bold text-on-brand">Đăng tin mới</Text>
               </Pressable>
             ) : null}
-            {isAppointments ? (
-              <View className="mb-4 flex-row gap-2" accessibilityRole="tablist">
-                {(['calendar', 'list'] as const).map((mode) => (
-                  <Pressable
-                    key={mode}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: appointmentView === mode }}
-                    onPress={() => setAppointmentView(mode)}
-                    className={`min-h-12 flex-1 flex-row items-center justify-center gap-2 rounded-xl border ${appointmentView === mode ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
-                    <Icon
-                      name={mode === 'calendar' ? 'calendar-outline' : 'list-outline'}
-                      size={19}
-                      className={appointmentView === mode ? 'text-primary' : 'text-secondary'}
-                    />
-                    <Text
-                      className={
-                        appointmentView === mode
-                          ? 'font-bold text-primary'
-                          : 'font-semibold text-secondary'
-                      }>
-                      {mode === 'calendar' ? 'Lịch' : 'Danh sách'}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-            {isAppointments && !showCalendar ? (
-              <View className="mb-4">
-                <View className="flex-row gap-2" accessibilityRole="tablist">
-                  {(
-                    [
-                      { value: 'ALL', label: 'Tất cả' },
-                      { value: 'UNVIEWED', label: 'Chưa xem' },
-                      { value: 'COMPLETED', label: 'Hoàn thành' },
-                    ] as const
-                  ).map((option) => (
-                    <Pressable
-                      key={option.value}
-                      accessibilityRole="tab"
-                      accessibilityState={{ selected: appointmentFilter === option.value }}
-                      onPress={() => setAppointmentFilter(option.value)}
-                      className={`min-h-11 flex-1 items-center justify-center rounded-full border px-2 ${appointmentFilter === option.value ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
-                      <Text
-                        className={
-                          appointmentFilter === option.value
-                            ? 'text-xs font-bold text-primary'
-                            : 'text-xs font-semibold text-secondary'
-                        }>
-                        {option.label}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-                {appointmentFilter === 'UNVIEWED' ? (
-                  <Text className="mt-2 text-xs text-muted-foreground">
-                    Lịch đang chờ duyệt hoặc đã xác nhận, chưa xem xong.
-                  </Text>
-                ) : null}
-              </View>
-            ) : null}
             {isRequests && visibleRequestTabs.length ? (
               <ScrollView
                 horizontal
@@ -965,109 +879,105 @@ export default function ManagementScreen({
                 })}
               </ScrollView>
             ) : null}
-            {!showCalendar ? (
-              <>
-                <View className="mb-3 min-h-12 flex-row items-center rounded-xl border border-border bg-surface px-3">
-                  <Icon name="search-outline" size={19} className="text-subtle" />
-                  <TextInput
-                    value={listQuery}
-                    onChangeText={setListQuery}
-                    placeholder="Tìm theo tên, địa chỉ hoặc trạng thái"
-                    returnKeyType="search"
-                    accessibilityLabel="Tìm kiếm trong danh sách quản lý"
-                    className="ml-2 min-h-12 flex-1 py-2 text-sm text-foreground placeholder:text-subtle"
-                  />
-                  {listQuery ? (
+            <View className="mb-3 min-h-12 flex-row items-center rounded-xl border border-border bg-surface px-3">
+              <Icon name="search-outline" size={19} className="text-subtle" />
+              <TextInput
+                value={listQuery}
+                onChangeText={setListQuery}
+                placeholder="Tìm theo tên, địa chỉ hoặc trạng thái"
+                returnKeyType="search"
+                accessibilityLabel="Tìm kiếm trong danh sách quản lý"
+                className="ml-2 min-h-12 flex-1 py-2 text-sm text-foreground placeholder:text-subtle"
+              />
+              {listQuery ? (
+                <Pressable
+                  onPress={() => setListQuery('')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Xóa nội dung tìm kiếm"
+                  className="min-h-10 min-w-10 items-center justify-center">
+                  <Icon name="close-circle" size={19} className="text-subtle" />
+                </Pressable>
+              ) : null}
+            </View>
+            <DatePeriodFilter
+              period={datePeriod}
+              anchor={dateAnchor}
+              onPeriodChange={setDatePeriod}
+              onAnchorChange={setDateAnchor}
+            />
+            {section?.endsWith('-payments') ? (
+              <Text className="mb-3 text-xs text-muted-foreground">
+                Thời gian tính theo ngày tạo giao dịch.
+              </Text>
+            ) : null}
+            {!isRequests && statusOptions.length > 1 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                className="mb-4"
+                accessibilityRole="tablist">
+                {[null, ...statusOptions].map((status) => {
+                  const selected = statusFilter === status;
+                  return (
                     <Pressable
-                      onPress={() => setListQuery('')}
-                      accessibilityRole="button"
-                      accessibilityLabel="Xóa nội dung tìm kiếm"
-                      className="min-h-10 min-w-10 items-center justify-center">
-                      <Icon name="close-circle" size={19} className="text-subtle" />
+                      key={status ?? 'ALL'}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected }}
+                      onPress={() => setStatusFilter(status)}
+                      className={`mr-2 min-h-11 flex-row items-center gap-2 rounded-full border px-4 ${selected ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
+                      <Text
+                        className={`text-sm font-semibold ${selected ? 'text-primary' : 'text-secondary'}`}>
+                        {status ? statusLabel(status) : 'Tất cả'}
+                      </Text>
                     </Pressable>
-                  ) : null}
+                  );
+                })}
+              </ScrollView>
+            ) : null}
+            {section?.endsWith('-payments') ? (
+              <>
+                <Text className="mb-2 text-xs font-semibold text-muted-foreground">
+                  Loại khoản tiền
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-3">
+                  {[
+                    null,
+                    ...Array.from(
+                      new Set(rows.flatMap((row) => (row.payment ? [row.payment.type] : [])))
+                    ),
+                  ].map((type) => (
+                    <Pressable
+                      key={type ?? 'ALL'}
+                      onPress={() => setPaymentTypeFilter(type)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: paymentTypeFilter === type }}
+                      className={`mr-2 min-h-10 justify-center rounded-full border px-4 ${paymentTypeFilter === type ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
+                      <Text
+                        className={`text-sm ${paymentTypeFilter === type ? 'font-bold text-primary' : 'text-secondary'}`}>
+                        {type ? paymentTypeLabel(type) : 'Tất cả'}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+                <View className="mb-4 flex-row gap-2">
+                  {([null, 'pay', 'receive'] as const).map((direction) => (
+                    <Pressable
+                      key={direction ?? 'ALL'}
+                      onPress={() => setPaymentDirectionFilter(direction)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: paymentDirectionFilter === direction }}
+                      className={`min-h-10 flex-1 items-center justify-center rounded-xl border ${paymentDirectionFilter === direction ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
+                      <Text
+                        className={`text-xs font-semibold ${paymentDirectionFilter === direction ? 'text-primary' : 'text-secondary'}`}>
+                        {direction === 'pay'
+                          ? 'Tôi chuyển'
+                          : direction === 'receive'
+                            ? 'Tôi nhận'
+                            : 'Cả hai'}
+                      </Text>
+                    </Pressable>
+                  ))}
                 </View>
-                <DatePeriodFilter
-                  period={datePeriod}
-                  anchor={dateAnchor}
-                  onPeriodChange={setDatePeriod}
-                  onAnchorChange={setDateAnchor}
-                />
-                {section?.endsWith('-payments') ? (
-                  <Text className="mb-3 text-xs text-muted-foreground">
-                    Thời gian tính theo ngày tạo giao dịch.
-                  </Text>
-                ) : null}
-                {!isRequests && !isAppointments && statusOptions.length > 1 ? (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    className="mb-4"
-                    accessibilityRole="tablist">
-                    {[null, ...statusOptions].map((status) => {
-                      const selected = statusFilter === status;
-                      return (
-                        <Pressable
-                          key={status ?? 'ALL'}
-                          accessibilityRole="tab"
-                          accessibilityState={{ selected }}
-                          onPress={() => setStatusFilter(status)}
-                          className={`mr-2 min-h-11 flex-row items-center gap-2 rounded-full border px-4 ${selected ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
-                          <Text
-                            className={`text-sm font-semibold ${selected ? 'text-primary' : 'text-secondary'}`}>
-                            {status ? statusLabel(status) : 'Tất cả'}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
-                ) : null}
-                {section?.endsWith('-payments') ? (
-                  <>
-                    <Text className="mb-2 text-xs font-semibold text-muted-foreground">
-                      Loại khoản tiền
-                    </Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-3">
-                      {[
-                        null,
-                        ...Array.from(
-                          new Set(rows.flatMap((row) => (row.payment ? [row.payment.type] : [])))
-                        ),
-                      ].map((type) => (
-                        <Pressable
-                          key={type ?? 'ALL'}
-                          onPress={() => setPaymentTypeFilter(type)}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: paymentTypeFilter === type }}
-                          className={`mr-2 min-h-10 justify-center rounded-full border px-4 ${paymentTypeFilter === type ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
-                          <Text
-                            className={`text-sm ${paymentTypeFilter === type ? 'font-bold text-primary' : 'text-secondary'}`}>
-                            {type ? paymentTypeLabel(type) : 'Tất cả'}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </ScrollView>
-                    <View className="mb-4 flex-row gap-2">
-                      {([null, 'pay', 'receive'] as const).map((direction) => (
-                        <Pressable
-                          key={direction ?? 'ALL'}
-                          onPress={() => setPaymentDirectionFilter(direction)}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: paymentDirectionFilter === direction }}
-                          className={`min-h-10 flex-1 items-center justify-center rounded-xl border ${paymentDirectionFilter === direction ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
-                          <Text
-                            className={`text-xs font-semibold ${paymentDirectionFilter === direction ? 'text-primary' : 'text-secondary'}`}>
-                            {direction === 'pay'
-                              ? 'Tôi chuyển'
-                              : direction === 'receive'
-                                ? 'Tôi nhận'
-                                : 'Cả hai'}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </>
-                ) : null}
               </>
             ) : null}
             <ErrorNotice message={isRequests ? requestCountsError : null} />
@@ -1079,88 +989,51 @@ export default function ManagementScreen({
             ) : null}
             <ErrorNotice message={error} />
             {error ? <Button label="Thử lại" onPress={() => load()} disabled={loading} /> : null}
-            {showCalendar ? (
-              <AppointmentCalendar
-                state={calendarState}
-                onChange={setCalendarState}
-                rows={rows}
-                loading={loading}
-                owner={section!.startsWith('landlord-')}
-                onSelect={openEntry}
-              />
-            ) : (
-              <>
-                <Text className="mb-3 text-sm text-muted-foreground">
-                  {visibleRows.length}
-                  {listQuery ||
-                  statusFilter ||
-                  paymentTypeFilter ||
-                  paymentDirectionFilter ||
-                  datePeriod !== 'ALL'
-                    ? ` / ${total}`
-                    : ''}{' '}
-                  {isRequests
-                    ? 'yêu cầu'
-                    : isAppointments
-                      ? 'lịch hẹn'
-                      : section?.endsWith('-payments')
-                        ? 'giao dịch'
-                        : 'mục'}
+            <Text className="mb-3 text-sm text-muted-foreground">
+              {visibleRows.length}
+              {listQuery ||
+              statusFilter ||
+              paymentTypeFilter ||
+              paymentDirectionFilter ||
+              datePeriod !== 'ALL'
+                ? ` / ${total}`
+                : ''}{' '}
+              {isRequests ? 'yêu cầu' : section?.endsWith('-payments') ? 'giao dịch' : 'mục'}
+            </Text>
+            {visibleRows.map((row) => (
+              <Pressable
+                key={row.id}
+                onPress={() => openEntry(row)}
+                accessibilityRole="button"
+                className={`mb-3 rounded-2xl border bg-surface p-4 ${isRequests ? `border-l-4 ${requestTone(row.status).border}` : 'border-border'}`}>
+                <View className="flex-row items-start gap-3">
+                  <Text className="flex-1 font-bold text-foreground">{row.title}</Text>
+                  {isRequests ? (
+                    <Icon name="chevron-forward" size={18} className="text-subtle" />
+                  ) : null}
+                </View>
+                <Text
+                  className={
+                    isRequests
+                      ? `mt-3 self-start overflow-hidden rounded-full px-3 py-1 text-xs font-bold ${requestTone(row.status).fill} ${requestTone(row.status).text}`
+                      : 'mt-2 text-xs text-primary'
+                  }>
+                  {statusLabel(row.status)}
                 </Text>
-                {visibleRows.map((row) => (
-                  <Pressable
-                    key={row.id}
-                    onPress={() => openEntry(row)}
-                    accessibilityRole="button"
-                    className={`mb-3 rounded-2xl border bg-surface p-4 ${isRequests ? `border-l-4 ${requestTone(row.status).border}` : isAppointments ? `border-l-4 ${appointmentTone(row.status).border}` : 'border-border'}`}>
-                    <View className="flex-row items-start gap-3">
-                      <Text className="flex-1 font-bold text-foreground">{row.title}</Text>
-                      {isRequests ? (
-                        <Icon name="chevron-forward" size={18} className="text-subtle" />
-                      ) : null}
-                    </View>
-                    <Text
-                      className={
-                        isRequests
-                          ? `mt-3 self-start overflow-hidden rounded-full px-3 py-1 text-xs font-bold ${requestTone(row.status).fill} ${requestTone(row.status).text}`
-                          : isAppointments
-                            ? `mt-3 self-start overflow-hidden rounded-full px-3 py-1 text-xs font-bold ${appointmentTone(row.status).fill} ${appointmentTone(row.status).text}`
-                            : 'mt-2 text-xs text-primary'
-                      }>
-                      {statusLabel(row.status)}
-                    </Text>
-                    {row.appointment?.rescheduleRequested ? (
-                      <Text className="mt-2 self-start rounded-full bg-warning-soft px-3 py-1 text-xs font-bold text-warning">
-                        Có yêu cầu đổi lịch
-                      </Text>
-                    ) : null}
-                    <Text
-                      className={`${isRequests ? 'mt-2' : 'mt-1'} text-xs text-muted-foreground`}>
-                      {row.fields[0]?.[1]}
-                    </Text>
-                    {isRequests ? (
-                      <Text className="mt-2 text-xs font-semibold text-secondary">
-                        Vào ở: {row.fields.find(([label]) => label === 'Ngày vào ở')?.[1]} ·{' '}
-                        {row.fields.find(([label]) => label === 'Thời hạn')?.[1]}
-                      </Text>
-                    ) : null}
-                    {row.appointment ? (
-                      <Text className="mt-2 text-xs font-semibold text-secondary">
-                        {row.appointment.appointmentDate.split('-').reverse().join('/')} ·{' '}
-                        {row.appointment.startTime.slice(0, 5)}–
-                        {row.appointment.endTime.slice(0, 5)}
-                      </Text>
-                    ) : null}
-                  </Pressable>
-                ))}
-              </>
-            )}
+                <Text className={`${isRequests ? 'mt-2' : 'mt-1'} text-xs text-muted-foreground`}>
+                  {row.fields[0]?.[1]}
+                </Text>
+                {isRequests ? (
+                  <Text className="mt-2 text-xs font-semibold text-secondary">
+                    Vào ở: {row.fields.find(([label]) => label === 'Ngày vào ở')?.[1]} ·{' '}
+                    {row.fields.find(([label]) => label === 'Thời hạn')?.[1]}
+                  </Text>
+                ) : null}
+              </Pressable>
+            ))}
             {loading || (isRequests && requestCountsLoading) ? (
               <ActivityIndicator className="my-6 text-primary" />
-            ) : !showCalendar &&
-              !visibleRows.length &&
-              !error &&
-              !(isRequests && requestCountsError) ? (
+            ) : !visibleRows.length && !error && !(isRequests && requestCountsError) ? (
               <Text className="py-10 text-center text-muted-foreground">
                 {listQuery ||
                 statusFilter ||
@@ -1174,11 +1047,7 @@ export default function ManagementScreen({
                     ? requestStatus
                       ? `Chưa có yêu cầu ${statusLabel(requestStatus).toLowerCase()}.`
                       : 'Chưa có yêu cầu thuê nào.'
-                    : isAppointments && listFilter === 'UNVIEWED'
-                      ? 'Không có lịch chưa xem.'
-                      : isAppointments && listFilter === 'COMPLETED'
-                        ? 'Chưa có lịch hoàn thành.'
-                        : 'Chưa có dữ liệu trong mục này.'}
+                    : 'Chưa có dữ liệu trong mục này.'}
               </Text>
             ) : null}
             {hasMore ? (

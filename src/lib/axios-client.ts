@@ -2,8 +2,9 @@ import { create, isCancel, type AxiosError, type InternalAxiosRequestConfig } fr
 
 import { gatewayBaseUrl } from '@/config/env';
 import { requestBackendHealthCheck } from '@/lib/backend-health-signal';
+import { FEATURE_LOCKED_MESSAGE, isPermissionDenied } from '@/lib/permissions';
 import { isProfileIncomplete, profileGateMissing } from '@/lib/profile-gate';
-import { notifyProfileGateDenied } from '@/lib/profile-gate-signal';
+import { notifyPermissionDenied, notifyProfileGateDenied } from '@/lib/profile-gate-signal';
 import { requestNetworkHealthCheck } from '@/lib/network-health-signal';
 import { clearSession, getAccessToken } from '@/features/auth/session';
 
@@ -43,6 +44,11 @@ axiosClient.interceptors.response.use(
       requestBackendHealthCheck();
     }
     if (!isCancel(error) && !error.response) requestNetworkHealthCheck();
+    // Revoked feature permission (1009): callers read response.data.message, so give them the friendly text.
+    if (isPermissionDenied(error.response)) {
+      (error.response!.data as { message?: string }).message = FEATURE_LOCKED_MESSAGE;
+      notifyPermissionDenied();
+    }
     // Incomplete profile (1010): the app refreshes the status and offers to open Settings; the server message is kept.
     if (isProfileIncomplete(error.response)) {
       notifyProfileGateDenied({

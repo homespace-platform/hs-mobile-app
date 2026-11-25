@@ -1,14 +1,20 @@
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { useDialog } from '@/components/AppDialog';
+import { checkKyc } from '@/components/appointment/booking/booking-flow';
 import Icon from '@/components/Icon';
+import { startKyc } from '@/lib/kyc/client';
+import { PERMISSIONS } from '@/lib/permissions';
+import { useFeatureGate } from '@/lib/use-feature-gate';
 import type { ActiveRentalRequest } from '@/services/bookingApi';
+import { getUserProfileApi } from '@/services/userApi';
 
 const SOON_TITLE = 'Tính năng đang phát triển';
 const SOON_MESSAGE = 'Tính năng này đang được phát triển, vui lòng thử lại sau.';
 
-// Visitor call-to-action block of the web overview card. "Yêu cầu thuê nhà", "Đặt lịch xem" and
-// the negotiation button are not built on mobile yet, so they only open an "in development" dialog.
+// Visitor call-to-action block of the web overview card. "Yêu cầu thuê nhà" and the negotiation
+// button are not built on mobile yet, so they only open an "in development" dialog.
 export default function ContactCta({
   status,
   acceptsNewRequests,
@@ -21,6 +27,7 @@ export default function ContactCta({
   onChat,
   onOpenRequests,
   onOpenBookings,
+  onBook,
 }: {
   status?: string;
   acceptsNewRequests: boolean;
@@ -33,11 +40,44 @@ export default function ContactCta({
   onChat: () => void;
   onOpenRequests: () => void;
   onOpenBookings: () => void;
+  /** Called once the permission and KYC gates pass. */
+  onBook: () => void;
 }) {
   const showDialog = useDialog();
   const soon = () => showDialog(SOON_TITLE, SOON_MESSAGE);
   const ownerNotice = (message: string) => showDialog('Thông báo', message);
   const bookingDisabled = !publicListing && !hasActiveBooking;
+  const bookGate = useFeatureGate(PERMISSIONS.APPOINTMENT_BOOK);
+  const [checkingKyc, setCheckingKyc] = useState(false);
+  const checking = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  async function openBooking() {
+    if (checking.current || !bookGate.guard()) return;
+    checking.current = true;
+    setCheckingKyc(true);
+    const kyc = await checkKyc(getUserProfileApi);
+    checking.current = false;
+    if (!mounted.current) return;
+    setCheckingKyc(false);
+    if (kyc === 'verified') return onBook();
+    if (kyc === 'unavailable') {
+      return showDialog(
+        'Thông báo',
+        'Đang tải thông tin tài khoản. Vui lòng thử lại trong giây lát.'
+      );
+    }
+    showDialog('Thông báo', 'Vui lòng xác minh danh tính (KYC) trước khi thực hiện thao tác này.', [
+      { text: 'Đóng', style: 'cancel' },
+      { text: 'Xác minh ngay', onPress: () => void startKyc() },
+    ]);
+  }
 
   return (
     <View className="mt-5 gap-3 border-t border-border pt-5">
@@ -104,16 +144,23 @@ export default function ContactCta({
             if (isOwner) {
               return ownerNotice('Bạn là chủ bài đăng này, không thể tự đặt lịch xem nhà.');
             }
-            soon();
+            void openBooking();
           }}
           accessibilityRole="button"
-          accessibilityState={{ disabled: bookingDisabled }}
+          accessibilityHint={
+            bookGate.title ?? 'Đặt lịch hẹn gặp trực tiếp chủ nhà tại bất động sản'
+          }
+          accessibilityState={{ disabled: bookingDisabled, busy: checkingKyc }}
           className={`min-h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 ${hasActiveBooking ? 'border-success bg-success-soft' : 'border-border bg-surface'} ${bookingDisabled ? 'opacity-50' : ''}`}>
-          <Icon
-            name={hasActiveBooking ? 'checkmark-circle' : 'calendar-outline'}
-            size={16}
-            className={hasActiveBooking ? 'text-success' : 'text-primary'}
-          />
+          {checkingKyc ? (
+            <ActivityIndicator className="text-primary" />
+          ) : (
+            <Icon
+              name={hasActiveBooking ? 'checkmark-circle' : 'calendar-outline'}
+              size={16}
+              className={hasActiveBooking ? 'text-success' : 'text-primary'}
+            />
+          )}
           <Text
             numberOfLines={1}
             className={`text-sm font-bold ${hasActiveBooking ? 'text-success' : 'text-foreground'}`}>

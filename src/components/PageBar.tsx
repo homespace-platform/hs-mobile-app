@@ -14,6 +14,8 @@ export default function PageBar({
   disabled,
   onChange,
   noun = 'tin đăng cho thuê',
+  summary,
+  nextLabel = 'Tiếp',
 }: {
   page: number;
   totalPages: number;
@@ -23,6 +25,9 @@ export default function PageBar({
   disabled?: boolean;
   onChange: (page: number) => void;
   noun?: string;
+  /** Replaces the "Hiển thị a - b ..." line. */
+  summary?: string;
+  nextLabel?: string;
 }) {
   if (totalPages <= 1) return null;
   const { from, to } = pageRange(page, pageSize, shown, totalItems);
@@ -34,8 +39,12 @@ export default function PageBar({
   return (
     <View className="mt-6 border-t border-border pt-4">
       <Text className="mb-3 text-center text-xs font-medium text-muted-foreground">
-        Hiển thị <Text className="font-bold text-foreground">{`${from} - ${to}`}</Text> trong tổng
-        số <Text className="font-bold text-foreground">{totalItems}</Text> {noun}
+        {summary ?? (
+          <>
+            Hiển thị <Text className="font-bold text-foreground">{`${from} - ${to}`}</Text> trong
+            tổng số <Text className="font-bold text-foreground">{totalItems}</Text> {noun}
+          </>
+        )}
       </Text>
       <View className="flex-row flex-wrap items-center justify-center gap-1.5">
         <Pressable
@@ -74,7 +83,7 @@ export default function PageBar({
           accessibilityRole="button"
           accessibilityLabel="Trang sau"
           className={`${edge} ${page === totalPages ? 'opacity-40' : ''}`}>
-          <Text className="mr-0.5 text-xs font-semibold text-foreground">Tiếp</Text>
+          <Text className="mr-0.5 text-xs font-semibold text-foreground">{nextLabel}</Text>
           <Icon name="chevron-forward" size={14} className="text-foreground" />
         </Pressable>
       </View>

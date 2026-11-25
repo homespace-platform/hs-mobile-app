@@ -258,7 +258,9 @@ export default function ConversationDetailScreen({
         <Pressable onPress={onBack} className="mr-3 px-1 py-2">
           <Ionicons name="chevron-back" size={26} className="text-foreground" />
         </Pressable>
-        <Text className="text-lg font-bold text-foreground">Chi tiết trò chuyện</Text>
+        <Text accessibilityRole="header" className="flex-1 text-lg font-bold text-foreground">
+          Chi tiết trò chuyện
+        </Text>
       </View>
 
       <ScrollView contentContainerClassName="px-5 py-6">

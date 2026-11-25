@@ -13,6 +13,13 @@
     "plugins": [
       "@react-native-community/datetimepicker",
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Cho phép HomeSpace dùng camera khi bạn gọi video.",
+          "microphonePermission": "Cho phép HomeSpace dùng micrô khi bạn gọi thoại hoặc video."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/homespace-logo.png",

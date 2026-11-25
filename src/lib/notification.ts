@@ -332,7 +332,8 @@ export function getNotificationRecipientSideLabel(
 
 export type NotificationTarget =
   | { kind: 'listing'; id: string; own: boolean }
-  | { kind: 'management'; section: ManagementSection }
+  // `query` is kept for viewing schedules only: it names the appointment to open.
+  | { kind: 'management'; section: ManagementSection; query?: string }
   // Contracts/payments/invoices: the path does not say if the user is tenant or landlord.
   | { kind: 'management-choice'; tenant: ManagementSection; landlord: ManagementSection }
   | { kind: 'news' }
@@ -375,6 +376,7 @@ export function notificationTarget(actionPath: unknown): NotificationTarget {
     return {
       kind: 'management',
       section: third ? 'tenant-appointments' : 'landlord-appointments',
+      ...(query ? { query } : {}),
     };
   if (second === 'rental-requests' && (segments.length === 2 || third === 'my-requests'))
     return {

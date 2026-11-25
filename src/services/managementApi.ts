@@ -3,10 +3,12 @@ import * as SecureStore from 'expo-secure-store';
 import { getAccessToken } from '@/features/auth/session';
 import { getUserProfileApi } from '@/services/userApi';
 import type { ApiResponse, PageResponse } from '@/types/api';
+import type { AppointmentResponse } from '@/types/appointment';
 
+/** These two have their own screen (components/appointment/manage). */
+export type AppointmentSection = 'tenant-appointments' | 'landlord-appointments';
 export type ManagementSection =
-  | 'tenant-appointments'
-  | 'landlord-appointments'
+  | AppointmentSection
   | 'tenant-requests'
   | 'landlord-requests'
   | 'tenant-payments'
@@ -15,7 +17,6 @@ export type ManagementSection =
   | 'landlord-branches'
   | 'tenant-contracts'
   | 'landlord-contracts';
-export type AppointmentListFilter = 'ALL' | 'UNVIEWED' | 'COMPLETED';
 export const RENTAL_REQUEST_STATUSES = [
   'PENDING',
   'ACCEPTED',
@@ -28,12 +29,8 @@ export const RENTAL_REQUEST_STATUSES = [
 ] as const;
 export type RentalRequestStatus = (typeof RENTAL_REQUEST_STATUSES)[number];
 export type ManagementAction =
-  | 'approve'
   | 'reject'
   | 'cancel'
-  | 'complete'
-  | 'approve-reschedule'
-  | 'reject-reschedule'
   | 'accept'
   | 'hide'
   | 'publish'
@@ -55,33 +52,10 @@ export type ManagementEntry = {
   listingId?: string;
   fields: [string, string][];
   actions: ActionOption[];
-  appointment?: Appointment;
   rentalRequest?: RentalRequest;
   payment?: Payment;
 };
-export type Appointment = {
-  id: string;
-  listingId: string;
-  listingTitle: string;
-  listingAddress: string;
-  status: string;
-  appointmentDate: string;
-  startTime: string;
-  endTime: string;
-  renterName: string;
-  renterPhone: string;
-  renterNote?: string | null;
-  ownerNote?: string | null;
-  rejectReason?: string | null;
-  cancelReason?: string | null;
-  rescheduleRequested: boolean;
-  proposedDate?: string | null;
-  proposedStartTime?: string | null;
-  proposedEndTime?: string | null;
-  cancelledBy?: 'RENTER' | 'OWNER' | 'SYSTEM' | null;
-  createdAt?: string;
-  updatedAt?: string;
-};
+export type Appointment = AppointmentResponse;
 export type RentalRequest = {
   id: string;
   listingId: string;
@@ -228,49 +202,6 @@ export function statusLabel(status: string) {
       } as Record<string, string>
     )[status] ?? status
   );
-}
-
-export function appointmentEntry(row: Appointment, owner: boolean): ManagementEntry {
-  const actions: ActionOption[] = [];
-  if (owner && row.status === 'PENDING')
-    actions.push(
-      { action: 'approve', label: 'Chấp nhận lịch hẹn' },
-      { action: 'reject', label: 'Từ chối lịch hẹn', needsReason: true, danger: true }
-    );
-  if (owner && row.rescheduleRequested && ['PENDING', 'CONFIRMED'].includes(row.status))
-    actions.push(
-      { action: 'approve-reschedule', label: 'Chấp nhận đổi lịch' },
-      { action: 'reject-reschedule', label: 'Từ chối đổi lịch', needsReason: true, danger: true }
-    );
-  if (owner && row.status === 'CONFIRMED')
-    actions.push({ action: 'complete', label: 'Xác nhận đã xem nhà' });
-  if (['PENDING', 'CONFIRMED'].includes(row.status))
-    actions.push({ action: 'cancel', label: 'Hủy lịch hẹn', needsReason: true, danger: true });
-  return {
-    id: row.id,
-    title: row.listingTitle,
-    listingId: row.listingId,
-    status: row.status,
-    date: row.appointmentDate,
-    appointment: row,
-    actions,
-    fields: [
-      ['Địa chỉ', row.listingAddress],
-      ['Lịch hẹn', `${row.appointmentDate} · ${row.startTime}–${row.endTime}`],
-      ['Người xem', row.renterName],
-      ['Điện thoại', row.renterPhone],
-      ['Ghi chú', row.renterNote || row.ownerNote || '—'],
-      ['Lý do từ chối/hủy', row.rejectReason || row.cancelReason || '—'],
-      ...(row.rescheduleRequested
-        ? [
-            [
-              'Lịch đề xuất',
-              `${row.proposedDate} · ${row.proposedStartTime}–${row.proposedEndTime}`,
-            ] as [string, string],
-          ]
-        : []),
-    ],
-  };
 }
 
 export function rentalEntry(row: RentalRequest, owner: boolean): ManagementEntry {
@@ -428,10 +359,9 @@ function contractEntry(row: Contract): ManagementEntry {
 }
 
 export async function getManagementPage(
-  section: ManagementSection,
+  section: Exclude<ManagementSection, AppointmentSection>,
   page: number,
   userId: string,
-  appointmentFilter: AppointmentListFilter = 'ALL',
   rentalStatus?: RentalRequestStatus
 ) {
   const owner = section.startsWith('landlord-');
@@ -452,26 +382,6 @@ export async function getManagementPage(
     const response = await axiosClient.get<ApiResponse<Branch[]>>('/api/v1/branches');
     const items = (response.data.result ?? []).map(branchEntry);
     return { items, hasMore: false, total: items.length };
-  }
-  if (section.endsWith('-appointments')) {
-    if (appointmentFilter === 'UNVIEWED') {
-      const items = await getAppointmentsByStatuses(owner, ['PENDING', 'CONFIRMED']);
-      return { items, hasMore: false, total: items.length };
-    }
-    const response = await axiosClient.get<PageResponse<Appointment>>(
-      `/api/v1/appointments/${owner ? 'owner' : 'my-bookings'}`,
-      {
-        params: {
-          ...params,
-          ...(appointmentFilter === 'COMPLETED' ? { status: 'COMPLETED' } : {}),
-        },
-      }
-    );
-    return {
-      items: response.data.result.map((row) => appointmentEntry(row, owner)),
-      hasMore: response.data.hasMore,
-      total: response.data.totalElements,
-    };
   }
   if (section.endsWith('-requests')) {
     const response = await axiosClient.get<PageResponse<RentalRequest>>(
@@ -699,34 +609,6 @@ async function loadManagementAttentionCounts(userId: string) {
   return counts;
 }
 
-export async function getAppointmentCalendar(owner: boolean) {
-  return getAppointmentsByStatuses(owner, ['CONFIRMED', 'COMPLETED']);
-}
-
-async function getAppointmentsByStatuses(owner: boolean, statuses: string[]) {
-  const rows: Appointment[] = [];
-  // shortcut: the API only filters a single date; use a date range when the backend supports it.
-  for (const status of statuses) {
-    let page = 1;
-    let hasMore: boolean;
-    do {
-      const response = await axiosClient.get<PageResponse<Appointment>>(
-        `/api/v1/appointments/${owner ? 'owner' : 'my-bookings'}`,
-        { params: { status, page, size: 50 } }
-      );
-      rows.push(...response.data.result);
-      hasMore = response.data.hasMore;
-      page++;
-    } while (hasMore);
-  }
-  return Array.from(new Map(rows.map((row) => [row.id, row])).values())
-    .sort(
-      (a, b) =>
-        b.appointmentDate.localeCompare(a.appointmentDate) || b.startTime.localeCompare(a.startTime)
-    )
-    .map((row) => appointmentEntry(row, owner));
-}
-
 export async function refreshManagementEntry(
   section: ManagementSection,
   entry: ManagementEntry,
@@ -765,20 +647,7 @@ export async function performManagementAction(
   if (entry.actions.find((option) => option.action === action)?.needsReason && !reason.trim())
     throw new Error('Vui lòng nhập lý do trước khi tiếp tục.');
   const id = encodeURIComponent(entry.id);
-  if (section.endsWith('-appointments')) {
-    const suffix =
-      (
-        {
-          'approve-reschedule': 'reschedule/approve',
-          'reject-reschedule': 'reschedule/reject',
-          cancel: section.startsWith('landlord-') ? 'owner-cancel' : 'cancel',
-        } as Partial<Record<ManagementAction, string>>
-      )[action] ?? action;
-    await axiosClient.put(`/api/v1/appointments/${id}/${suffix}`, {
-      rejectReason: reason.trim(),
-      cancelReason: reason.trim(),
-    });
-  } else if (section.endsWith('-requests')) {
+  if (section.endsWith('-requests')) {
     await axiosClient.put(
       `/api/v1/rental-requests/${id}/${action}`,
       action === 'reject' ? { rejectReason: reason.trim() } : undefined
