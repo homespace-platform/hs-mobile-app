@@ -3,7 +3,7 @@
 import { formatNumberVi } from '@/lib/rent-detail';
 
 /** Rounds the way ICU does, on the shortest decimal text: 1.2345 -> 1.235 (toFixed alone gives 1.234). */
-function roundDecimal(value: number, digits: number) {
+export function roundDecimal(value: number, digits: number) {
   const text = String(Math.abs(value));
   if (!Number.isFinite(value) || text.includes('e')) return value;
   return Math.sign(value) * Number(`${Math.round(Number(`${text}e${digits}`))}e-${digits}`);

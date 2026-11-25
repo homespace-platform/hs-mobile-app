@@ -18,7 +18,7 @@ export function PolicyNotice({
   tone = 'info',
   icon,
   ...props
-}: Omit<BaseProps, 'summary'> & { summary?: string }) {
+}: Omit<BaseProps, 'summary'> & { summary?: BaseProps['summary'] }) {
   return (
     <BaseNotice
       {...props}

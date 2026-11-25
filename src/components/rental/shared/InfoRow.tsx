@@ -13,6 +13,7 @@ export default function InfoRow({
   value,
   stacked,
   strong = false,
+  mono = false,
   className = '',
 }: {
   label: string;
@@ -22,6 +23,8 @@ export default function InfoRow({
   stacked?: boolean;
   /** Totals: large primary value. */
   strong?: boolean;
+  /** Monospace text value (web `font-mono`: codes to copy). */
+  mono?: boolean;
   className?: string;
 }) {
   const isText = typeof value === 'string' || typeof value === 'number';
@@ -36,7 +39,7 @@ export default function InfoRow({
       {isText ? (
         <Text
           selectable
-          className={`leading-5 ${below ? '' : 'max-w-[60%] text-right'} ${strong ? 'text-lg font-bold text-primary' : 'text-sm font-semibold text-foreground'}`}>
+          className={`leading-5 ${below ? '' : 'max-w-[60%] text-right'} ${strong ? 'text-lg font-bold text-primary' : 'text-sm font-semibold text-foreground'} ${mono ? 'font-mono' : ''}`}>
           {value}
         </Text>
       ) : (

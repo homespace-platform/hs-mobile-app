@@ -19,6 +19,10 @@ export type ModalShellProps = {
   icon?: ComponentProps<typeof Icon>['name'];
   headerExtra?: ReactNode;
   onClose: () => void;
+  /** Screen-reader name of the X button. */
+  closeLabel?: string;
+  /** Visible text of the close button, instead of the X. */
+  closeText?: string;
   /** True while a request is running: the X, the backdrop and Android back do nothing. */
   closeDisabled?: boolean;
   /** Accepted for web parity; a phone always uses the full-height sheet. */
@@ -37,6 +41,8 @@ export default function ModalShell({
   icon,
   headerExtra,
   onClose,
+  closeLabel = 'Đóng',
+  closeText,
   closeDisabled = false,
   footer,
   children,
@@ -86,10 +92,14 @@ export default function ModalShell({
                 onPress={close}
                 disabled={closeDisabled}
                 accessibilityRole="button"
-                accessibilityLabel="Đóng"
+                accessibilityLabel={closeLabel}
                 accessibilityState={{ disabled: closeDisabled }}
-                className={`h-11 w-11 items-center justify-center rounded-full active:bg-muted ${closeDisabled ? 'opacity-40' : ''}`}>
-                <Icon name="close" size={24} className="text-muted-foreground" />
+                className={`h-11 items-center justify-center active:bg-muted ${closeText ? 'rounded-xl border border-border px-4' : 'w-11 rounded-full'} ${closeDisabled ? 'opacity-40' : ''}`}>
+                {closeText ? (
+                  <Text className="text-sm font-semibold text-foreground">{closeText}</Text>
+                ) : (
+                  <Icon name="close" size={24} className="text-muted-foreground" />
+                )}
               </Pressable>
             </View>
             <ScrollView

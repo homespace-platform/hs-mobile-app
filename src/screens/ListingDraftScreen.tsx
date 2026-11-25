@@ -39,6 +39,7 @@ import {
   type ListingCatalog,
   type ListingSubmissionAction,
 } from '@/services/listingCreateApi';
+import { fileSessionGuard, withFileLease } from '@/services/rental/cache';
 import { uploadFile } from '@/services/storageApi';
 import { getUserProfileApi } from '@/services/userApi';
 import { getAccessibleListing, type ListingDetail } from '@/services/listingApi';
@@ -482,7 +483,9 @@ export default function ListingDraftScreen({
     }
     submitLock.current = true;
     setBusy(true);
-    try {
+    // Every picked file is leased until the submit settles, also across a sign-out.
+    const checkSession = fileSessionGuard();
+    const send = async () => {
       const profile = await getUserProfileApi();
       if (!profile.kycVerified)
         throw new Error('Bạn cần xác minh danh tính trong Hồ sơ trước khi đăng tin.');
@@ -492,6 +495,7 @@ export default function ListingDraftScreen({
         ['VIDEO', videos],
       ] as const) {
         for (const item of items) {
+          checkSession();
           let storageObjectId = item.storageObjectId;
           if (!storageObjectId) {
             const stored = await uploadFile(
@@ -517,7 +521,15 @@ export default function ListingDraftScreen({
           uploadedMedia.push({ storageObjectId, mediaType: kind });
         }
       }
+      checkSession();
       await upsertListing(buildListingPayload(formData(uploadedMedia), action));
+    };
+    try {
+      await withFileLease(
+        [...images, ...videos].map((item) => item.uri),
+        send
+      );
+      checkSession();
       onSaved();
       showDialog(
         action === 'SAVE_DRAFT'

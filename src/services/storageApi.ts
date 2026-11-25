@@ -1,4 +1,5 @@
 import axiosClient from '@/lib/axios-client';
+import { fileSessionGuard, withFileLease } from '@/services/rental/cache';
 import type { ApiResponse, PageResponse } from '@/types/api';
 
 type UploadResponse = {
@@ -15,7 +16,13 @@ type CompletedUpload = {
 
 export type LocalFile = { uri: string; fileName: string; contentType: string; sizeBytes: number };
 
-export async function uploadFile(
+/** The local file stays until the upload settles, also across a sign-out. */
+export function uploadFile(file: LocalFile, metadata: Parameters<typeof sendFile>[1]) {
+  const checkSession = fileSessionGuard();
+  return withFileLease([file.uri], () => sendFile(file, metadata, checkSession));
+}
+
+async function sendFile(
   file: LocalFile,
   metadata: {
     purpose:
@@ -28,7 +35,8 @@ export async function uploadFile(
     visibility: 'AUTHENTICATED' | 'PUBLIC' | 'PRIVATE';
     referenceType: string;
     referenceId: string;
-  }
+  },
+  checkSession: () => void
 ): Promise<CompletedUpload> {
   const maxMb =
     metadata.purpose === 'USER_AVATAR'
@@ -61,19 +69,23 @@ export async function uploadFile(
     !['video/mp4', 'video/webm', 'video/quicktime'].includes(file.contentType)
   )
     throw new Error('Video phải là MP4, WebM hoặc MOV.');
+  checkSession();
   const upload = await axiosClient.post<ApiResponse<UploadResponse>>('/api/v1/storage/uploads', {
     fileName: file.fileName,
     contentType: file.contentType,
     size: file.sizeBytes,
     ...metadata,
   });
+  checkSession();
   const blob = await (await fetch(file.uri)).blob();
+  checkSession();
   const response = await fetch(upload.data.result.uploadUrl, {
     method: 'PUT',
     headers: { 'Content-Type': file.contentType },
     body: blob,
   });
   if (!response.ok) throw new Error('Không thể tải tệp lên kho lưu trữ.');
+  checkSession();
   return (
     await axiosClient.post<ApiResponse<CompletedUpload>>(
       `/api/v1/storage/${encodeURIComponent(upload.data.result.storageId)}/complete`,

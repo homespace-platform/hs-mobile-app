@@ -16,6 +16,8 @@ export interface CardAction {
   label: string;
   /** Web `href` actions navigate from here too. */
   onClick?: () => void;
+  /** The web action has an `href`: announced as a link. */
+  link?: boolean;
   disabled?: boolean;
   busy?: boolean;
 }
@@ -74,7 +76,7 @@ export default function NextActionCard({
       className={`gap-3 rounded-2xl border bg-surface p-4 ${view?.mine ? 'border-primary' : 'border-border'}`}>
       <View className="flex-row items-start gap-3">
         <View className={`h-12 w-12 items-center justify-center rounded-2xl border ${parts.box}`}>
-          {view && !view.mine && system ? (
+          {system && !view?.mine ? (
             <ActivityIndicator className={parts.text} />
           ) : (
             <Icon

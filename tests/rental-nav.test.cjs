@@ -179,7 +179,8 @@ test('section=deposit lands on the deposit agreement in two steps', () => {
 test('paymentLink results are navigable routes', () => {
   const base = { payerId: 't', payeeId: 'l', direction: 'TENANT_TO_LANDLORD', contractId: 'c-1' };
   const { href } = paymentLink({ ...base, type: 'DEPOSIT_REFUND', direction: 'x' }, 't');
-  is(nav.navigateStack([], href), [landing('c-1', { tab: 'payment', section: 'deposit' })]);
+  const [route] = nav.navigateStack([], href);
+  is(nav.normalizeRentalRoute(route), landing('c-1', { tab: 'payment', section: 'deposit' }));
 });
 
 test('hostile and foreign paths never become a resource route', () => {
@@ -267,13 +268,35 @@ test('navigator stack: push, replace, back, legacy redirect, stable keys', () =>
   );
   is(nav.backStack(stack), [list]);
   is(nav.backStack([list]), []);
-  is(nav.navigateStack([], { screen: 'invoice-landing', contractId: 'c-1' }), [
+  // C-006: the stack keeps it for the redirect message; the screen then replaces it.
+  const legacy = { screen: 'invoice-landing', contractId: 'c-1' };
+  is(nav.navigateStack([], legacy), [legacy]);
+  is(nav.navigateStack([legacy], nav.normalizeRentalRoute(legacy), { replace: true }), [
     landing('c-1', { tab: 'payment', section: 'monthly' }),
   ]);
   assert.equal(
     nav.normalizeRentalRoute({ screen: 'invoice-landing', contractId: '../x' }).screen,
     'link-error'
   );
+});
+
+test('"back to list" keeps the caller side, else the role selected in Quản lý', () => {
+  const bad = { screen: 'invoice-landing', contractId: '../x' };
+  const side = (stack, options) => nav.navigateStack(stack, bad, options).at(-1).contractListSide;
+  assert.equal(side([{ screen: 'contract-list', side: 'landlord' }]), 'landlord');
+  assert.equal(side([{ screen: 'rental-requests', mode: 'RECEIVED' }]), 'landlord');
+  assert.equal(side([{ screen: 'rental-requests', mode: 'SENT' }], { role: 'landlord' }), 'tenant');
+  assert.equal(
+    side([{ screen: 'payment-lookup', paymentId: 'p' }], { replace: true, role: 'landlord' }),
+    'landlord'
+  );
+  assert.equal(side([], { role: 'landlord' }), 'landlord');
+  assert.equal(nav.stackSide([landing('c-1')], 'landlord'), 'landlord');
+  const read = (file) => fs.readFileSync(path.resolve(__dirname, '..', file), 'utf8');
+  const screen = read('src/screens/rental/ContractLandingScreen.tsx');
+  assert.ok(screen.includes('contractListPath(props.side)'));
+  assert.ok(!screen.includes("side: 'tenant'"));
+  assert.ok(read('App.tsx').includes('role={managementRole}'));
 });
 
 test('Quản lý menu: only requests, contracts and payment history enter the rental flow', () => {
@@ -433,4 +456,82 @@ test('rental request sync is scoped by requestId', async (t) => {
   t.mock.timers.tick(250);
   assert.equal(h.state.calls, 1);
   h.stop();
+});
+
+const { notificationTarget } = M('lib/notification');
+const ID = UUID;
+
+test('every service notification form opens the same route whatever role is selected', () => {
+  const cases = [
+    [`/dashboard/rental-requests?requestId=${ID}`, 'rental-requests'],
+    [`/dashboard/rental-requests/my-requests?requestId=${ID}`, 'rental-requests'],
+    [`/dashboard/contracts/${ID}?tab=sign`, 'contract-landing'],
+    [`/dashboard/contracts/${ID}?tab=end`, 'contract-landing'],
+    [`/dashboard/contracts/${ID}?tab=content`, 'contract-landing'],
+    [`/dashboard/invoices/${ID}?section=monthly&invoice=${ID}`, 'contract-landing'],
+    [`/dashboard/invoices/${ID}?section=monthly`, 'contract-landing'],
+    [`/dashboard/invoices/${ID}?section=deposit`, 'contract-landing'],
+    [`/dashboard/payments?paymentId=${ID}`, 'payment-lookup'],
+    [`/dashboard/complaints?requestId=${ID}&complaintId=${ID}`, 'complaint'],
+  ];
+  for (const [actionPath, screen] of cases) {
+    const route = link(actionPath, 'tenant');
+    assert.equal(route.screen, screen, actionPath);
+    is(link(actionPath, 'landlord'), plain(route), actionPath);
+  }
+});
+
+test('non-rental notifications keep their previous target', () => {
+  const listing = (own) => ({ kind: 'listing', id: ID, own });
+  const section = (name, extra = {}) => ({ kind: 'management', section: name, ...extra });
+  const none = { kind: 'none' };
+  for (const [actionPath, expected] of [
+    [`/chat?channel=direct&conversationId=${ID}`, none],
+    ['/notifications', none],
+    ['/settings/account-security', none],
+    ['/dashboard/membership', none],
+    [`/dashboard/membership/return?orderId=${ID}`, none],
+    ['/dashboard/viewing-schedules', section('landlord-appointments')],
+    [
+      `/dashboard/viewing-schedules/my-bookings?appointmentId=${ID}`,
+      section('tenant-appointments', { query: `appointmentId=${ID}` }),
+    ],
+    [`/dashboard/properties/view?id=${ID}`, listing(true)],
+    [`/rent/${ID}`, listing(false)],
+    ['/news/some-slug', { kind: 'news' }],
+    [`/operations/complaints?caseId=${ID}`, none],
+    [`/operations/system-alerts?incidentId=${ID}`, none],
+    ['https://evil.example/dashboard/payments?paymentId=p', none],
+    ['/dashboard/contracts/../x', none],
+    [null, none],
+  ]) {
+    for (const role of ['tenant', 'landlord'])
+      assert.equal(link(actionPath, role), null, String(actionPath));
+    is(notificationTarget(actionPath), expected, String(actionPath));
+  }
+});
+
+test('the old fallback of an unmapped rental path still ends on a new rental screen', () => {
+  for (const actionPath of ['/dashboard/payments', '/dashboard/contracts/c-1/extra']) {
+    assert.equal(link(actionPath), null, actionPath);
+    const target = notificationTarget(actionPath);
+    assert.equal(target.kind, 'management-choice', actionPath);
+    for (const section of [target.tenant, target.landlord])
+      assert.ok(nav.rentalRouteForDestination(section), section);
+  }
+});
+
+test('wiring: no entry hands a rental section to the old screens', () => {
+  const read = (file) => fs.readFileSync(path.resolve(__dirname, '..', file), 'utf8');
+  const app = read('App.tsx');
+  assert.match(app, /const openManagement[\s\S]{0,300}rentalRouteForDestination\(section\)/);
+  assert.equal(
+    app.match(/setRentalStack\(\[route\]\)/g).length,
+    1,
+    'only openRental starts a flow'
+  );
+  const feed = read('src/screens/NotificationsScreen.tsx');
+  const mapped = feed.indexOf('rentalRouteFromActionPath(item.actionPath, rentalRole)');
+  assert.ok(feed.indexOf('markNotificationRead(item.id)') < mapped);
+  assert.ok(mapped < feed.indexOf('notificationTarget(item.actionPath)'));
 });

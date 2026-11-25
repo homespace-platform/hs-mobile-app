@@ -9,19 +9,23 @@ import {
 } from 'react';
 import { Modal, Pressable, ScrollView, Text, View, type AlertButton } from 'react-native';
 import Icon from '@/components/Icon';
+import { onSessionEnd, sessionGeneration } from '@/lib/session-end';
 
 type Dialog = {
   title: string;
   message: string;
   buttons: AlertButton[];
-  tone: 'info' | 'success';
+  tone: 'info' | 'success' | 'warning';
+  /** Offers an action that other notices must wait for. */
+  keep?: boolean;
 };
 
 type ShowDialog = (
   title: string,
   message: string,
   buttons?: AlertButton[],
-  tone?: Dialog['tone']
+  tone?: Dialog['tone'],
+  keep?: boolean
 ) => void;
 
 /** A custom full-screen dialog drawn in the host's own Modal, above any message dialog. */
@@ -33,6 +37,7 @@ export type DialogLayer = {
 
 type DialogHost = {
   show: ShowDialog;
+  enqueue: (dialog: Dialog) => void;
   /** Returns a function that removes the layer. */
   present: (layer: DialogLayer) => () => void;
   adopt: (child: DialogHost) => () => void;
@@ -57,24 +62,39 @@ export function DialogProvider({
   const [layer, setLayer] = useState<DialogLayer | null>(null);
   // Mirrors of the state for the host methods, which must be stable and current at once.
   const dialogRef = useRef<Dialog | null>(null);
+  const pending = useRef<Dialog[]>([]);
+  const closingForAction = useRef(false);
   const layerRef = useRef<DialogLayer | null>(null);
   const nestedHosts = useRef<DialogHost[]>([]);
   const root = nested ? (parent?.root ?? parent) : null;
 
   const host = useMemo<DialogHost>(() => {
     const top = () => nestedHosts.current[nestedHosts.current.length - 1];
+    const display = (next: Dialog) => {
+      dialogRef.current = next;
+      setDialog(next);
+    };
     return {
       root,
-      show(title, message, buttons, tone = 'info') {
+      show(title, message, buttons, tone = 'info', keep) {
         const child = top();
-        if (child) return child.show(title, message, buttons, tone);
-        dialogRef.current = {
+        if (child) return child.show(title, message, buttons, tone, keep);
+        const next = {
           title,
           message,
           buttons: buttons?.length ? buttons : [{ text: 'Đóng' }],
           tone,
+          keep,
         };
-        setDialog(dialogRef.current);
+        if (dialogRef.current?.keep || closingForAction.current || pending.current.length)
+          pending.current.push(next);
+        else display(next);
+      },
+      enqueue(next) {
+        const child = top();
+        if (child) return child.enqueue(next);
+        if (dialogRef.current || closingForAction.current) pending.current.push(next);
+        else display({ ...next, keep: true });
       },
       present(next) {
         const child = top();
@@ -98,42 +118,93 @@ export function DialogProvider({
     };
   }, [root]);
 
+  useEffect(
+    () =>
+      onSessionEnd(() => {
+        pending.current.length = 0;
+        closingForAction.current = false;
+        dialogRef.current = null;
+        setDialog(null);
+        const previous = layerRef.current;
+        layerRef.current = null;
+        setLayer(null);
+        previous?.onDismiss();
+      }),
+    []
+  );
+
   useEffect(() => {
     if (!nested || !parent) return;
     const leave = parent.adopt(host);
+    const notices = pending.current;
     return () => {
       leave();
       layerRef.current?.onDismiss();
       // A message raised just before this Modal closed must not vanish with it.
       const left = dialogRef.current;
       dialogRef.current = null;
-      if (left)
-        setTimeout(() => host.root?.show(left.title, left.message, left.buttons, left.tone), 500);
+      const queued = notices.splice(0);
+      if (left) queued.unshift(left);
+      if (queued.length) {
+        const generation = sessionGeneration();
+        setTimeout(() => {
+          if (generation === sessionGeneration())
+            queued.forEach((notice) => host.root?.enqueue(notice));
+        }, 500);
+      }
     };
   }, [nested, parent, host]);
 
   function close(button?: AlertButton) {
+    const showNext = () => {
+      const next = pending.current.shift();
+      dialogRef.current = next ? { ...next, keep: true } : null;
+      setDialog(dialogRef.current);
+    };
+    if (!button?.onPress) return showNext();
+    // Close the native modal before the action, including when another notice is queued.
+    closingForAction.current = true;
     dialogRef.current = null;
     setDialog(null);
-    // Let the native modal close before an action opens another native screen.
-    if (button?.onPress) setTimeout(() => button.onPress?.(), 250);
+    const generation = sessionGeneration();
+    setTimeout(() => {
+      if (generation !== sessionGeneration()) return;
+      try {
+        button.onPress?.();
+      } finally {
+        setTimeout(() => {
+          if (generation !== sessionGeneration()) return;
+          closingForAction.current = false;
+          showNext();
+        }, 250);
+      }
+    }, 250);
   }
 
   const destructive = dialog?.buttons.some((button) => button.style === 'destructive');
+  const warning = dialog?.tone === 'warning';
   const icon =
     dialog?.tone === 'success'
       ? 'checkmark-circle'
-      : destructive
+      : destructive || warning
         ? 'warning'
         : 'information-circle';
   const accent =
-    dialog?.tone === 'success' ? 'text-success' : destructive ? 'text-danger' : 'text-primary';
+    dialog?.tone === 'success'
+      ? 'text-success'
+      : warning
+        ? 'text-warning'
+        : destructive
+          ? 'text-danger'
+          : 'text-primary';
   const soft =
     dialog?.tone === 'success'
       ? 'bg-success-soft'
-      : destructive
-        ? 'bg-danger-soft'
-        : 'bg-primary-soft';
+      : warning
+        ? 'bg-warning-soft'
+        : destructive
+          ? 'bg-danger-soft'
+          : 'bg-primary-soft';
 
   return (
     <DialogContext.Provider value={host}>

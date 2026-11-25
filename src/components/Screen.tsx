@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type ComponentProps } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
@@ -10,7 +10,15 @@ import {
 } from 'react-native';
 import Icon from '@/components/Icon';
 
-export function ScreenHeader({ title, onBack }: { title: string; onBack: () => void }) {
+export function ScreenHeader({
+  title,
+  onBack,
+  icon,
+}: {
+  title: string;
+  onBack: () => void;
+  icon?: ComponentProps<typeof Icon>['name'];
+}) {
   useEffect(() => {
     const handler = BackHandler.addEventListener('hardwareBackPress', () => {
       onBack();
@@ -27,6 +35,7 @@ export function ScreenHeader({ title, onBack }: { title: string; onBack: () => v
         className="mr-3 h-11 w-11 items-center justify-center">
         <Icon name="chevron-back" size={25} className="text-foreground" />
       </Pressable>
+      {icon ? <Icon name={icon} size={22} className="mr-2 text-primary" /> : null}
       <Text accessibilityRole="header" className="flex-1 text-lg font-bold text-foreground">
         {title}
       </Text>

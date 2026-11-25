@@ -1,7 +1,7 @@
 // Pure port of hs-web-app lib/profile-gate.ts (no React/RN). KYC has no settings section: it starts the web /kyc flow (gateAction).
 export type ProfileRequirement = 'PROFILE' | 'ADDRESS' | 'BANK_ACCOUNT' | 'KYC';
 /** Settings sections that can complete a requirement on mobile (a subset of SettingsSection). */
-export type ProfileGateSection = 'profile' | 'bank-accounts';
+export type ProfileGateSection = 'profile' | 'bank-accounts' | 'account-security';
 
 /** Canonical display order, label and the mobile settings section for each requirement (null = none). */
 export const PROFILE_REQUIREMENTS: readonly {

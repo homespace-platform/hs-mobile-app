@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { createContext, type ReactNode } from 'react';
 import { Text, View } from 'react-native';
 
 /** Label above, error (announced) and helper text below: the frame of every rental form field. */
@@ -35,5 +35,8 @@ export default function FieldFrame({
 export const inputBoxClass = (invalid: boolean, disabled?: boolean) =>
   `min-h-12 flex-row items-center rounded-xl border px-3 ${invalid ? 'border-danger' : 'border-border'} ${disabled ? 'bg-muted' : 'bg-surface'}`;
 
-export const inputTextClass = (disabled?: boolean) =>
-  `flex-1 py-2.5 text-base selection:text-primary placeholder:text-subtle ${disabled ? 'text-muted-foreground' : 'text-foreground'}`;
+/** The text colour a wrapper gives the inputs inside it (web ContractEditField). */
+export const FieldTextColor = createContext<string | undefined>(undefined);
+
+export const inputTextClass = (disabled?: boolean, color?: string) =>
+  `flex-1 py-2.5 text-base selection:text-primary placeholder:text-subtle ${color ?? (disabled ? 'text-muted-foreground' : 'text-foreground')}`;

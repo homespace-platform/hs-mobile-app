@@ -1,3 +1,5 @@
+const { platformSelect } = require('nativewind/theme');
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ['./App.{js,ts,tsx}', './src/**/*.{js,ts,tsx}'],
@@ -44,6 +46,10 @@ module.exports = {
         'preview-accent',
       ].map((name) => [name, `rgb(var(--color-${name}) / <alpha-value>)`])
     ),
+    extend: {
+      // The preset's Android value, "mono", is not an Android font family: font-mono drew sans.
+      fontFamily: { mono: platformSelect({ android: 'monospace', ios: "'Courier New'" }) },
+    },
   },
   plugins: [],
 };

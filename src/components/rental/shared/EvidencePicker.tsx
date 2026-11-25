@@ -1,5 +1,5 @@
 // Evidence / proof files: web <input type="file">. Uploading stays with @/services/rental/storage.service.
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Image, Linking, Pressable, Text, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { useDialog } from '@/components/AppDialog';
 import Icon from '@/components/Icon';
+import { discardPickedCopy } from '@/services/rental/cache';
 import type { LocalFile } from '@/services/storageApi';
 
 import ActionButton from './ActionButton';
@@ -54,10 +55,13 @@ export default function EvidencePicker({
   onChange,
   messages,
   types = EVIDENCE_TYPES,
+  namePattern,
   maxBytes = EVIDENCE_MAX_BYTES,
   maxCount = 1,
   existingCount = 0,
+  replace = false,
   onError,
+  onPickingChange,
   camera = false,
   libraryLabel = 'Chọn ảnh',
   documentLabel = 'Chọn tệp',
@@ -75,13 +79,19 @@ export default function EvidencePicker({
   messages: FileMessages;
   /** Accepted MIME types. */
   types?: readonly string[];
+  /** Also require the file name to match. */
+  namePattern?: RegExp;
   maxBytes?: number;
-  /** 1 replaces the file on each pick; more appends. */
+  /** 1 replaces the file on each pick; more appends unless `replace`. */
   maxCount?: number;
   /** Files already stored that count towards maxCount. */
   existingCount?: number;
+  /** Each pick replaces the whole list (web `<input type="file" multiple>`). */
+  replace?: boolean;
   /** A refused or failed pick (the web's toast). The message is also shown under the field. */
   onError?: (message: string) => void;
+  /** True from opening a picker until its selection is handled: lock submit meanwhile. */
+  onPickingChange?: (picking: boolean) => void;
   camera?: boolean;
   libraryLabel?: string;
   documentLabel?: string;
@@ -95,9 +105,25 @@ export default function EvidencePicker({
   const [pickError, setPickError] = useState('');
   const [picking, setPicking] = useState(false);
   const lock = useRef(false);
+  const alive = useRef(true);
+  // Ends the running pick for the caller, once: when it finishes or when the field goes away.
+  const release = useRef<(() => void) | null>(null);
+  const endPick = () => {
+    release.current?.();
+    release.current = null;
+  };
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      release.current?.();
+      release.current = null;
+    };
+  }, []);
   const multiple = maxCount > 1;
-  // A single-file field replaces its file, so what it holds does not count.
-  const kept = existingCount + (multiple ? value.length : 0);
+  const appends = multiple && !replace;
+  // A list that gets replaced does not count towards the limit.
+  const kept = existingCount + (appends ? value.length : 0);
   const room = maxCount - kept;
   const off = Boolean(disabled || picking || room <= 0);
   const images = types.some((type) => type.startsWith('image/'));
@@ -120,6 +146,7 @@ export default function EvidencePicker({
     }
     if (source === 'camera') {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!alive.current) return [];
       if (!permission.granted) {
         showDialog('Thông báo', 'Cần cấp quyền camera để chụp ảnh.', [
           { text: 'Đóng', style: 'cancel' },
@@ -142,19 +169,31 @@ export default function EvidencePicker({
     if (lock.current) return;
     lock.current = true;
     setPicking(true);
+    onPickingChange?.(true);
+    release.current = () => onPickingChange?.(false);
+    let assets: Picked[] = [];
+    let handedOver = false;
     try {
-      const assets = await assetsFrom(source);
+      assets = await assetsFrom(source);
       if (!assets.length) return;
       const files = await Promise.all(assets.map(localFile));
-      const refused = fileSelectionError(files, kept, { types, maxBytes, maxCount }, messages);
+      // A field that is gone must not hand over a late selection (the caller may upload it).
+      if (!alive.current) return;
+      const rules = { types, namePattern, maxBytes, maxCount };
+      const refused = fileSelectionError(files, kept, rules, messages);
       if (refused) return fail(refused);
       setPickError('');
-      onChange(multiple ? [...value, ...files] : files);
+      onChange(appends ? [...value, ...files] : files);
+      handedOver = true;
     } catch (cause) {
+      if (!alive.current) return;
       fail(cause instanceof Error && cause.message ? cause.message : 'Không thể chọn tệp.');
     } finally {
+      // Refused, unreadable or late: nobody holds these copies.
+      if (!handedOver) assets.forEach((asset) => void discardPickedCopy(asset.uri));
       lock.current = false;
-      setPicking(false);
+      endPick();
+      if (alive.current) setPicking(false);
     }
   }
 

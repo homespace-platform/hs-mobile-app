@@ -81,11 +81,14 @@ export function EmptyBlock({
 }
 
 export function ErrorBlock({
+  title,
   message,
   onRetry,
   retryLabel = 'Thử lại',
   busy,
 }: {
+  /** A heading inside the same box, above the message. */
+  title?: string;
   message: string;
   onRetry?: () => void;
   retryLabel?: string;
@@ -95,7 +98,10 @@ export function ErrorBlock({
     <View className="gap-3 rounded-2xl border border-danger bg-danger-soft p-4">
       <View accessibilityRole="alert" accessible className="flex-row items-start gap-2">
         <Icon name="alert-circle-outline" size={20} className="text-danger" />
-        <Text className="flex-1 text-sm leading-5 text-danger">{message}</Text>
+        <View className="flex-1 gap-1">
+          {title ? <Text className="text-base font-bold text-danger">{title}</Text> : null}
+          <Text className="text-sm leading-5 text-danger">{message}</Text>
+        </View>
       </View>
       {onRetry ? (
         <ActionButton

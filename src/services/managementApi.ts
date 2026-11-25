@@ -2,7 +2,8 @@ import axiosClient from '@/lib/axios-client';
 import * as SecureStore from 'expo-secure-store';
 import { getAccessToken } from '@/features/auth/session';
 import { getUserProfileApi } from '@/services/userApi';
-import type { ApiResponse, PageResponse } from '@/types/api';
+import { onSessionEnd } from '@/lib/session-end';
+import type { PageResponse } from '@/types/api';
 import type { AppointmentResponse } from '@/types/appointment';
 
 /** These two have their own screen (components/appointment/manage). */
@@ -17,30 +18,10 @@ export type ManagementSection =
   | 'landlord-branches'
   | 'tenant-contracts'
   | 'landlord-contracts';
-export const RENTAL_REQUEST_STATUSES = [
-  'PENDING',
-  'ACCEPTED',
-  'COMPLETED',
-  'REJECTED',
-  'EXPIRED',
-  'CANCELLED_BY_RENTER',
-  'CANCELLED_BY_OWNER',
-  'CANCELLED_BY_SYSTEM',
-] as const;
-export type RentalRequestStatus = (typeof RENTAL_REQUEST_STATUSES)[number];
-export type ManagementAction =
-  | 'reject'
-  | 'cancel'
-  | 'accept'
-  | 'hide'
-  | 'publish'
-  | 'resubmit'
-  | 'confirm-receipt'
-  | 'reject-receipt';
+export type ManagementAction = 'hide' | 'publish' | 'resubmit';
 export type ActionOption = {
   action: ManagementAction;
   label: string;
-  needsReason?: boolean;
   danger?: boolean;
 };
 export type ManagementEntry = {
@@ -52,73 +33,16 @@ export type ManagementEntry = {
   listingId?: string;
   fields: [string, string][];
   actions: ActionOption[];
-  rentalRequest?: RentalRequest;
-  payment?: Payment;
 };
 export type Appointment = AppointmentResponse;
-export type RentalRequest = {
+/** The fields the attention dot reads from a rental request. */
+type RentalRequest = {
   id: string;
-  listingId: string;
-  listingTitle: string;
-  listingAddress: string;
   status: string;
-  renterName: string;
-  renterPhone: string;
-  moveInDate: string;
   createdAt?: string | null;
   acceptedAt?: string | null;
   updatedAt?: string | null;
-  leaseMonths: number;
-  occupantCount: number;
-  monthlyRentPrice: number;
-  depositAmount?: number | null;
-  renterNote?: string | null;
-  rejectReason?: string | null;
-  holdExpiresAt?: string | null;
-  initialPayment?: { status: string } | null;
 };
-export type Payment = {
-  id: string;
-  listingId: string;
-  rentalRequestId: string;
-  contractId?: string;
-  invoiceId?: string;
-  payerId: string;
-  payeeId: string;
-  direction: string;
-  status: string;
-  type: string;
-  totalAmount: number;
-  transferReference: string;
-  dueAt?: string;
-  createdAt?: string | null;
-  payerReportedAt?: string;
-  payeeConfirmedAt?: string;
-  confirmedAt?: string;
-  updatedAt?: string;
-  bankTransactionReference?: string;
-  currency?: string;
-  lineItems?: {
-    id: string;
-    displayName: string;
-    quantity: number;
-    unitPrice: number;
-    amount: number;
-  }[];
-  qrImageUrl?: string;
-  payeeBankAccountSnapshot?: BankAccount;
-  payeeAccount?: BankAccount;
-  rejectedReason?: string;
-  evidences?: { storageObjectId: string; note?: string }[];
-  evidenceList?: { storageObjectId: string; note?: string }[];
-};
-export type RentalOnboarding = {
-  stage: string;
-  message: string;
-  cancellationRequestedAt?: string;
-  payments: Payment[];
-};
-type BankAccount = { bankName: string; accountNumber: string; accountHolderName: string };
 type OwnListing = {
   id: string;
   title: string;
@@ -132,37 +56,7 @@ type OwnListing = {
   expiresAt?: string | null;
   createdAt?: string | null;
 };
-type Branch = {
-  id: string;
-  name: string;
-  category: string;
-  display?: string;
-  address?: string;
-  totalUnits?: number;
-  activeListingsCount?: number;
-  description?: string;
-  createdAt?: string | null;
-};
-type Contract = {
-  id: string;
-  listingId: string;
-  contractNumber: string;
-  status: string;
-  paymentStatus: string;
-  signedAt?: string;
-  createdAt: string;
-};
-export type ContractDocument = {
-  id: string;
-  fileName?: string;
-  status: string;
-  documentType: string;
-  viewUrl?: string;
-  downloadUrl?: string;
-  storageObjectId?: string;
-};
-
-export function money(value?: number | null) {
+function money(value?: number | null) {
   return value == null ? 'Chưa xác định' : `${value.toLocaleString('vi-VN')} đ`;
 }
 export function statusLabel(status: string) {
@@ -204,101 +98,6 @@ export function statusLabel(status: string) {
   );
 }
 
-export function rentalEntry(row: RentalRequest, owner: boolean): ManagementEntry {
-  const actions: ActionOption[] = [];
-  if (owner && row.status === 'PENDING')
-    actions.push(
-      { action: 'accept', label: 'Chấp thuận yêu cầu thuê' },
-      { action: 'reject', label: 'Từ chối yêu cầu', needsReason: true, danger: true }
-    );
-  if (
-    row.status === 'PENDING' ||
-    (row.status === 'ACCEPTED' &&
-      !['TRANSFER_REPORTED', 'CONFIRMED'].includes(row.initialPayment?.status ?? ''))
-  )
-    actions.push({ action: 'cancel', label: 'Hủy yêu cầu thuê', danger: true });
-  return {
-    id: row.id,
-    title: row.listingTitle,
-    listingId: row.listingId,
-    status: row.status,
-    date: row.createdAt,
-    rentalRequest: row,
-    actions,
-    fields: [
-      ['Địa chỉ', row.listingAddress],
-      ['Người thuê', row.renterName],
-      ['Điện thoại', row.renterPhone],
-      ['Ngày vào ở', row.moveInDate],
-      ['Thời hạn', `${row.leaseMonths} tháng`],
-      ['Số người', `${row.occupantCount}`],
-      ['Tiền thuê/tháng', money(row.monthlyRentPrice)],
-      ['Tiền cọc', money(row.depositAmount)],
-      ['Hạn giữ chỗ', row.holdExpiresAt || '—'],
-      ['Ghi chú', row.renterNote || row.rejectReason || '—'],
-    ],
-  };
-}
-
-export function paymentTypeLabel(type: string) {
-  return (
-    (
-      {
-        RESERVATION_DEPOSIT: 'Cọc giữ chỗ',
-        INITIAL: 'Tiền thuê ban đầu',
-        MONTHLY_RENT: 'Tiền thuê định kỳ',
-        UTILITY: 'Phí tiện ích',
-        OTHER_CHARGE: 'Khoản thu khác',
-        INITIAL_PAYMENT_REFUND: 'Hoàn tiền ban đầu',
-        DEPOSIT_REFUND: 'Hoàn cọc',
-        DEPOSIT_ADJUSTMENT: 'Điều chỉnh cọc',
-      } as Record<string, string>
-    )[type] ?? type
-  );
-}
-
-export function paymentEntry(row: Payment, userId: string): ManagementEntry {
-  const actions: ActionOption[] = [];
-  if (row.payeeId === userId && row.status === 'TRANSFER_REPORTED')
-    actions.push(
-      { action: 'confirm-receipt', label: 'Xác nhận đã nhận đủ tiền' },
-      { action: 'reject-receipt', label: 'Chưa nhận đủ tiền', needsReason: true, danger: true }
-    );
-  const bank = row.payeeBankAccountSnapshot ?? row.payeeAccount;
-  return {
-    id: row.id,
-    title: `${money(row.totalAmount)} · ${row.transferReference}`,
-    listingId: row.listingId,
-    status: row.status,
-    date: row.createdAt,
-    actions,
-    payment: { ...row, evidences: row.evidences ?? row.evidenceList ?? [] },
-    fields: [
-      ['Số tiền', money(row.totalAmount)],
-      ['Nội dung chuyển khoản', row.transferReference],
-      ['Loại thanh toán', paymentTypeLabel(row.type)],
-      ['Chiều chuyển tiền', row.payerId === userId ? 'Bạn chuyển tiền' : 'Bạn nhận tiền'],
-      ['Ngày tạo', row.createdAt ? new Date(row.createdAt).toLocaleString('vi-VN') : '—'],
-      [
-        'Ngày báo chuyển khoản',
-        row.payerReportedAt ? new Date(row.payerReportedAt).toLocaleString('vi-VN') : '—',
-      ],
-      [
-        'Ngày xác nhận nhận tiền',
-        row.payeeConfirmedAt || row.confirmedAt
-          ? new Date((row.payeeConfirmedAt || row.confirmedAt)!).toLocaleString('vi-VN')
-          : '—',
-      ],
-      ['Ngân hàng nhận', bank?.bankName || 'Chưa cấu hình'],
-      ['Số tài khoản', bank?.accountNumber || '—'],
-      ['Chủ tài khoản', bank?.accountHolderName || '—'],
-      ['Hạn thanh toán', row.dueAt ? new Date(row.dueAt).toLocaleString('vi-VN') : '—'],
-      ['Mã giao dịch ngân hàng', row.bankTransactionReference || '—'],
-      ['Lý do từ chối', row.rejectedReason || '—'],
-    ],
-  };
-}
-
 function listingEntry(row: OwnListing): ManagementEntry {
   return {
     id: row.id,
@@ -326,86 +125,9 @@ function listingEntry(row: OwnListing): ManagementEntry {
             : [],
   };
 }
-function branchEntry(row: Branch): ManagementEntry {
-  return {
-    id: row.id,
-    title: row.name,
-    status: row.category,
-    date: row.createdAt,
-    actions: [],
-    fields: [
-      ['Địa chỉ', row.display || row.address || '—'],
-      ['Số phòng', String(row.totalUnits ?? '—')],
-      ['Tin đang hoạt động', String(row.activeListingsCount ?? '—')],
-      ['Mô tả', row.description || '—'],
-    ],
-  };
-}
-function contractEntry(row: Contract): ManagementEntry {
-  return {
-    id: row.id,
-    title: row.contractNumber || row.id,
-    listingId: row.listingId,
-    status: row.status,
-    date: row.createdAt,
-    actions: [],
-    fields: [
-      ['Mã hợp đồng', row.contractNumber],
-      ['Thanh toán', statusLabel(row.paymentStatus)],
-      ['Ngày tạo', row.createdAt],
-      ['Ngày ký', row.signedAt || 'Chưa ký'],
-    ],
-  };
-}
-
-export async function getManagementPage(
-  section: Exclude<ManagementSection, AppointmentSection>,
-  page: number,
-  userId: string,
-  rentalStatus?: RentalRequestStatus
-) {
-  const owner = section.startsWith('landlord-');
-  const params = { page, size: 12 };
-  if (section.endsWith('-payments')) {
-    const response = await axiosClient.get<ApiResponse<Payment[]>>('/api/v1/payment-requests/mine');
-    const items = (response.data.result ?? [])
-      .filter((row) => {
-        const tenantId = row.direction === 'LANDLORD_TO_TENANT' ? row.payeeId : row.payerId;
-        return owner
-          ? (row.direction === 'LANDLORD_TO_TENANT' ? row.payerId : row.payeeId) === userId
-          : tenantId === userId;
-      })
-      .map((row) => paymentEntry(row, userId));
-    return { items, hasMore: false, total: items.length };
-  }
-  if (section === 'landlord-branches') {
-    const response = await axiosClient.get<ApiResponse<Branch[]>>('/api/v1/branches');
-    const items = (response.data.result ?? []).map(branchEntry);
-    return { items, hasMore: false, total: items.length };
-  }
-  if (section.endsWith('-requests')) {
-    const response = await axiosClient.get<PageResponse<RentalRequest>>(
-      `/api/v1/rental-requests/${owner ? 'owner' : 'my-requests'}`,
-      { params: { ...params, ...(rentalStatus ? { status: rentalStatus } : {}) } }
-    );
-    return {
-      items: response.data.result.map((row) => rentalEntry(row, owner)),
-      hasMore: response.data.hasMore,
-      total: response.data.totalElements,
-    };
-  }
-  if (section.endsWith('-contracts')) {
-    const response = await axiosClient.get<PageResponse<Contract>>('/api/v1/contracts', {
-      params: { ...params, role: owner ? 'LANDLORD' : 'TENANT' },
-    });
-    return {
-      items: response.data.result.map(contractEntry),
-      hasMore: response.data.hasMore,
-      total: response.data.totalElements,
-    };
-  }
+export async function getManagementPage(page: number) {
   const response = await axiosClient.get<PageResponse<OwnListing>>('/api/v1/listings/me', {
-    params,
+    params: { page, size: 12 },
   });
   return {
     items: response.data.result.map(listingEntry),
@@ -414,29 +136,19 @@ export async function getManagementPage(
   };
 }
 
-export async function getRentalRequestCounts(owner: boolean) {
-  const endpoint = `/api/v1/rental-requests/${owner ? 'owner' : 'my-requests'}`;
-  const counts = new Map<string, number>();
-  let page = 1;
-  let hasMore: boolean;
-  do {
-    const response = await axiosClient.get<PageResponse<RentalRequest>>(endpoint, {
-      params: { page, size: 50 },
-    });
-    for (const row of response.data.result)
-      counts.set(row.status, (counts.get(row.status) ?? 0) + 1);
-    hasMore = response.data.hasMore;
-    page++;
-  } while (hasMore);
-  return RENTAL_REQUEST_STATUSES.map((status) => ({ status, count: counts.get(status) ?? 0 }));
-}
-
 let managementAttentionCache: Partial<Record<ManagementSection, number>> | null = null;
 let managementAttentionCacheAt = 0;
 let managementAttentionCacheToken = '';
 let managementAttentionRequest: Promise<Partial<Record<ManagementSection, number>>> | null = null;
 let managementAttentionRequestToken = '';
 let managementAttentionUserId = '';
+onSessionEnd(() => {
+  managementAttentionCache = null;
+  managementAttentionRequest = null;
+  managementAttentionCacheToken = '';
+  managementAttentionRequestToken = '';
+  managementAttentionUserId = '';
+});
 // shortcut: Seen state is device-local until the API supports per-user read receipts.
 const seenNotices = new Map<string, string>();
 
@@ -609,80 +321,10 @@ async function loadManagementAttentionCounts(userId: string) {
   return counts;
 }
 
-export async function refreshManagementEntry(
-  section: ManagementSection,
-  entry: ManagementEntry,
-  userId: string
-) {
-  if (entry.payment) {
-    const response = await axiosClient.get<ApiResponse<Payment>>(
-      `/api/v1/payment-requests/${encodeURIComponent(entry.id)}`
-    );
-    return paymentEntry(response.data.result, userId);
-  }
-  if (section.endsWith('-requests')) {
-    const response = await axiosClient.get<ApiResponse<RentalRequest>>(
-      `/api/v1/rental-requests/${encodeURIComponent(entry.id)}`
-    );
-    return rentalEntry(response.data.result, section.startsWith('landlord-'));
-  }
-  return entry;
-}
-
-export async function refreshRentalOnboarding(requestId: string) {
-  const response = await axiosClient.post<ApiResponse<RentalOnboarding>>(
-    `/api/v1/rental-requests/${encodeURIComponent(requestId)}/onboarding/refresh`
-  );
-  return response.data.result;
-}
-
-export async function performManagementAction(
-  section: ManagementSection,
-  entry: ManagementEntry,
-  action: ManagementAction,
-  reason: string
-) {
+export async function performManagementAction(entry: ManagementEntry, action: ManagementAction) {
   if (!entry.actions.some((option) => option.action === action))
     throw new Error('Thao tác không khả dụng cho trạng thái hiện tại.');
-  if (entry.actions.find((option) => option.action === action)?.needsReason && !reason.trim())
-    throw new Error('Vui lòng nhập lý do trước khi tiếp tục.');
-  const id = encodeURIComponent(entry.id);
-  if (section.endsWith('-requests')) {
-    await axiosClient.put(
-      `/api/v1/rental-requests/${id}/${action}`,
-      action === 'reject' ? { rejectReason: reason.trim() } : undefined
-    );
-  } else if (section.endsWith('-payments')) {
-    await axiosClient.post(
-      `/api/v1/payment-requests/${id}/${action}`,
-      action === 'confirm-receipt' ? undefined : { reason: reason.trim() }
-    );
-  } else if (section === 'landlord-properties') {
-    await axiosClient.patch(`/api/v1/listings/${id}/status`, {
-      status: action === 'hide' ? 'HIDDEN' : action === 'resubmit' ? 'PENDING_REVIEW' : 'PUBLISHED',
-    });
-  }
-}
-
-export async function getContractDocuments(id: string) {
-  const response = await axiosClient.get<ApiResponse<ContractDocument[]>>(
-    `/api/v1/contracts/${encodeURIComponent(id)}/documents`
-  );
-  return response.data.result;
-}
-
-export async function reportPaymentTransfer(
-  payment: Payment,
-  proofStorageId: string,
-  reference: string
-) {
-  if (!proofStorageId) throw new Error('Cần tải chứng từ trước khi báo chuyển khoản.');
-  await axiosClient.post(
-    `/api/v1/payment-requests/${encodeURIComponent(payment.id)}/report-transfer`,
-    {
-      proofStorageId,
-      expectedAmount: payment.totalAmount,
-      bankTransactionReference: reference.trim() || undefined,
-    }
-  );
+  await axiosClient.patch(`/api/v1/listings/${encodeURIComponent(entry.id)}/status`, {
+    status: action === 'hide' ? 'HIDDEN' : action === 'resubmit' ? 'PENDING_REVIEW' : 'PUBLISHED',
+  });
 }

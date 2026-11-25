@@ -134,6 +134,9 @@ function harness(side, options = {}) {
     };
     log.link = link;
   } else {
+    log.cleanupTimers = [];
+    log.deleted = [];
+    globals.setTimeout = (callback) => log.cleanupTimers.push(callback);
     globals.FileReader = FakeFileReader;
     let uuid = 0;
     stubs['expo-crypto'] = { randomUUID: () => `uuid-${++uuid}` };
@@ -141,6 +144,7 @@ function harness(side, options = {}) {
       cacheDirectory: 'file:///cache/',
       EncodingType: { Base64: 'base64' },
       makeDirectoryAsync: async () => {},
+      deleteAsync: async (uri) => log.deleted.push(uri),
       writeAsStringAsync: async (uri, content, writeOptions) =>
         log.written.push({ uri, content, encoding: writeOptions.encoding }),
       getInfoAsync: async (uri) => ({
@@ -493,7 +497,7 @@ test('receipt PDF: same validation, but mobile resolves to a cached file', async
       continue;
     }
     assert.equal(await expected.value.text(), PDF);
-    assert.equal(actual.value, 'file:///cache/rental-uuid-1/1.pdf'); // path separators never reach the cache path
+    assert.equal(actual.value, 'file:///cache/rental-files/uuid-1/1.pdf'); // path separators never reach the cache path
     assert.deepEqual(sides.mobile.log.written, [
       { uri: actual.value, content: PDF_BASE64, encoding: 'base64' },
     ]);
@@ -522,16 +526,20 @@ test('verified PDF content and download: bytes, error messages and the share she
   assert.ok(ok.mobile.log.written[0].uri.endsWith(`/${encodeURIComponent('Hợp đồng.pdf')}`));
   assert.equal(ok.mobile.log.shared[0].uri, ok.mobile.log.written[0].uri);
   assert.equal(ok.mobile.log.shared[0].mimeType, 'application/pdf');
+  assert.deepEqual(ok.mobile.log.deleted, []);
+  ok.mobile.log.cleanupTimers[0]();
+  assert.deepEqual(ok.mobile.log.deleted, ['file:///cache/rental-files/uuid-1/']);
   await same(ok, 'contract', 'downloadDocument', [{ id: 'd1' }]);
   assert.ok(ok.mobile.log.written[1].uri.endsWith('/hop-dong-da-ky.pdf'));
   await same(ok, 'contract', 'downloadDocument', [{ id: 'd1', fileName: '../..' }]);
-  assert.ok(ok.mobile.log.written[2].uri.endsWith('rental-uuid-3/tai-lieu.pdf'));
+  assert.ok(ok.mobile.log.written[2].uri.endsWith('rental-files/uuid-3/tai-lieu.pdf'));
 
   const noShare = pair({ respond: () => new Blob([PDF]), sharing: false });
   await assert.rejects(
     api(noShare.service('contract').mobile).downloadDocument({ id: 'd1' }),
     /chưa hỗ trợ/
   );
+  assert.deepEqual(noShare.mobile.log.deleted, ['file:///cache/rental-files/uuid-1/']);
 
   for (const body of ['{"message":"Tài liệu bị sửa"}', '{}', '<html>', 'null', undefined]) {
     const failing = pair({ respond: blobFailure(body) });
@@ -544,6 +552,40 @@ test('verified PDF content and download: bytes, error messages and the share she
     }
     assert.equal(failing.mobile.log.shared.length, 0);
   }
+});
+
+test('verified PDF stays scoped to the session that asked for it, including the share hand-off', async () => {
+  let completeDownload;
+  const old = harness('mobile', {
+    respond: () =>
+      new Promise((resolve) => {
+        completeDownload = resolve;
+      }),
+  });
+  const cache = old.load('services/rental/cache');
+  const pending = api(old.load('services/rental/contract.service')).downloadDocument({ id: 'old' });
+  await cache.purgeSensitiveCache();
+  cache.openSensitiveCache();
+  completeDownload(new Blob([PDF]));
+  await assert.rejects(pending, /Phiên đăng nhập đã kết thúc/);
+  assert.deepEqual([old.log.written, old.log.shared], [[], []]);
+
+  let completeAvailability;
+  const device = harness('mobile', {
+    sharing: new Promise((resolve) => {
+      completeAvailability = resolve;
+    }),
+  });
+  const files = device.load('services/rental/files');
+  const local = await files.saveBase64ToCache(PDF_BASE64, 'proof.pdf');
+  const opening = files.sharePdf(local);
+  const deviceCache = device.load('services/rental/cache');
+  await deviceCache.purgeSensitiveCache();
+  assert.deepEqual(device.log.deleted, []);
+  completeAvailability(true);
+  await assert.rejects(opening, /Phiên đăng nhập đã kết thúc/);
+  assert.deepEqual(device.log.shared, []);
+  assert.deepEqual(device.log.deleted, ['file:///cache/rental-files/uuid-1/']);
 });
 
 test('complaint source PDF: only the exact signed document, same errors', async () => {

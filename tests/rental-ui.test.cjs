@@ -50,27 +50,71 @@ test('askReason counts the trimmed text and uses the web strings', () => {
   assert.equal(ui.reasonState('abcd', 5, 20).counter, '4/20');
 });
 
+const money = ({ value, error }) => (error ? { error } : { value });
+const at = (start, end = start) => ({ start, end });
+
 test('money typing keeps plain digits', () => {
-  assert.deepEqual(plain(ui.editVndText('', '5')), { value: '5' });
-  assert.deepEqual(plain(ui.editVndText('1.000', '1.0000')), { value: '10000' });
-  assert.deepEqual(plain(ui.editVndText('10.000', '10.00')), { value: '1000' });
-  assert.deepEqual(plain(ui.editVndText('5', '')), { value: '' });
-  assert.deepEqual(plain(ui.editVndText('0', '07')), { value: '7' });
+  assert.deepEqual(money(ui.editVndText('', '5', [at(0)])), { value: '5' });
+  assert.deepEqual(money(ui.editVndText('1.000', '1.0000', [at(5)])), { value: '10000' });
+  assert.deepEqual(money(ui.editVndText('10.000', '10.00', [at(6)])), { value: '1000' });
+  assert.deepEqual(money(ui.editVndText('5', '', [at(1)])), { value: '' });
+  assert.deepEqual(money(ui.editVndText('0', '07', [at(1)])), { value: '7' });
   // Deleting a grouping dot removes the digit before it.
-  assert.deepEqual(plain(ui.editVndText('12.345', '12345')), { value: '1345' });
-  // A stray separator typed on the keypad changes nothing.
-  assert.deepEqual(plain(ui.editVndText('1.000', '1.000,')), { value: '1000' });
+  assert.deepEqual(money(ui.editVndText('12.345', '12345', [at(3)])), { value: '1345' });
+  // A separator alone is indistinguishable from an invalid paste.
+  assert.match(ui.editVndText('1.000', '1.000,', [at(5)]).error, /^Dán số tiền VNĐ nguyên/);
   for (const bad of ['-', '1.000-', '1e'])
-    assert.match(ui.editVndText(bad.slice(0, -1), bad).error, /^Chỉ nhập số tiền/);
+    assert.match(
+      ui.editVndText(bad.slice(0, -1), bad, [at(bad.length - 1)]).error,
+      /^Chỉ nhập số tiền/
+    );
 });
 
 test('pasted money is parsed, never silently multiplied', () => {
-  assert.deepEqual(plain(ui.editVndText('', '30000.00')), { value: '30000' });
-  assert.deepEqual(plain(ui.editVndText('3', '30000.00')), { value: '30000' });
-  assert.deepEqual(plain(ui.editVndText('100.000', '5.00')), { value: '5' });
-  assert.deepEqual(plain(ui.editVndText('', '1.500.000 đ')), { value: '1500000' });
+  assert.deepEqual(money(ui.editVndText('', '30000.00', [at(0)])), { value: '30000' });
+  assert.deepEqual(money(ui.editVndText('3', '30000.00', [at(0, 1)])), { value: '30000' });
+  assert.deepEqual(money(ui.editVndText('100.000', '5.00', [at(0, 7)])), { value: '5' });
+  assert.deepEqual(money(ui.editVndText('', '1.500.000 đ', [at(0)])), { value: '1500000' });
   for (const bad of ['1,5', '-5000', '12.34', 'abc'])
     assert.match(ui.editVndText('', bad).error, /^Dán số tiền VNĐ nguyên/, bad);
+});
+
+test('a paste over selected text is read as a paste, backspace stays a deletion (C-177)', () => {
+  const edit = (display, next, ...selections) => money(ui.editVndText(display, next, selections));
+  const refused = (result) => assert.match(result.error ?? '', /^Dán số tiền VNĐ nguyên/);
+
+  // Select all, paste "1.25": never 125. Selection reported before the text (Android)...
+  refused(edit('1.250', '1.25', at(0, 5)));
+  // ...or already replaced by the new caret (iOS), also when selected backwards.
+  refused(edit('1.250', '1.25', at(0, 5), at(4)));
+  refused(edit('1.250', '1.25', at(5, 0), at(4)));
+  assert.deepEqual(edit('1.250', '2.000', at(0, 5)), { value: '2000' });
+  assert.deepEqual(edit('1.250', '2.000', at(0, 5), at(5)), { value: '2000' });
+  assert.deepEqual(edit('1.250', '30000.00', at(0, 5), at(8)), { value: '30000' });
+  // A partial selection keeps the rest, as on web; only the pasted part is parsed.
+  assert.deepEqual(edit('1.250', '1.99', at(2, 5)), { value: '199' });
+  refused(edit('1.250', '1.2,5', at(2, 5)));
+  // Typing or deleting over a selection.
+  assert.deepEqual(edit('1.250', '5', at(0, 5)), { value: '5' });
+  assert.deepEqual(edit('1.250', '', at(0, 5)), { value: '' });
+  assert.deepEqual(edit('1.250', '', at(0, 5), at(0)), { value: '' });
+  assert.match(edit('1.250', '-', at(0, 5)).error, /^Chỉ nhập số tiền/);
+  // A selection that no longer fits the text is refused, not guessed.
+  refused(edit('1.250', '1.25', at(1, 3)));
+
+  // Plain backspace in either event order, also on the grouping dot.
+  assert.deepEqual(edit('1.250', '1.25', at(5)), { value: '125' });
+  assert.deepEqual(edit('1.250', '1.25', at(5), at(4)), { value: '125' });
+  assert.deepEqual(edit('12.345', '12345', at(3)), { value: '1345' });
+  assert.deepEqual(money(ui.editVndText('12.345', '12345', [at(3)], at(2))), { value: '1345' });
+  refused(edit('12.345', '12345', at(3), at(2)));
+  // Select all, tap the end again, then backspace.
+  assert.deepEqual(edit('1.250', '1.25', at(0, 5), at(5)), { value: '125' });
+  // Same events as an iOS paste of "10.00" (10 on web) and a backspace (1000): refused.
+  refused(edit('10.000', '10.00', at(0, 6), at(5)));
+  // Typing a digit.
+  assert.deepEqual(edit('1.250', '1.2500', at(5)), { value: '12500' });
+  assert.deepEqual(edit('1.250', '1.2500', at(5), at(6)), { value: '12500' });
 });
 
 test('money range error matches the web wording', () => {
@@ -163,4 +207,137 @@ test('tone classes split into box and text classes', () => {
     text: 'text-danger',
   });
   assert.equal(ui.toneParts('neutral').text, 'text-muted-foreground');
+});
+
+test('B-209: a name pattern refuses by file name even when the MIME type passes', () => {
+  const rules = {
+    types: ui.EVIDENCE_TYPES,
+    maxBytes: ui.EVIDENCE_MAX_BYTES,
+    maxCount: 5,
+    namePattern: /[.](jpe?g|png|webp|pdf)$/i,
+  };
+  const pdf = (fileName) => ({ fileName, contentType: 'application/pdf', sizeBytes: 1 });
+  assert.equal(ui.fileSelectionError([pdf('chung-tu.PDF')], 0, rules, 'T'), null);
+  assert.equal(ui.fileSelectionError([pdf('a.pdf'), pdf('chung-tu.bin')], 0, rules, 'T'), 'T');
+  const without = { ...rules, namePattern: undefined };
+  assert.equal(ui.fileSelectionError([pdf('chung-tu.bin')], 0, without, 'T'), null);
+});
+
+// AppCalendar.tsx run with a minimal hook runtime; the picker itself is not rendered.
+function mountCalendar(props) {
+  const slots = [];
+  let hook = 0;
+  const react = {
+    useState(initial) {
+      const at = hook++;
+      if (!(at in slots)) slots[at] = typeof initial === 'function' ? initial() : initial;
+      return [slots[at], (next) => (slots[at] = next)];
+    },
+    useRef: (current) => ({ current }),
+    useMemo: (make) => make(),
+    useCallback: (callback) => callback,
+  };
+  const element = (type, elementProps, key) => ({ type, key, props: elementProps });
+  const modules = {
+    react,
+    'react/jsx-runtime': { jsx: element, jsxs: element },
+    'react-native': { Text: 'Text', View: 'View', Pressable: 'Pressable' },
+    'react-native-ui-datepicker': { __esModule: true, default: 'Picker' },
+    'date-fns': require('date-fns'),
+    'date-fns/locale/vi': require('date-fns/locale/vi'),
+    '@/components/Icon': { __esModule: true, default: 'Icon' },
+  };
+  const module = { exports: {} };
+  const source = fs.readFileSync(path.join(SRC, 'components/appointment/AppCalendar.tsx'), 'utf8');
+  vm.runInNewContext(
+    ts.transpileModule(source, {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+        jsx: ts.JsxEmit.ReactJSX,
+        esModuleInterop: true,
+      },
+    }).outputText,
+    { module, exports: module.exports, require: (request) => modules[request] }
+  );
+  return (override = {}) => {
+    hook = 0;
+    const found = [];
+    const walk = (node) => {
+      if (Array.isArray(node)) return node.forEach(walk);
+      if (!node?.props) return;
+      found.push(node);
+      walk(node.props.children);
+    };
+    walk(module.exports.default({ onSelect() {}, ...props, ...override }));
+    const picker = found.find((node) => node.type === 'Picker');
+    const arrow = (label) => found.find((node) => node.props.label === label)?.props;
+    const caption = found.find((node) => node.props.accessibilityRole === 'header')?.props;
+    const days = found.filter((node) =>
+      /^\d{2}\/\d{2}\/\d{4}$/.test(node.props.accessibilityLabel ?? '')
+    );
+    return {
+      picker,
+      caption,
+      days: days.map((day) => day.props),
+      previous: arrow('Tháng trước'),
+      next: arrow('Tháng sau'),
+    };
+  };
+}
+
+test('AppCalendar without range keeps the picker header, outside days and free navigation', () => {
+  const { picker, previous, next } = mountCalendar({})();
+  assert.equal(picker.props.showOutsideDays, true);
+  assert.ok(!picker.props.hideHeader);
+  for (const value of [picker.key, picker.props.month, picker.props.year])
+    assert.equal(value, undefined);
+  assert.equal(picker.props.components.Day, undefined);
+  assert.deepEqual([previous, next], [undefined, undefined]);
+});
+
+test('B-210: range calendar renders the actual dates and selection when crossing into January', () => {
+  const range = { start: new Date(2026, 10, 30), end: new Date(2027, 0, 31) };
+  let picked;
+  const render = mountCalendar({
+    range,
+    onSelect: (date) => {
+      picked = date;
+    },
+  });
+  const shown = (view) => view.days.map((day) => day.accessibilityLabel);
+  let view = render();
+  assert.equal(shown(view)[0], '01/11/2026');
+  assert.equal(view.days[0].disabled, true);
+  assert.equal(view.days.at(-1).disabled, false);
+  assert.deepEqual([view.previous.disabled, view.next.disabled], [true, false]);
+  view.next.onPress();
+  view = render();
+  assert.equal(shown(view)[0], '01/12/2026');
+  view.next.onPress();
+  view = render();
+  assert.match(view.caption.children, /2027/);
+  assert.deepEqual(
+    shown(view),
+    Array.from({ length: 31 }, (_, n) => `${String(n + 1).padStart(2, '0')}/01/2027`)
+  );
+  assert.ok(view.days.every((day) => !day.accessibilityState.selected));
+  view.days[0].onPress();
+  assert.deepEqual([picked.getFullYear(), picked.getMonth(), picked.getDate()], [2027, 0, 1]);
+  assert.deepEqual([view.previous.disabled, view.next.disabled], [false, true]);
+  // A reload that shortens the range pulls the shown month back inside it.
+  assert.equal(shown(render({ range: { ...range, end: new Date(2026, 11, 5) } }))[0], '01/12/2026');
+  const direct = mountCalendar({
+    range: { start: new Date(2027, 0, 1), end: range.end },
+  })();
+  assert.equal(shown(direct)[0], '01/01/2027');
+  const selected = new Date(2027, 0, 15);
+  const selection = mountCalendar({ range, selected })();
+  assert.equal(shown(selection)[0], '01/01/2027');
+  assert.deepEqual(
+    selection.days
+      .filter((day) => day.accessibilityState.selected)
+      .map((day) => day.accessibilityLabel),
+    ['15/01/2027']
+  );
 });

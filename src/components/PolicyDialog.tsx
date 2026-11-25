@@ -2,6 +2,7 @@ import { useState, type ComponentProps, type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
+import { splitSentences } from '@/lib/rental/split-sentences';
 
 /** Policy codes like "RESERVATION_DEFAULT_V3" are internal; users only see "Phiên bản 3". */
 function versionLabel(version?: string) {
@@ -16,12 +17,6 @@ const TONES = {
   warning: { box: 'border-warning bg-warning-soft', icon: 'text-warning' },
   neutral: { box: 'border-border bg-surface', icon: 'text-muted-foreground' },
 } as const;
-
-/** Splits on ". " only; every character is kept (the period stays with its sentence). */
-function splitSentences(text: string) {
-  const parts = text.split('. ');
-  return parts.map((s, i) => (i < parts.length - 1 ? `${s}.` : s));
-}
 
 export type PolicyDialogProps = {
   visible: boolean;
@@ -49,7 +44,8 @@ export function PolicyDialog({
   footer,
 }: PolicyDialogProps) {
   const insets = useSafeAreaInsets();
-  const sentences = text ? splitSentences(text) : [];
+  // As web, `children` takes precedence over `text`.
+  const sentences = children == null && text ? splitSentences(text) : [];
   return (
     <Modal
       visible={visible}
@@ -94,8 +90,8 @@ export function PolicyDialog({
                   <Text className="flex-1 text-sm leading-6 text-secondary">{s}</Text>
                 </View>
               ))
-            ) : sentences.length ? (
-              <Text className="text-sm leading-6 text-secondary">{sentences[0]}</Text>
+            ) : children == null && text ? (
+              <Text className="text-sm leading-6 text-secondary">{text}</Text>
             ) : null}
           </ScrollView>
           <View className="px-5 pt-2" style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
@@ -127,7 +123,8 @@ export function PolicyNotice({
   icon = 'information-circle-outline',
   className = '',
 }: {
-  summary: string;
+  /** A string, or text runs (e.g. a nested bold `Text`). Shown in full. */
+  summary: ReactNode;
   title: string;
   subtitle?: string;
   version?: string;
@@ -149,9 +146,7 @@ export function PolicyNotice({
         accessibilityHint="Mở cửa sổ xem nội dung"
         className={`flex-row items-center rounded-2xl border px-3 ${t.box} ${className}`}>
         <Icon name={icon} size={20} className={t.icon} />
-        <Text numberOfLines={2} className="ml-2 flex-1 py-2 text-sm leading-5 text-foreground">
-          {summary}
-        </Text>
+        <Text className="ml-2 flex-1 py-2 text-sm leading-5 text-foreground">{summary}</Text>
         <View className="ml-2 h-11 w-11 items-center justify-center rounded-full">
           <Icon name="book-outline" size={22} className="text-muted-foreground" />
         </View>
@@ -164,68 +159,6 @@ export function PolicyNotice({
         version={version}
         icon={icon}
         text={text}>
-        {children}
-      </PolicyDialog>
-    </>
-  );
-}
-
-/** "Xem điều khoản" link for consent checkboxes. "Đã hiểu" never ticks; `onAgree` does. */
-export function PolicyConsent({
-  title,
-  subtitle,
-  version,
-  text,
-  children,
-  label = 'Xem điều khoản',
-  onAgree,
-}: {
-  title: string;
-  subtitle?: string;
-  version?: string;
-  text?: string;
-  children?: ReactNode;
-  label?: string;
-  onAgree?: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const close = () => setOpen(false);
-  return (
-    <>
-      <Pressable
-        onPress={() => setOpen(true)}
-        accessibilityRole="button"
-        className="min-h-11 justify-center self-start">
-        <Text className="text-sm font-bold text-primary">{label}</Text>
-      </Pressable>
-      <PolicyDialog
-        visible={open}
-        onClose={close}
-        title={title}
-        subtitle={subtitle}
-        version={version}
-        text={text}
-        footer={
-          onAgree ? (
-            <View className="gap-2">
-              <Pressable
-                onPress={() => {
-                  onAgree();
-                  close();
-                }}
-                accessibilityRole="button"
-                className="min-h-12 items-center justify-center rounded-2xl bg-brand px-4 py-3">
-                <Text className="text-sm font-bold text-on-brand">Đồng ý & đóng</Text>
-              </Pressable>
-              <Pressable
-                onPress={close}
-                accessibilityRole="button"
-                className="min-h-12 items-center justify-center rounded-2xl border border-border px-4 py-3">
-                <Text className="text-sm font-bold text-foreground">Đã hiểu</Text>
-              </Pressable>
-            </View>
-          ) : undefined
-        }>
         {children}
       </PolicyDialog>
     </>

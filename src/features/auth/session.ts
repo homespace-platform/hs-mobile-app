@@ -4,6 +4,8 @@ import * as WebBrowser from 'expo-web-browser';
 
 import { keycloakConfig } from '@/config/env';
 import { authBrowserOptions, authScopes, discovery, redirectUri } from '@/lib/auth/discovery';
+import { runSessionEndCleanups } from '@/lib/session-end';
+import { openSensitiveCache, purgeSensitiveCache } from '@/services/rental/cache';
 
 const REFRESH_TOKEN_KEY = 'homespace.refreshToken';
 
@@ -47,12 +49,18 @@ const readRefreshToken = async () => {
 
 const applyTokens = async (next: AuthSession.TokenResponse) => {
   tokens = next;
+  openSensitiveCache();
   await persistRefreshToken(next.refreshToken ?? null);
   notify();
 };
 
+/** Every sign-out ends here: the button, a failed refresh, and a rejected 401. */
 export const clearSession = async () => {
   tokens = null;
+  refreshPromise = null;
+  // Not awaited: file cleanup never delays or fails a sign-out.
+  void purgeSensitiveCache();
+  runSessionEndCleanups();
   await persistRefreshToken(null);
   notify();
 };
@@ -74,6 +82,8 @@ export const exchangeAuthorizationCode = async (code: string, codeVerifier: stri
 export const restoreSession = async () => {
   const storedRefreshToken = await readRefreshToken();
   if (!storedRefreshToken) {
+    // Started without a session: clears what a killed app left behind.
+    void purgeSensitiveCache();
     return false;
   }
 
@@ -103,10 +113,11 @@ const runRefresh = async () => {
 
   try {
     const next = await current.refreshAsync({ clientId: keycloakConfig.clientId }, discovery);
+    if (tokens !== current) return null;
     await applyTokens(next);
     return next;
   } catch {
-    await clearSession();
+    if (tokens === current) await clearSession();
     return null;
   }
 };
@@ -121,9 +132,10 @@ export const getAccessToken = async (forceRefresh = false) => {
   }
 
   if (!refreshPromise) {
-    refreshPromise = runRefresh().finally(() => {
-      refreshPromise = null;
+    const pending = runRefresh().finally(() => {
+      if (refreshPromise === pending) refreshPromise = null;
     });
+    refreshPromise = pending;
   }
 
   const refreshed = await refreshPromise;

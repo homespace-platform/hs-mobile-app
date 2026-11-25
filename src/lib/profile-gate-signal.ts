@@ -3,11 +3,16 @@ import type { ProfileGateSection, ProfileRequirement } from '@/lib/profile-gate'
 // Signals so axios-client (1010) and the banner can reach the app without importing screens/React (no import cycles).
 export type ProfileGateDenial = { message?: string; missing: ProfileRequirement[] };
 
-let denied: ((denial: ProfileGateDenial) => void) | undefined;
+let denied: ((denial: ProfileGateDenial) => boolean | void) | undefined;
+const shownDenials = new WeakSet<object>();
 export const setProfileGateDeniedHandler = (next: typeof denied) => {
   denied = next;
 };
-export const notifyProfileGateDenied = (denial: ProfileGateDenial) => denied?.(denial);
+export const notifyProfileGateDenied = (denial: ProfileGateDenial, error?: object) => {
+  if (denied?.(denial) && error) shownDenials.add(error);
+};
+export const hasProfileGateNotice = (error: unknown) =>
+  typeof error === 'object' && error !== null && shownDenials.has(error);
 
 let permissionDenied: (() => void) | undefined;
 export const setPermissionDeniedHandler = (next: typeof permissionDenied) => {

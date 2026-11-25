@@ -52,13 +52,34 @@ export function contractQueryOf({ tab, section, invoice }: ContractRouteQuery): 
   };
 }
 
+/**
+ * The web's stored dashboard role, as the caller shows it: the side of the nearest route in the
+ * stack that has one, else the role selected in Quản lý.
+ */
+export function stackSide(stack: readonly RentalRoute[], role: DashboardRole): DashboardRole {
+  for (let i = stack.length - 1; i >= 0; i--) {
+    const route = stack[i];
+    if ('side' in route) return route.side;
+    if (route.screen === 'rental-requests')
+      return route.mode === 'RECEIVED' ? 'landlord' : 'tenant';
+  }
+  return role;
+}
+
 /** Back stack, bottom first. Empty = the rental flow is closed. */
 export function navigateStack(
   stack: readonly RentalRoute[],
   route: RentalRoute,
-  { replace = false }: { replace?: boolean } = {}
+  { replace = false, role = 'tenant' }: { replace?: boolean; role?: DashboardRole } = {}
 ): RentalRoute[] {
-  return [...(replace ? stack.slice(0, -1) : stack), normalizeRentalRoute(route)];
+  return [
+    ...(replace ? stack.slice(0, -1) : stack),
+    // A usable legacy invoice route stays: the navigator shows the web's redirect message, then
+    // replaces it with normalizeRentalRoute's target.
+    route.screen === 'invoice-landing' && safeResourceId(route.contractId)
+      ? route
+      : normalizeRentalRoute(route, stackSide(stack, role)),
+  ];
 }
 
 export const backStack = (stack: readonly RentalRoute[]): RentalRoute[] => stack.slice(0, -1);

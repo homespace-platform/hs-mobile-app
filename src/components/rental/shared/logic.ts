@@ -30,32 +30,106 @@ export function reasonState(text: string, minLength = 10, maxLength = 500) {
 const VND_TYPED_ERROR = 'Chỉ nhập số tiền VNĐ nguyên, không dùng số âm hoặc ký hiệu e.';
 const VND_PASTE_ERROR = 'Dán số tiền VNĐ nguyên; không nhập số âm hoặc phần thập phân.';
 
-/**
- * One change of the formatted money field. RN has no paste or key events, so both are read from
- * the difference between the old and the new text.
- */
-export function editVndText(display: string, next: string): { value: string } | { error: string } {
-  let start = 0;
-  while (start < display.length && start < next.length && display[start] === next[start]) start++;
-  let end = 0;
-  const limit = Math.min(display.length, next.length) - start;
-  while (end < limit && display[display.length - 1 - end] === next[next.length - 1 - end]) end++;
-  const removed = display.slice(start, display.length - end);
-  const inserted = next.slice(start, next.length - end);
+export type TextSelection = { start: number; end: number };
 
-  // Several characters at once is a paste. The whole text is parsed, so an ambiguous mix is
-  // refused instead of guessed ("30000.00" must never become 3000000).
-  if (inserted.length > 1) {
-    const pasted = parsePastedVnd(next);
-    return pasted === null ? { error: VND_PASTE_ERROR } : { value: pasted };
+type VndEdit = { value: string; caret: number } | { error: string };
+
+function editAtSelection(
+  display: string,
+  next: string,
+  selection: TextSelection,
+  expectedCaret?: number
+) {
+  const start = Math.min(selection.start, selection.end);
+  const end = Math.max(selection.start, selection.end);
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > display.length)
+    return;
+  const ranges =
+    start === end && next.length < display.length
+      ? [
+          [start - 1, start],
+          [start, start + 1],
+        ]
+      : [[start, end]];
+  for (const [from, to] of ranges) {
+    if (from < 0 || to > display.length) continue;
+    const head = display.slice(0, from);
+    const tail = display.slice(to);
+    if (next.length < head.length + tail.length || !next.startsWith(head) || !next.endsWith(tail))
+      continue;
+    const inserted = next.slice(from, next.length - tail.length);
+    if (expectedCaret !== undefined && from + inserted.length !== expectedCaret) continue;
+    let before = head.replace(/\D/g, '');
+    let after = tail.replace(/\D/g, '');
+    if (inserted === '' && start === end && display[from] === '.') {
+      if (from < start) before = before.slice(0, -1);
+      else after = after.slice(1);
+    }
+    const pasted = inserted ? parsePastedVnd(inserted) : '';
+    if (pasted === null) {
+      const error =
+        inserted.length === 1 && !/^[.,\s]$/.test(inserted) ? VND_TYPED_ERROR : VND_PASTE_ERROR;
+      return { error };
+    }
+    const digits = before + pasted + after;
+    const value = digits.replace(/^0+(?=\d)/, '');
+    const digitsBefore = Math.max(
+      0,
+      before.length + pasted.length - (digits.length - value.length)
+    );
+    const formatted = formatVndInput(value);
+    let caret = 0;
+    for (let count = 0; caret < formatted.length && count < digitsBefore; caret++) {
+      if (/\d/.test(formatted[caret])) count++;
+    }
+    return { value, caret };
   }
-  if (!/^[\d.,\s]*$/.test(next)) return { error: VND_TYPED_ERROR };
-  // Deleting a grouping dot deletes the digit before it, otherwise the dot just comes back.
-  const source =
-    !inserted && removed === '.' && start > 0
-      ? display.slice(0, start - 1) + display.slice(start + 1)
-      : next;
-  return { value: source.replace(/\D/g, '').replace(/^0+(?=\d)/, '') };
+}
+
+/** The native replacement must fit the pre-edit selection. A post-edit caret can corroborate it. */
+export function editVndText(
+  display: string,
+  next: string,
+  selections: readonly TextSelection[] = [],
+  after?: TextSelection,
+  preEditConfirmed = false
+): VndEdit {
+  const refused = { error: VND_PASTE_ERROR };
+  if (after && after.start !== after.end) return refused;
+  const latest =
+    selections[selections.length - 1] ?? (display === '' ? { start: 0, end: 0 } : undefined);
+  if (!latest) return refused;
+  // At the dot, an untagged caret can be either before Delete or after Backspace.
+  if (
+    !preEditConfirmed &&
+    latest.start === latest.end &&
+    display[latest.start] === '.' &&
+    next === display.slice(0, latest.start) + display.slice(latest.start + 1)
+  )
+    return refused;
+
+  const safeEdit = (selection: TextSelection, caret?: number) => {
+    const edit = editAtSelection(display, next, selection, caret);
+    // Native can report the same text without an edit (including a stale selection event).
+    if (next === display && edit && 'value' in edit && edit.value !== display.replaceAll('.', ''))
+      return refused;
+    return edit;
+  };
+  const edit = safeEdit(latest, after?.start);
+  if (after) return edit ?? refused;
+
+  // Android's untagged caret may be the result of an edit at the previous selection.
+  const earlier = selections[selections.length - 2];
+  if (earlier && latest.start === latest.end) {
+    const previousEdit = safeEdit(earlier, latest.start);
+    if (previousEdit && edit) {
+      if ('value' in previousEdit && 'value' in edit && previousEdit.value === edit.value)
+        return edit;
+      return refused;
+    }
+    if (previousEdit) return previousEdit;
+  }
+  return edit ?? refused;
 }
 
 export function vndRangeError(value: unknown, min = 0, max = 1_000_000_000) {
@@ -163,11 +237,13 @@ export interface FileRules {
   types: readonly string[];
   maxBytes: number;
   maxCount: number;
+  /** The web screens that test the file name rather than the MIME type. */
+  namePattern?: RegExp;
 }
 
 /** Why the whole picked batch is refused (as on web), or null. `existing` = files already counted. */
 export function fileSelectionError(
-  files: readonly Pick<LocalFile, 'contentType' | 'sizeBytes'>[],
+  files: readonly (Pick<LocalFile, 'contentType' | 'sizeBytes'> & { fileName?: string })[],
   existing: number,
   rules: FileRules,
   messages: FileMessages
@@ -177,6 +253,7 @@ export function fileSelectionError(
   if (files.length + existing > rules.maxCount) return text('count');
   for (const file of files) {
     if (!rules.types.includes(file.contentType)) return text('type');
+    if (rules.namePattern && !rules.namePattern.test(file.fileName ?? '')) return text('type');
     if (!(file.sizeBytes > 0 && file.sizeBytes <= rules.maxBytes)) return text('size');
   }
   return null;

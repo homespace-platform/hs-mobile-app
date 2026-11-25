@@ -1,5 +1,8 @@
+import type { AxiosRequestConfig } from 'axios';
+
 import axiosClient from './client';
 import { blobText, blobToCacheFile, sharePdf } from './files';
+import { discardRentalFile, fileSessionGuard } from './cache';
 import { primaryDocument } from '@/lib/rental/contract-document-history';
 import { vnDateKey } from '@/lib/rental/format';
 import type { ContractAmendments } from '@/types/rental/contract-amendment.type';
@@ -53,8 +56,16 @@ export const contractService = {
   },
 
   async downloadDocument(document: ContractDocumentResponse): Promise<void> {
+    const checkSession = fileSessionGuard();
     const bytes = await contractService.getDocumentContent(document.id, true);
-    await sharePdf(await blobToCacheFile(bytes, document.fileName || 'hop-dong-da-ky.pdf'));
+    checkSession();
+    const uri = await blobToCacheFile(bytes, document.fileName || 'hop-dong-da-ky.pdf');
+    try {
+      checkSession();
+      await sharePdf(uri);
+    } finally {
+      await discardRentalFile(uri);
+    }
   },
 
   async getSignatureState(contractId: string): Promise<SignatureStateResponse> {
@@ -84,10 +95,13 @@ export const contractService = {
 
   async refreshSmartCaSignature(
     contractId: string,
-    requestId: string
+    requestId: string,
+    options?: Pick<AxiosRequestConfig, 'signal' | 'timeout'>
   ): Promise<SignatureRequestResponse> {
     const response = await axiosClient.post<ApiResponse<SignatureRequestResponse>>(
-      `/api/v1/contracts/${contractId}/signatures/${requestId}/refresh`
+      `/api/v1/contracts/${contractId}/signatures/${requestId}/refresh`,
+      undefined,
+      options
     );
     return response.data.result;
   },

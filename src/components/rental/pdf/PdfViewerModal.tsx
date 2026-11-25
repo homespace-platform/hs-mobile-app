@@ -1,26 +1,41 @@
-// The ONLY importer of the react-native-pdf-renderer native module. Nothing imports this file yet:
-// importing it needs a dev build that contains the module (see docs/yeu-cau-thue/phase1-nav.md).
+// The ONLY importer of the react-native-pdf-renderer native module. It is required lazily, so an app
+// build without the module still starts and only this viewer says it cannot draw the file.
 // Covers web ContractPdfViewerModal (+SignedPdfContent) and the PaymentReceiptActions preview.
 // Pinch zoom, double tap and scrolling are native.
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, Text, UIManager, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as FileSystem from 'expo-file-system/legacy';
-import PdfRendererView from 'react-native-pdf-renderer';
+import * as WebBrowser from 'expo-web-browser';
+import type PdfRendererViewType from 'react-native-pdf-renderer';
 
 import Icon from '@/components/Icon';
 import { Button } from '@/components/Screen';
+import { discardRentalFile } from '@/services/rental/cache';
 import { sharePdf } from '@/services/rental/files';
 
 const LOADING = 'Đang nạp và kết xuất văn bản hợp đồng (PDF)...';
 const LOAD_ERROR = 'Không thể tải nội dung tài liệu.';
 const RENDER_ERROR = 'Không thể hiển thị tài liệu trực tiếp';
+const MODULE_MISSING =
+  'Bản ứng dụng đang cài chưa có trình xem PDF. Hãy cài bản ứng dụng mới nhất, hoặc dùng nút tải/chia sẻ ở góc trên để mở tệp bằng ứng dụng khác.';
+
+function loadRenderer(): typeof PdfRendererViewType | null {
+  try {
+    // Without the native view, drawing it would crash (old architecture) or show a blank box.
+    if (!UIManager.hasViewManagerConfig('RNPdfRendererView')) return null;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('react-native-pdf-renderer').default;
+  } catch {
+    return null;
+  }
+}
 
 export type PdfViewerModalProps = {
   isOpen: boolean;
   onClose: () => void;
   /** Contract: the file name. Receipt: "Chứng từ thanh toán". */
   title: string;
+  documentType?: string;
   subtitle?: string;
   /**
    * A local file:// URI (the caller owns the file), or a loader that downloads into the app cache and
@@ -34,6 +49,10 @@ export type PdfViewerModalProps = {
   errorText?: string;
   closeLabel?: string;
   shareLabel?: string;
+  /** Screen-reader name of the whole viewer. */
+  label?: string;
+  /** Web "Mở liên kết ngoài" on the error screen: a URL the browser can open by itself. */
+  externalUrl?: string;
 };
 
 // Android opens the string as a plain path; iOS parses it as a URL and needs it still encoded.
@@ -49,13 +68,17 @@ function nativeSource(uri: string) {
 function Viewer({
   onClose,
   title,
+  documentType,
   subtitle,
   source,
   loadingText = LOADING,
   errorText = LOAD_ERROR,
   closeLabel = 'Đóng',
   shareLabel = 'Tải về',
+  label,
+  externalUrl,
 }: PdfViewerModalProps) {
+  const [PdfRendererView] = useState(loadRenderer);
   const sourceRef = useRef(source);
   const [attempt, setAttempt] = useState(0);
   const [uri, setUri] = useState<string | null>(null);
@@ -67,8 +90,7 @@ function Viewer({
   useEffect(() => {
     const request = new AbortController();
     let owned: string | undefined;
-    const discard = (file: string) =>
-      void FileSystem.deleteAsync(file, { idempotent: true }).catch(() => {});
+    const discard = (file: string) => void discardRentalFile(file);
     const current = sourceRef.current;
     setUri(null);
     setError(null);
@@ -106,7 +128,11 @@ function Viewer({
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
+    <SafeAreaView
+      accessibilityLabel={label}
+      accessibilityViewIsModal
+      className="flex-1 bg-background"
+      edges={['top', 'bottom']}>
       <View className="flex-row items-center gap-2 border-b border-border bg-surface px-3 py-2">
         <Pressable
           onPress={onClose}
@@ -116,16 +142,27 @@ function Viewer({
           <Icon name="close" size={24} className="text-foreground" />
         </Pressable>
         <View className="flex-1">
-          <Text numberOfLines={1} accessibilityRole="header" className="font-bold text-foreground">
-            {title}
-          </Text>
+          <View className="flex-row items-center gap-2">
+            <Text
+              numberOfLines={1}
+              accessibilityRole="header"
+              className="shrink font-bold text-foreground">
+              {title}
+            </Text>
+            {documentType ? (
+              <Text className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-semibold text-muted-foreground">
+                {documentType}
+              </Text>
+            ) : null}
+          </View>
           {subtitle ? (
             <Text numberOfLines={2} className="text-xs text-muted-foreground">
               {subtitle}
             </Text>
           ) : null}
         </View>
-        {uri && !error ? (
+        {/* As web, the file stays downloadable when only the drawing failed. */}
+        {uri ? (
           <Pressable
             onPress={() => void share(uri)}
             disabled={sharing}
@@ -149,9 +186,27 @@ function Viewer({
           </Text>
           <Text className="text-center text-sm text-muted-foreground">{error}</Text>
           <Button label="Thử lại" onPress={() => setAttempt((n) => n + 1)} />
+          {externalUrl ? (
+            <Button
+              label="Mở liên kết ngoài"
+              onPress={() =>
+                void WebBrowser.openBrowserAsync(externalUrl).catch(() => setShareError(errorText))
+              }
+            />
+          ) : null}
           <Button label="Đóng" onPress={onClose} />
         </View>
-      ) : uri ? (
+      ) : uri && !PdfRendererView ? (
+        <View className="flex-1 justify-center gap-3 px-6">
+          <Text accessibilityRole="alert" className="text-center font-bold text-foreground">
+            {RENDER_ERROR}
+          </Text>
+          <Text className="text-center text-sm leading-6 text-muted-foreground">
+            {MODULE_MISSING}
+          </Text>
+          <Button label="Đóng" onPress={onClose} />
+        </View>
+      ) : uri && PdfRendererView ? (
         <View className="flex-1">
           <PdfRendererView
             style={{ flex: 1 }}

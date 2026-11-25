@@ -28,6 +28,9 @@ import {
   type NotificationFilterCategory,
   type NotificationItem,
 } from '@/lib/notification';
+import { rentalRouteFromActionPath } from '@/lib/rental-nav/deep-link';
+import type { RentalRoute } from '@/lib/rental-nav/routes';
+import type { DashboardRole } from '@/lib/rental/dashboard-role';
 import { applyNotificationEvent } from '@/lib/realtime/pure';
 import { subscribeNotificationEvents } from '@/lib/realtime/connections';
 import { notificationUnreadStore } from '@/lib/unread-store';
@@ -46,14 +49,27 @@ export default function NotificationsScreen({
   onBack,
   onOpenListing,
   onOpenManagement,
+  rentalRole,
+  onOpenRental,
   onOpenNews,
 }: {
   onBack: () => void;
   onOpenListing: (id: string, own?: boolean) => void;
   onOpenManagement: (section: ManagementSection, appointmentId?: string) => void;
+  /** The role selected in Quản lý, for the paths where the web uses its stored role. */
+  rentalRole: DashboardRole;
+  onOpenRental: (route: RentalRoute) => void;
   onOpenNews: () => void;
 }) {
   const showDialog = useDialog();
+  const openVersion = useRef(0);
+  const readUpdates = useRef(new Map<string, Promise<void>>());
+  useEffect(
+    () => () => {
+      openVersion.current++;
+    },
+    []
+  );
   const [items, setItems] = useState<NotificationItem[]>([]);
   const unreadCount = useUnreadNotificationCount();
   const [tab, setTab] = useState<NotificationFilterCategory>('ALL');
@@ -185,20 +201,32 @@ export default function NotificationsScreen({
   };
 
   const open = async (item: NotificationItem) => {
+    const version = ++openVersion.current;
     if (isNotificationUnread(item)) {
-      try {
-        const updated = await markNotificationRead(item.id);
-        const readAt = updated?.readAt ?? new Date().toISOString();
-        setItems((prev) =>
-          unreadOnly
-            ? prev.filter((n) => n.id !== item.id)
-            : prev.map((n) => (n.id === item.id ? { ...n, readAt } : n))
-        );
-        notificationUnreadStore.dispatch({ type: 'decrement' });
-      } catch {
-        // Like the web page: a failed mark-as-read must not block opening the notification.
+      let update = readUpdates.current.get(item.id);
+      if (!update) {
+        update = markNotificationRead(item.id)
+          .then((updated) => {
+            const readAt = updated?.readAt ?? new Date().toISOString();
+            setItems((prev) =>
+              unreadOnly
+                ? prev.filter((n) => n.id !== item.id)
+                : prev.map((n) => (n.id === item.id ? { ...n, readAt } : n))
+            );
+            notificationUnreadStore.dispatch({ type: 'decrement' });
+          })
+          .catch(() => {
+            // Like web, a failed read update does not block navigation.
+            readUpdates.current.delete(item.id);
+          });
+        readUpdates.current.set(item.id, update);
       }
+      await update;
     }
+    if (version !== openVersion.current) return;
+    // As on the web, the destination screen works out the side; nothing is asked here.
+    const rentalRoute = rentalRouteFromActionPath(item.actionPath, rentalRole);
+    if (rentalRoute) return onOpenRental(rentalRoute);
     const target = notificationTarget(item.actionPath);
     if (target.kind === 'listing') onOpenListing(target.id, target.own);
     else if (target.kind === 'management')
@@ -206,8 +234,18 @@ export default function NotificationsScreen({
     else if (target.kind === 'news') onOpenNews();
     else if (target.kind === 'management-choice')
       showDialog(item.title, `${item.body}\n\nBạn đang xem với vai trò nào?`, [
-        { text: SIDE_LABELS.tenant, onPress: () => onOpenManagement(target.tenant) },
-        { text: SIDE_LABELS.landlord, onPress: () => onOpenManagement(target.landlord) },
+        {
+          text: SIDE_LABELS.tenant,
+          onPress: () => {
+            if (version === openVersion.current) onOpenManagement(target.tenant);
+          },
+        },
+        {
+          text: SIDE_LABELS.landlord,
+          onPress: () => {
+            if (version === openVersion.current) onOpenManagement(target.landlord);
+          },
+        },
         { text: 'Đóng', style: 'cancel' },
       ]);
     else showDialog(item.title, item.body);
@@ -297,7 +335,13 @@ export default function NotificationsScreen({
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <ScreenHeader title="Thông báo" onBack={onBack} />
+      <ScreenHeader
+        title="Thông báo"
+        onBack={() => {
+          openVersion.current++;
+          onBack();
+        }}
+      />
       {header}
       {loading ? (
         <View className="px-5" accessibilityLabel="Đang tải thông báo">

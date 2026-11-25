@@ -24,7 +24,7 @@ import SearchScreen from '@/screens/SearchScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
 import ListingCollectionScreen from '@/screens/ListingCollectionScreen';
 import RentalNavigator from '@/screens/rental/RentalNavigator';
-import type { RentalRoute } from '@/lib/rental-nav/routes';
+import { rentalRouteForDestination, type RentalRoute } from '@/lib/rental-nav/routes';
 import type { ManagementRole } from '@/lib/dashboard-navigation';
 import type { ManagementSection } from '@/services/managementApi';
 import InitialPasswordGate from '@/components/InitialPasswordGate';
@@ -49,6 +49,7 @@ function SignedInApp() {
     MainTab | 'favorites' | 'history' | 'browse' | 'news' | 'notifications'
   >('home');
   const [ownListing, setOwnListing] = useState(false);
+  const [listingFromRental, setListingFromRental] = useState(false);
   const [managementRole, setManagementRole] = useState<ManagementRole>('tenant');
   const [managementSection, setManagementSection] = useState<ManagementSection | null>(null);
   // Appointment of a tapped notification; the appointments screen opens it and clears it on close.
@@ -56,6 +57,8 @@ function SignedInApp() {
   const [managementOrigin, setManagementOrigin] = useState<'detail' | 'notifications' | null>(null);
   // Back stack of the rental flow, shown inside the Quản lý tab while not empty.
   const [rentalStack, setRentalStack] = useState<RentalRoute[]>([]);
+  // Back on the first rental screen returns to the notification center, not the Quản lý menu.
+  const [rentalFromNotifications, setRentalFromNotifications] = useState(false);
   const [filters, setFilters] = useState<Record<string, string | number>>({});
   const [listingId, setListingId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -90,15 +93,34 @@ function SignedInApp() {
     route === 'messages' ? selectTab('messages') : setScreen('notifications')
   );
 
-  const openListing = (id: string, own = false, section?: ManagementSection) => {
+  const openListing = (
+    id: string,
+    own = false,
+    section?: ManagementSection,
+    fromRental = false
+  ) => {
     if (screen !== 'detail' && screen !== 'conversation-detail') setReturnScreen(screen);
     setOwnListing(own);
+    setListingFromRental(fromRental);
     setListingId(id);
     setScreen('detail');
     if (section) setManagementSection(section);
   };
+  const openRental = (route: RentalRoute) => {
+    setRentalFromNotifications(screen === 'notifications');
+    setRentalStack([route]);
+    setManagementSection(null);
+    setManagementOrigin(null);
+    setLinkedAppointmentId(null);
+    setScreen('management');
+  };
   const openManagement = (section: ManagementSection, appointmentId?: string) => {
-    setRentalStack([]);
+    // Requests, contracts and payments have their own screens; ManagementScreen never gets them.
+    const rentalRoute = rentalRouteForDestination(section);
+    if (rentalRoute) return openRental(rentalRoute);
+    // Opened from a listing, the rental flow stays underneath: leaving returns to that listing, and
+    // its Back to the request list.
+    if (screen !== 'detail') setRentalStack([]);
     setManagementSection(section);
     setLinkedAppointmentId(appointmentId ?? null);
     setManagementOrigin(screen === 'detail' || screen === 'notifications' ? screen : null);
@@ -125,6 +147,8 @@ function SignedInApp() {
       <ListingDetailScreen
         listingId={listingId}
         own={ownListing}
+        accessible={listingFromRental}
+        onSelectTab={selectTab}
         onBack={() => setScreen(returnScreen)}
         onOpenManagement={openManagement}
         onOpenListing={(id) => openListing(id)}
@@ -173,6 +197,8 @@ function SignedInApp() {
         onBack={() => setScreen('home')}
         onOpenListing={openListing}
         onOpenManagement={openManagement}
+        rentalRole={managementRole}
+        onOpenRental={openRental}
         onOpenNews={() => setScreen('news')}
       />
     );
@@ -185,13 +211,23 @@ function SignedInApp() {
   }
 
   if (screen === 'management') {
-    if (rentalStack.length) {
+    // A section opened from a listing covers the kept rental flow until it is left.
+    if (rentalStack.length && managementOrigin !== 'detail') {
       return (
         <RentalNavigator
           stack={rentalStack}
           onStackChange={setRentalStack}
-          onOpenListing={(id) => openListing(id)}
+          role={managementRole}
+          onOpenListing={(id) => openListing(id, false, undefined, true)}
           onBrowseListings={() => selectTab('search')}
+          onExit={
+            rentalFromNotifications
+              ? () => {
+                  setRentalStack([]);
+                  setScreen('notifications');
+                }
+              : undefined
+          }
         />
       );
     }
@@ -201,7 +237,7 @@ function SignedInApp() {
           role={managementRole}
           onSelectRole={setManagementRole}
           onOpenAppointments={openManagement}
-          onOpenRental={(route) => setRentalStack([route])}
+          onOpenRental={openRental}
           onSelectTab={selectTab}
         />
       );

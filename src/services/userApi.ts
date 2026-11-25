@@ -1,11 +1,17 @@
 import axiosClient from '@/lib/axios-client';
 import { getAccessToken } from '@/features/auth/session';
+import { onSessionEnd } from '@/lib/session-end';
 import type { ApiResponse, UserAddress, UserProfileResponse, VietmapAddress } from '@/types/api';
 
 let profileRequest: Promise<UserProfileResponse> | null = null;
 let profileRequestToken: string | null = null;
 let profileCache: UserProfileResponse | null = null;
 let profileCacheAt = 0;
+onSessionEnd(() => {
+  profileRequest = null;
+  profileRequestToken = null;
+  profileCache = null;
+});
 export const getUserProfileApi = async (forceRefresh = false) => {
   const token = await getAccessToken();
   if (

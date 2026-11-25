@@ -58,15 +58,23 @@ export function useOnboardingSync() {
       void refreshOnboarding();
       if (!allowDialog()) return;
       const action = gateAction(missing);
-      showDialog('Cần hoàn thiện hồ sơ', message?.trim() || 'Vui lòng cập nhật đầy đủ hồ sơ.', [
-        { text: 'Đóng', style: 'cancel' },
-        action?.kind === 'kyc'
-          ? { text: 'Xác minh danh tính', onPress: () => void startKyc() }
-          : {
-              text: 'Cập nhật hồ sơ',
-              onPress: () => openSettings(action?.kind === 'settings' ? action.section : 'profile'),
-            },
-      ]);
+      showDialog(
+        'Cần hoàn thiện hồ sơ',
+        message?.trim() || 'Vui lòng cập nhật đầy đủ hồ sơ.',
+        [
+          { text: 'Đóng', style: 'cancel' },
+          action?.kind === 'kyc'
+            ? { text: 'Xác minh danh tính', onPress: () => void startKyc() }
+            : {
+                text: 'Cập nhật hồ sơ',
+                onPress: () =>
+                  openSettings(action?.kind === 'settings' ? action.section : 'profile'),
+              },
+        ],
+        'info',
+        true
+      );
+      return true;
     });
     return () => setProfileGateDeniedHandler(undefined);
   }, [showDialog]);

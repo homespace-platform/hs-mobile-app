@@ -18,6 +18,10 @@ export type ActionButtonProps = {
   icon?: ComponentProps<typeof Icon>['name'];
   disabled?: boolean;
   busy?: boolean;
+  /** The web renders this action as a link. */
+  link?: boolean;
+  /** Screen-reader description (web `title`). */
+  hint?: string;
   /** Layout only, e.g. "flex-1". */
   className?: string;
 };
@@ -30,6 +34,8 @@ export default function ActionButton({
   icon,
   disabled,
   busy,
+  link,
+  hint,
   className = '',
 }: ActionButtonProps) {
   const look = VARIANTS[variant];
@@ -38,7 +44,8 @@ export default function ActionButton({
     <Pressable
       onPress={onClick}
       disabled={off}
-      accessibilityRole="button"
+      accessibilityRole={link && !off ? 'link' : 'button'}
+      accessibilityHint={hint}
       accessibilityState={{ disabled: off, busy: Boolean(busy) }}
       className={`min-h-12 flex-row items-center justify-center gap-2 rounded-xl border px-4 py-3 active:opacity-80 ${look.box} ${off ? 'opacity-50' : ''} ${className}`}>
       {busy ? (

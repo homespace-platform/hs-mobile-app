@@ -23,14 +23,14 @@ function load(file, dependencies = {}, globals = {}) {
     ...globals,
     require(name) {
       if (name in dependencies) return dependencies[name];
-      // Real module over the same mocked client: bookingApi and managementApi delegate to it.
-      if (name === '@/services/appointmentApi')
-        return load('services/appointmentApi.ts', dependencies, globals);
       if (name === 'date-fns') return require('date-fns');
       if (name === 'expo-secure-store')
         return { getItemAsync: async () => null, setItemAsync: async () => {} };
       if (name === '@/services/userApi') return { getUserProfileApi: async () => ({ id: 'user' }) };
       if (name === '@/features/auth/session') return { getAccessToken: async () => 'token' };
+      if (name === '@/lib/session-end') return { onSessionEnd: () => {} };
+      if (name === '@/services/rental/cache')
+        return { fileSessionGuard: () => () => {}, withFileLease: (_uris, run) => run() };
       assert.fail(`Unexpected dependency ${name}`);
     },
   });
@@ -49,101 +49,75 @@ function mockApi(data = {}) {
   );
   return { calls, client };
 }
-const payment = {
-  id: 'payment/1',
-  listingId: 'listing1',
-  rentalRequestId: 'request1',
-  payerId: 'tenant',
-  payeeId: 'owner',
-  direction: 'TENANT_TO_LANDLORD',
-  status: 'TRANSFER_REPORTED',
-  type: 'MONTHLY_RENT',
-  totalAmount: 3000000,
-  transferReference: 'HS123',
-  payeeBankAccountSnapshot: { bankName: 'Bank', accountNumber: '123', accountHolderName: 'Owner' },
-};
-const appointment = {
-  id: 'a/1',
-  listingId: 'l1',
-  listingTitle: 'Tin thật',
-  listingAddress: 'Địa chỉ',
-  status: 'PENDING',
-  appointmentDate: '2026-11-03',
-  startTime: '09:00',
-  endTime: '10:00',
-  renterName: 'Người xem',
-  renterPhone: '0900000000',
-  rescheduleRequested: false,
-};
 
-test('each management menu calls its real endpoint and preserves pagination', async () => {
-  const paths = {
-    'tenant-requests': '/api/v1/rental-requests/my-requests',
-    'landlord-requests': '/api/v1/rental-requests/owner',
-    'tenant-contracts': '/api/v1/contracts',
-    'landlord-contracts': '/api/v1/contracts',
-    'landlord-properties': '/api/v1/listings/me',
-    'landlord-branches': '/api/v1/branches',
+test('a delayed authenticated response or 401 cannot run in the next login session', async () => {
+  const sessions = load('lib/session-end.ts');
+  let prepare, accept, reject;
+  let token = 'session-one';
+  const replays = [];
+  const client = (config) => {
+    replays.push(config);
+    return Promise.resolve(config);
   };
-  for (const [section, endpoint] of Object.entries(paths)) {
-    const { client, calls } = mockApi({ result: [], hasMore: true, totalElements: 30 });
-    const api = load('services/managementApi.ts', { '@/lib/axios-client': client });
-    const result = await api.getManagementPage(section, 2, 'tenant');
-    assert.equal(calls[0].args[0], endpoint);
-    if (section.endsWith('branches')) {
-      assert.equal(result.hasMore, false);
-      continue;
-    }
-    assert.equal(calls[0].args[1].params.page, 2);
-    assert.equal(result.hasMore, true);
-    assert.equal(result.total, 30);
-    if (section.endsWith('contracts'))
-      assert.equal(
-        calls[0].args[1].params.role,
-        section.startsWith('tenant') ? 'TENANT' : 'LANDLORD'
-      );
-  }
+  client.interceptors = {
+    request: {
+      use: (handler) => {
+        prepare = handler;
+      },
+    },
+    response: {
+      use: (ok, failed) => {
+        accept = ok;
+        reject = failed;
+      },
+    },
+  };
+  load('lib/axios-client.ts', {
+    axios: { create: () => client, isCancel: () => false, CanceledError: Error },
+    '@/config/env': {},
+    '@/features/auth/session': { getAccessToken: async () => token },
+    '@/lib/backend-health-signal': { requestBackendHealthCheck() {} },
+    '@/lib/network-health-signal': { requestNetworkHealthCheck() {} },
+    '@/lib/permissions': { isPermissionDenied: () => false },
+    '@/lib/profile-gate': { isProfileIncomplete: () => false },
+    '@/lib/profile-gate-signal': {},
+    '@/lib/session-end': sessions,
+  });
+  const old = await prepare({ headers: {} });
+  sessions.runSessionEndCleanups();
+  token = 'session-two';
+  assert.throws(() => accept({ config: old }), /Phiên đăng nhập đã kết thúc/);
+  await assert.rejects(
+    reject(Object.assign(new Error('401'), { config: old, response: { status: 401 } })),
+    /401/
+  );
+  assert.deepEqual(replays, []);
+  const current = await prepare({ headers: {} });
+  assert.equal(current.headers.Authorization, 'Bearer session-two');
+  await reject({ config: current, response: { status: 401 } });
+  assert.equal(replays.length, 1);
 });
 
-test('rental request tabs count all statuses with paginated requests and fetch the selected status', async () => {
-  for (const [section, endpoint] of [
-    ['tenant-requests', '/api/v1/rental-requests/my-requests'],
-    ['landlord-requests', '/api/v1/rental-requests/owner'],
-  ]) {
-    const calls = [];
-    const client = {
-      async get(path, options) {
-        calls.push({ path, params: options.params });
-        return {
-          data: {
-            result: options.params.status
-              ? []
-              : options.params.page === 1
-                ? [{ status: 'ACCEPTED' }, { status: 'PENDING' }]
-                : [{ status: 'ACCEPTED' }],
-            hasMore: !options.params.status && options.params.page === 1,
-            totalElements: 3,
-          },
-        };
-      },
-    };
-    const api = load('services/managementApi.ts', { '@/lib/axios-client': client });
-    const counts = await api.getRentalRequestCounts(section.startsWith('landlord-'));
-    assert.equal(calls.length, 2);
-    assert.ok(calls.every((call) => call.path === endpoint && call.params.size === 50));
-    assert.deepEqual(
-      calls.map((call) => call.params.page),
-      [1, 2]
-    );
-    assert.deepEqual(
-      Array.from(counts, (item) => item.status),
-      Array.from(api.RENTAL_REQUEST_STATUSES)
-    );
-    assert.equal(counts.find((item) => item.status === 'PENDING').count, 1);
-    assert.equal(counts.find((item) => item.status === 'ACCEPTED').count, 2);
-    await api.getManagementPage(section, 2, 'user', 'ACCEPTED');
-    assert.deepEqual({ ...calls.at(-1).params }, { page: 2, size: 12, status: 'ACCEPTED' });
-  }
+test('own listings call their real endpoint and preserve pagination', async () => {
+  const { client, calls } = mockApi({ result: [], hasMore: true, totalElements: 30 });
+  const api = load('services/managementApi.ts', { '@/lib/axios-client': client });
+  const result = await api.getManagementPage(2);
+  assert.equal(calls[0].args[0], '/api/v1/listings/me');
+  assert.equal(calls[0].args[1].params.page, 2);
+  assert.equal(result.hasMore, true);
+  assert.equal(result.total, 30);
+});
+
+test('a listing status change sends only an action offered for that listing', async () => {
+  const { client, calls } = mockApi();
+  const api = load('services/managementApi.ts', { '@/lib/axios-client': client });
+  const entry = { id: 'listing/1', actions: [{ action: 'hide' }] };
+  await assert.rejects(api.performManagementAction(entry, 'publish'));
+  assert.equal(calls.length, 0);
+  await api.performManagementAction(entry, 'hide');
+  assert.equal(calls[0].method, 'patch');
+  assert.equal(calls[0].args[0], '/api/v1/listings/listing%2F1/status');
+  assert.equal(calls[0].args[1].status, 'HIDDEN');
 });
 
 test('management badges reuse fresh counts across tabs and reload for another account', async () => {
@@ -212,63 +186,6 @@ test('concurrent profile readers share one request and recent profile visits use
   assert.equal(calls, 3);
   resolveProfile({ data: { result: { id: 'other-user' } } });
   assert.equal((await fourth).id, 'other-user');
-});
-
-test('payment menus distinguish rent and refunds by actor and direction', async () => {
-  const refund = {
-    ...payment,
-    id: 'refund',
-    direction: 'LANDLORD_TO_TENANT',
-    payerId: 'owner',
-    payeeId: 'tenant',
-  };
-  const other = { ...payment, id: 'unrelated', payerId: 'stranger', payeeId: 'stranger2' };
-  for (const [section, actor] of [
-    ['tenant-payments', 'tenant'],
-    ['landlord-payments', 'owner'],
-  ]) {
-    const { client } = mockApi({ result: [payment, refund, other] });
-    const api = load('services/managementApi.ts', { '@/lib/axios-client': client });
-    const page = await api.getManagementPage(section, 1, actor);
-    assert.deepEqual(
-      Array.from(page.items, (row) => row.id),
-      ['payment/1', 'refund']
-    );
-  }
-});
-
-test('only payee may confirm a reported transfer, including tenant refunds', () => {
-  const api = load('services/managementApi.ts', { '@/lib/axios-client': {} });
-  const actions = (actor) =>
-    Array.from(api.paymentEntry(payment, actor).actions, (row) => row.action);
-  assert.ok(actions('owner').includes('confirm-receipt'));
-  assert.ok(!actions('tenant').includes('confirm-receipt'));
-  assert.equal(actions('stranger').length, 0);
-  assert.equal(api.paymentEntry({ ...payment, status: 'CONFIRMED' }, 'owner').actions.length, 0);
-});
-
-test('accepted rental requests with reported or confirmed money cannot be canceled in UI', () => {
-  const api = load('services/managementApi.ts', { '@/lib/axios-client': {} });
-  for (const status of ['TRANSFER_REPORTED', 'CONFIRMED']) {
-    const row = api.rentalEntry(
-      { ...appointment, status: 'ACCEPTED', initialPayment: { status } },
-      false
-    );
-    assert.ok(!row.actions.some((action) => action.action === 'cancel'));
-  }
-});
-
-test('report transfer requires proof and sends the displayed server amount', async () => {
-  const { client, calls } = mockApi();
-  const api = load('services/managementApi.ts', { '@/lib/axios-client': client });
-  await assert.rejects(api.reportPaymentTransfer(payment, '', 'ref'));
-  assert.equal(calls.length, 0);
-  await api.reportPaymentTransfer(payment, 'proof-id', ' BANK001 ');
-  assert.equal(calls[0].method, 'post');
-  assert.equal(calls[0].args[0], '/api/v1/payment-requests/payment%2F1/report-transfer');
-  assert.equal(calls[0].args[1].proofStorageId, 'proof-id');
-  assert.equal(calls[0].args[1].expectedAmount, 3000000);
-  assert.equal(calls[0].args[1].bankTransactionReference, 'BANK001');
 });
 
 test('province search accepts names typed without Vietnamese accents', () => {
@@ -512,57 +429,12 @@ test('saved listing filter, sort and paging match the web pages', () => {
   assert.deepEqual({ ...saved.pageWindow(17, 9) }, { page: 3, totalPages: 3, start: 16, end: 17 });
 });
 
-test('rental policy and authoritative cost estimate go through the backend', async () => {
+test('the reservation policy comes from the backend', async () => {
   const { client, calls } = mockApi({ result: { version: 'server-version', text: 'Policy' } });
   const api = load('services/bookingApi.ts', { '@/lib/axios-client': client });
   const policy = await api.getReservationPolicy();
   assert.equal(policy.version, 'server-version');
-  await api.estimateRental({
-    listingId: 'l',
-    moveInDate: '2026-11-01',
-    leaseMonths: 12,
-    occupantCount: 1,
-    motorbikeCount: 0,
-    carCount: 0,
-  });
-  assert.equal(calls[1].args[0], '/api/v1/rental-requests/estimate');
-});
-
-test('listing rental action reads the existing request and returns the newly created status', async () => {
-  const { client, calls } = mockApi({ result: { id: 'request1', status: 'PENDING' } });
-  const api = load('services/bookingApi.ts', { '@/lib/axios-client': client });
-  assert.equal((await api.getMyRentalRequestByListing('listing/1')).status, 'PENDING');
-  assert.equal(calls[0].args[0], '/api/v1/rental-requests/by-listing/listing%2F1');
-  const created = await api.createRentalRequest({
-    listingId: 'listing/1',
-    moveInDate: '2026-11-01',
-    leaseMonths: 12,
-    occupantCount: 1,
-    motorbikeCount: 0,
-    carCount: 0,
-    renterName: 'Người thuê',
-    renterPhone: '0900000000',
-    renterEmail: '',
-    renterNote: '',
-    reservationPolicyAccepted: true,
-    reservationPolicyVersion: 'server-version',
-  });
-  assert.equal(created.status, 'PENDING');
-  assert.equal(calls[1].args[0], '/api/v1/rental-requests');
-  const absent = mockApi({ result: null });
-  const emptyApi = load('services/bookingApi.ts', { '@/lib/axios-client': absent.client });
-  assert.equal(await emptyApi.getMyRentalRequestByListing('listing/2'), null);
-});
-
-test('dates and numeric form validation reject invalid calendar and count values', () => {
-  const validate = load('lib/form-validation.ts');
-  assert.equal(validate.validDate('2026-02-31'), false);
-  assert.equal(validate.validDate('2028-02-29'), true);
-  assert.equal(validate.validDate('2026-2-3'), false);
-  assert.equal(validate.positiveInteger('11', 10), false);
-  assert.equal(validate.positiveInteger('1.5'), false);
-  assert.equal(validate.nonnegativeInteger('-1'), false);
-  assert.equal(validate.nonnegativeInteger('0'), true);
+  assert.equal(calls[0].args[0], '/api/v1/rental-requests/reservation-policy');
 });
 
 test('proof uploads are private, bound to the payment, and are not completed if S3 fails', async () => {
@@ -627,7 +499,8 @@ test('news overview and related articles keep their page sizes and views use the
 
 test('news content renders escaped spans, line breaks and nested formatting as native text', () => {
   const content = load('lib/news-content.ts');
-  const value = '&lt;span style=&quot;font-weight: 700&quot;&gt;Thị trường <em>mới</em>&lt;/span&gt;<br>Giá &amp; thuê';
+  const value =
+    '&lt;span style=&quot;font-weight: 700&quot;&gt;Thị trường <em>mới</em>&lt;/span&gt;<br>Giá &amp; thuê';
   assert.equal(content.newsPlainText(value), 'Thị trường mới\nGiá & thuê');
   const parts = content.newsTextParts(value);
   assert.equal(parts[0].style, 'font-bold');
@@ -637,7 +510,8 @@ test('news content renders escaped spans, line breaks and nested formatting as n
 
 test('news pasted images only load HTTPS images from known publisher CDNs', () => {
   const { newsPlainText, readNewsInlineImage } = load('lib/news-content.ts');
-  const input = '&lt;img src="https://cafefcdn.com/news.webp?w=640&amp;h=480" alt="Ảnh &quot;minh họa&quot;"&gt;';
+  const input =
+    '&lt;img src="https://cafefcdn.com/news.webp?w=640&amp;h=480" alt="Ảnh &quot;minh họa&quot;"&gt;';
   assert.equal(readNewsInlineImage(input)?.src, 'https://cafefcdn.com/news.webp?w=640&h=480');
   assert.equal(readNewsInlineImage(input)?.alt, 'Ảnh "minh họa"');
   assert.ok(readNewsInlineImage('<img src="https://vcnd1.vnecdn.net/news.webp">'));
@@ -746,35 +620,11 @@ test('viewing date selection blocks past dates and the owner closed weekdays', (
   assert.equal(booking.canSelectViewingDay(new Date(2026, 10, 1), '2026-10-31', ['MONDAY']), false);
   assert.equal(booking.canSelectViewingDay(new Date(2026, 10, 2), '2026-10-31', ['MONDAY']), true);
   assert.equal(booking.canSelectViewingDay(new Date(2026, 10, 2), '2026-10-31', []), false);
-  assert.equal(booking.viewingPeriod('08:00:00'), 'MORNING');
-  assert.equal(booking.viewingPeriod('13:00:00'), 'AFTERNOON');
-  assert.equal(booking.viewingPeriod('18:00:00'), 'EVENING');
-});
-
-test('booking only accepts a slot still available in the selected day and permits rescheduling an existing booking', () => {
-  const booking = load('lib/booking.ts', {
-    '@/lib/appointment-calendar': load('lib/appointment-calendar.ts'),
-  });
-  const slot = { startTime: '09:00:00', endTime: '10:00:00', status: 'AVAILABLE' };
-  const data = { isDayAvailable: true, hasExistingActiveBooking: false, slots: [slot] };
-  assert.equal(booking.canBookSlot(data, slot, false), true);
-  assert.equal(booking.canBookSlot(null, slot, false), false);
-  assert.equal(booking.canBookSlot({ ...data, isDayAvailable: false }, slot, false), false);
-  assert.equal(booking.canBookSlot({ ...data, slots: [] }, slot, false), false);
-  assert.equal(
-    booking.canBookSlot({ ...data, slots: [{ ...slot, status: 'UNAVAILABLE' }] }, slot, false),
-    false
-  );
-  assert.equal(
-    booking.canBookSlot({ ...data, hasExistingActiveBooking: true }, slot, false),
-    false
-  );
-  assert.equal(booking.canBookSlot({ ...data, hasExistingActiveBooking: true }, slot, true), true);
 });
 
 test('changing dates can cancel the previous availability request without changing the chosen API date', async () => {
   const { client, calls } = mockApi({ result: { slots: [] } });
-  const api = load('services/bookingApi.ts', { '@/lib/axios-client': client });
+  const api = load('services/appointmentApi.ts', { '@/lib/axios-client': client });
   const controller = new AbortController();
   await api.getAvailability('listing/1', '2026-11-02', controller.signal);
   assert.equal(calls[0].args[0], '/api/v1/appointments/availability/listing%2F1');
@@ -849,11 +699,14 @@ test('membership card status follows the web rules and /membership/me failures d
   assert.equal(status('FREE', me).label, 'Gói khởi đầu mặc định');
   assert.equal(status('FREE', null).label, 'Đang áp dụng (Còn 3 lượt)');
   assert.equal(status('STARTER', me).label, 'Đang sử dụng gói cao hơn');
-  assert.deepEqual({ ...status('PRO', me) }, {
-    current: true,
-    kind: 'info',
-    label: 'Đang kích hoạt (Có thể nâng cấp gói cao hơn)',
-  });
+  assert.deepEqual(
+    { ...status('PRO', me) },
+    {
+      current: true,
+      kind: 'info',
+      label: 'Đang kích hoạt (Có thể nâng cấp gói cao hơn)',
+    }
+  );
   assert.equal(status('BUSINESS', { ...me, tier: 'BUSINESS' }).label, 'Đang kích hoạt');
   assert.match(status('BUSINESS', me).label, /^Nâng cấp lên Business/);
   assert.equal(status('STARTER', null).kind, 'info');
@@ -879,7 +732,10 @@ test('membership checkout quotes, creates, checks and cancels through the authen
 });
 
 test('membership checkout submits only a matching signed Sandbox form', () => {
-  const { buildSandboxCheckout, isSandboxPaymentPage, isMembershipQuote } = load('lib/membership-checkout.ts', {});
+  const { buildSandboxCheckout, isSandboxPaymentPage, isMembershipQuote } = load(
+    'lib/membership-checkout.ts',
+    {}
+  );
   const id = 'abcd'.repeat(8);
   const returnUrl = `https://homespace.example.com/dashboard/membership/return?orderId=${id}`;
   const checkout = {
@@ -911,24 +767,62 @@ test('membership checkout submits only a matching signed Sandbox form', () => {
   assert.equal(hosted.source.uri, checkout.paymentUrl);
   assert.equal(form.get('signature'), checkout.formFields.signature);
   assert.equal(form.get('success_url'), checkout.formFields.success_url);
-  assert.deepEqual([...form.keys()], [
-    'order_amount', 'merchant', 'currency', 'operation', 'order_description',
-    'order_invoice_number', 'success_url', 'error_url', 'cancel_url', 'signature',
-  ]);
+  assert.deepEqual(
+    [...form.keys()],
+    [
+      'order_amount',
+      'merchant',
+      'currency',
+      'operation',
+      'order_description',
+      'order_invoice_number',
+      'success_url',
+      'error_url',
+      'cancel_url',
+      'signature',
+    ]
+  );
   assert.equal(isSandboxPaymentPage(hosted.source.uri), true);
   assert.equal(isSandboxPaymentPage(checkout.formFields.success_url), false);
   assert.equal(isSandboxPaymentPage('https://pay-sandbox.sepay.vn.evil.example/'), false);
   assert.throws(() => buildSandboxCheckout(checkout, 129000), /Số tiền đã thay đổi/);
   assert.throws(() => buildSandboxCheckout({ ...checkout, provider: 'ETH' }, 49000), /Sandbox/);
-  assert.throws(() => buildSandboxCheckout({
-    ...checkout, paymentUrl: 'https://pay.sepay.vn/v1/checkout/init',
-  }, 49000), /Sandbox/);
-  assert.throws(() => buildSandboxCheckout({
-    ...checkout, formFields: { ...checkout.formFields, order_amount: '129000' },
-  }, 49000), /biểu mẫu/);
-  assert.throws(() => buildSandboxCheckout({
-    ...checkout, formFields: { ...checkout.formFields, success_url: returnUrl.replace(id, 'other') + '&sepayReturn=success' },
-  }, 49000), /trả kết quả/);
+  assert.throws(
+    () =>
+      buildSandboxCheckout(
+        {
+          ...checkout,
+          paymentUrl: 'https://pay.sepay.vn/v1/checkout/init',
+        },
+        49000
+      ),
+    /Sandbox/
+  );
+  assert.throws(
+    () =>
+      buildSandboxCheckout(
+        {
+          ...checkout,
+          formFields: { ...checkout.formFields, order_amount: '129000' },
+        },
+        49000
+      ),
+    /biểu mẫu/
+  );
+  assert.throws(
+    () =>
+      buildSandboxCheckout(
+        {
+          ...checkout,
+          formFields: {
+            ...checkout.formFields,
+            success_url: returnUrl.replace(id, 'other') + '&sepayReturn=success',
+          },
+        },
+        49000
+      ),
+    /trả kết quả/
+  );
 });
 
 test('membership Sepolia uses the same signed quote and settlement endpoints as web', async () => {
@@ -958,9 +852,15 @@ test('membership Sepolia signs exact contract calldata and guards against wrong 
   const contractAddress = '0x' + '3'.repeat(40);
   const paymentId = '0x' + 'a'.repeat(64);
   const quote = {
-    payer, recipient, contractAddress, paymentId,
-    chainId: 11155111, amountVnd: 49000, amountWei: '12345678900000000',
-    expiresAt: new Date(Date.now() + 60000).toISOString(), signature: '0x' + 'b'.repeat(130),
+    payer,
+    recipient,
+    contractAddress,
+    paymentId,
+    chainId: 11155111,
+    amountVnd: 49000,
+    amountWei: '12345678900000000',
+    expiresAt: new Date(Date.now() + 60000).toISOString(),
+    signature: '0x' + 'b'.repeat(130),
   };
   const tx = eth.buildMembershipEthTransaction(quote, payer, 49000);
   assert.equal(tx.chainId, '0xaa36a7');
@@ -974,14 +874,39 @@ test('membership Sepolia signs exact contract calldata and guards against wrong 
   assert.equal(BigInt(`0x${tx.data.slice(330, 394)}`), 192n);
   assert.equal(BigInt(`0x${tx.data.slice(394, 458)}`), 65n);
   assert.equal(eth.formatSepoliaEth(quote.amountWei), '0.0123456789');
-  assert.throws(() => eth.buildMembershipEthTransaction({ ...quote, chainId: 1 }, payer, 49000), /Sepolia/);
+  assert.throws(
+    () => eth.buildMembershipEthTransaction({ ...quote, chainId: 1 }, payer, 49000),
+    /Sepolia/
+  );
   assert.throws(() => eth.buildMembershipEthTransaction(quote, recipient, 49000), /Sepolia/);
   assert.throws(() => eth.buildMembershipEthTransaction(quote, payer, 129000), /Số tiền/);
-  assert.throws(() => eth.buildMembershipEthTransaction({ ...quote, expiresAt: '2000-01-01' }, payer, 49000), /hết hạn/);
-  assert.throws(() => eth.buildMembershipEthTransaction({ ...quote, amountWei: (1n << 256n).toString() }, payer, 49000), /giới hạn/);
-  assert.throws(() => eth.assertPayableEthOrder({ id: 'order', provider: 'ETH', status: 'PAID', amountVnd: 49000 }, 'order', 49000), /đã thay đổi/);
+  assert.throws(
+    () => eth.buildMembershipEthTransaction({ ...quote, expiresAt: '2000-01-01' }, payer, 49000),
+    /hết hạn/
+  );
+  assert.throws(
+    () =>
+      eth.buildMembershipEthTransaction(
+        { ...quote, amountWei: (1n << 256n).toString() },
+        payer,
+        49000
+      ),
+    /giới hạn/
+  );
+  assert.throws(
+    () =>
+      eth.assertPayableEthOrder(
+        { id: 'order', provider: 'ETH', status: 'PAID', amountVnd: 49000 },
+        'order',
+        49000
+      ),
+    /đã thay đổi/
+  );
   assert.equal(eth.readEthSubmission(JSON.stringify({ paymentId })).paymentId, paymentId);
-  assert.throws(() => eth.readEthSubmission(JSON.stringify({ paymentId, txHash: 'untrusted' })), /giao dịch/);
+  assert.throws(
+    () => eth.readEthSubmission(JSON.stringify({ paymentId, txHash: 'untrusted' })),
+    /giao dịch/
+  );
 });
 
 test('notification API uses the same endpoints and params as the web service', async () => {
@@ -1154,9 +1079,7 @@ test('password change validation mirrors web schema', () => {
 });
 
 test('profile form validation mirrors the web zod schema and detects real changes', () => {
-  const p = load('lib/profile-form.ts', {
-    '@/lib/form-validation': load('lib/form-validation.ts'),
-  });
+  const p = load('lib/profile-form.ts');
   const base = {
     username: 'an.nguyen',
     email: 'an@example.com',

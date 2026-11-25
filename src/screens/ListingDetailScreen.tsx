@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Ionicons from '@/components/Icon';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import BookingAppointmentModal from '@/components/appointment/BookingAppointmentModal';
+import AppointmentsScreen from '@/components/appointment/manage/AppointmentsScreen';
+import type { MainTab } from '@/components/BottomTabBar';
 import ListingCard from '@/components/ListingCard';
 import { Button } from '@/components/Screen';
 import ContactCta from '@/components/listing-detail/ContactCta';
+import { rentalModalProps } from '@/components/rental/requests/logic';
+import RentalRequestModal from '@/components/rental/requests/RentalRequestModal';
+import { useViewer } from '@/components/rental/requests/useViewer';
 import { OwnListingCard, VisitorOwnerCard } from '@/components/listing-detail/OwnerCard';
 import MediaGallery from '@/components/listing-detail/MediaGallery';
 import NearbyPlaces from '@/components/listing-detail/NearbyPlaces';
@@ -43,8 +48,11 @@ import {
 } from '@/lib/rent-detail';
 import { useFavoriteListings } from '@/lib/use-favorite-listings';
 import { getMyBookingByListing } from '@/services/appointmentApi';
-import { getMyRentalRequestByListing, type ActiveRentalRequest } from '@/services/bookingApi';
+import type { RentalRoute } from '@/lib/rental-nav/routes';
+import RentalNavigator from '@/screens/rental/RentalNavigator';
+import rentalRequestService from '@/services/rental/rental-request.service';
 import type { ManagementSection } from '@/services/managementApi';
+import type { RentalRequestResponse } from '@/types/rental/rental-request.type';
 
 type SenderProfile = { displayName?: string; email?: string; avatarUrl?: string };
 
@@ -53,15 +61,21 @@ export default function ListingDetailScreen({
   onBack,
   onOpenMessages,
   onOpenManagement,
+  onSelectTab,
   onOpenListing,
   own = false,
+  accessible = false,
 }: {
   listingId: string;
   onBack: () => void;
   onOpenMessages: (conversationId: string, pendingListing?: RelatedListing) => void;
   onOpenManagement: (section: ManagementSection) => void;
+  onSelectTab: (tab: MainTab) => void;
   onOpenListing: (listingId: string) => void;
   own?: boolean;
+  /** Opened from a rental record: read with the viewer's identity (the listing may not be public).
+   * Access only, never ownership. */
+  accessible?: boolean;
 }) {
   const [listing, setListing] = useState<ListingDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -71,35 +85,66 @@ export default function ListingDetailScreen({
   const [chatError, setChatError] = useState<string | null>(null);
   const [favoriteReady, setFavoriteReady] = useState(false);
   const [favoriteSaving, setFavoriteSaving] = useState(false);
-  const [userId, setUserId] = useState('');
+  // From the session: a favorites or profile failure must not hide the visitor actions.
+  const { userId } = useViewer();
   const [senderProfile, setSenderProfile] = useState<SenderProfile | undefined>();
   const [editing, setEditing] = useState(false);
   const [quickMessage, setQuickMessage] = useState('');
-  const [rentalRequest, setRentalRequest] = useState<ActiveRentalRequest | null>(null);
+  const [rentalRequest, setRentalRequest] = useState<RentalRequestResponse | null>(null);
+  const [rentalFormOpen, setRentalFormOpen] = useState(false);
+  // A request sent for the previous listing can settle after this screen moved to another one.
+  const shownListingId = useRef(listingId);
+  // "Yêu cầu của tôi" opens here, so Back from the list returns to this listing.
+  const [rentalStack, setRentalStack] = useState<RentalRoute[]>([]);
+  const viewingRequests = rentalStack.length > 0;
+  // A listing opened from that list is shown on top of it, so Back returns to the list.
+  const [recordListingId, setRecordListingId] = useState<string | null>(null);
   const [hasActiveBooking, setHasActiveBooking] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [appointmentsOpen, setAppointmentsOpen] = useState(false);
+  const [appointmentListingId, setAppointmentListingId] = useState<string | null>(null);
   const { favoriteIds: similarFavoriteIds, toggle: toggleSimilarFavorite } = useFavoriteListings();
   const [similarListings, setSimilarListings] = useState<ListingSummary[]>([]);
   const scrollRef = useRef<ScrollView>(null);
   const bodyY = useRef(0);
   const contactY = useRef(0);
 
-  // Same as web: an unavailable lookup simply means "no request / no booking".
+  // Android Back = the header button. The request list and the editor have their own ScreenHeader;
+  // modals take Back themselves.
+  const hasOwnHeader = viewingRequests || editing || appointmentsOpen;
   useEffect(() => {
+    if (hasOwnHeader) return;
+    const handler = BackHandler.addEventListener('hardwareBackPress', () => {
+      onBack();
+      return true;
+    });
+    return () => handler.remove();
+  }, [hasOwnHeader, onBack]);
+
+  useEffect(() => {
+    shownListingId.current = listingId;
     setRentalRequest(null);
+    setRentalFormOpen(false);
+    setRentalStack([]);
+    setRecordListingId(null);
     setHasActiveBooking(false);
     setBookingOpen(false);
-    if (own) return;
+    setAppointmentsOpen(false);
+    setAppointmentListingId(null);
+  }, [listingId, own]);
+
+  // On entry (own listings too, as web) and again when the request form closes. Closing the request
+  // list is web's re-entry: there it is another page. An unavailable lookup means "no request".
+  useEffect(() => {
+    if (rentalFormOpen || viewingRequests) return;
     let active = true;
-    getMyRentalRequestByListing(listingId)
-      .then((request) => {
-        if (active) setRentalRequest(request);
-      })
-      .catch(() => undefined);
+    void rentalRequestService.getMyRequestByListing(listingId).then((request) => {
+      if (active) setRentalRequest(request);
+    });
     return () => {
       active = false;
     };
-  }, [listingId, own]);
+  }, [listingId, rentalFormOpen, viewingRequests]);
 
   // On entry and again each time the booking modal closes.
   useEffect(() => {
@@ -119,7 +164,6 @@ export default function ListingDetailScreen({
     try {
       const [ids, profile] = await Promise.all([getFavoriteIds(), getUserProfileApi()]);
       setFavorite(ids.includes(listingId));
-      setUserId(profile.id);
       setSenderProfile({
         displayName:
           [profile.lastName, profile.firstName].filter(Boolean).join(' ') || profile.username,
@@ -152,14 +196,19 @@ export default function ListingDetailScreen({
     setLoading(true);
     setError(null);
     try {
-      setListing(await (own ? getAccessibleListing(listingId) : getPublicListing(listingId)));
-      if (!own) void recordListingHistory(listingId).catch(() => undefined);
+      const detail = await (own || accessible
+        ? getAccessibleListing(listingId)
+        : getPublicListing(listingId));
+      setListing(detail);
+      // As on web, only a publicly visible listing goes into the view history.
+      if (!own && (!accessible || ['PUBLISHED', 'RESERVED'].includes(detail.status)))
+        void recordListingHistory(listingId).catch(() => undefined);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Không tải được bài đăng');
     } finally {
       setLoading(false);
     }
-  }, [listingId, own]);
+  }, [listingId, own, accessible]);
 
   useEffect(() => {
     load();
@@ -186,6 +235,63 @@ export default function ListingDetailScreen({
   }, [listing, own]);
 
   const property = useMemo(() => (listing ? toRentProperty(listing) : null), [listing]);
+
+  const openAppointments = () => {
+    setBookingOpen(false);
+    setAppointmentsOpen(true);
+  };
+
+  if (appointmentsOpen && appointmentListingId)
+    return (
+      <ListingDetailScreen
+        key={appointmentListingId}
+        listingId={appointmentListingId}
+        onBack={() => setAppointmentListingId(null)}
+        onSelectTab={onSelectTab}
+        onOpenListing={setAppointmentListingId}
+        onOpenMessages={onOpenMessages}
+        onOpenManagement={onOpenManagement}
+      />
+    );
+
+  if (appointmentsOpen)
+    return (
+      <AppointmentsScreen
+        role="RENTER"
+        onBack={() => setAppointmentsOpen(false)}
+        onSelectTab={onSelectTab}
+        onOpenListing={setAppointmentListingId}
+      />
+    );
+
+  if (viewingRequests && recordListingId)
+    return (
+      <ListingDetailScreen
+        key={recordListingId}
+        listingId={recordListingId}
+        accessible
+        onBack={() => setRecordListingId(null)}
+        onOpenListing={setRecordListingId}
+        onSelectTab={onSelectTab}
+        onOpenMessages={onOpenMessages}
+        onOpenManagement={onOpenManagement}
+      />
+    );
+
+  if (viewingRequests)
+    return (
+      <RentalNavigator
+        stack={rentalStack}
+        onStackChange={setRentalStack}
+        // Opened as the tenant's own requests.
+        role="tenant"
+        onOpenListing={setRecordListingId}
+        onBrowseListings={() => {
+          setRentalStack([]);
+          onBack();
+        }}
+      />
+    );
 
   if (editing)
     return (
@@ -320,7 +426,6 @@ export default function ListingDetailScreen({
               {showVisitorCta ? (
                 <ContactCta
                   status={property.status}
-                  acceptsNewRequests={extras.acceptsNewRequests}
                   publicListing={extras.publicListing}
                   isNegotiable={extras.isNegotiable}
                   isOwner={isOwnerView}
@@ -328,8 +433,11 @@ export default function ListingDetailScreen({
                   hasActiveBooking={hasActiveBooking}
                   chatting={openingChat}
                   onChat={() => void openPropertyChat()}
-                  onOpenRequests={() => onOpenManagement('tenant-requests')}
-                  onOpenBookings={() => onOpenManagement('tenant-appointments')}
+                  onOpenRequests={() =>
+                    setRentalStack([{ screen: 'rental-requests', mode: 'SENT' }])
+                  }
+                  onRequestRental={() => setRentalFormOpen(true)}
+                  onOpenBookings={openAppointments}
                   onBook={() => setBookingOpen(true)}
                 />
               ) : null}
@@ -418,10 +526,19 @@ export default function ListingDetailScreen({
         </View>
       ) : null}
 
+      <RentalRequestModal
+        {...rentalModalProps(property)}
+        isOpen={rentalFormOpen}
+        onClose={() => setRentalFormOpen(false)}
+        onSuccess={(created) => {
+          if (created.listingId === shownListingId.current) setRentalRequest(created);
+        }}
+      />
+
       <BookingAppointmentModal
         isOpen={bookingOpen}
         onClose={() => setBookingOpen(false)}
-        onViewMyBookings={() => onOpenManagement('tenant-appointments')}
+        onViewMyBookings={openAppointments}
         listingId={property.id}
         listingTitle={property.title}
         listingAddress={property.location}

@@ -3,14 +3,25 @@
 > File tiến độ dùng chung cho mọi phiên/agent. **Đọc file này trước khi làm**, cập nhật ngay sau mỗi bước.
 > Nguyên tắc: web `hs-web-app` là chuẩn duy nhất. Không tự nghĩ workflow; mọi hành vi, điều kiện, chuỗi tiếng Việt, API đều phải trỏ được về file:dòng của web. Chỗ nào mobile buộc phải khác (thiết bị) thì ghi vào mục "Khác web" và chờ user duyệt.
 
-Trạng thái: **XONG Pha 1 — DỪNG, chờ user duyệt để sang Pha 2** (25/11/2026). Pha 2: tối đa 2 agent cùng lúc; mỗi agent ghi tiến độ sớm.
+Trạng thái: **Pha 3 đã xong phần sửa mã và kiểm tra tự động** (26/11). Chờ nghiệm thu trên điện thoại và quyết định RD-01. Xem mục "BÀN GIAO" ngay dưới.
 
-**Quy tắc cho mọi agent:** model Sonnet; dùng skill `ui-ux-pro-max` khi làm UI (đẹp, gọn trên điện thoại) nhưng nội dung/luồng/chuỗi giữ đúng web; tuân `hs-mobile-app/AGENTS.md` (token màu semantic, `@/components/Icon`, `useDialog`); không commit; không sửa `hs-web-app`/backend; chỉ sửa file mình sở hữu.
+**Phân vai (user chốt 25/11, áp dụng từ nay):** Sonnet sub-agent viết code · **sol Codex** (`codex exec -m gpt-6.2-sol -s read-only`) review và viết báo cáo vào `docs/yeu-cau-thue/review-<phần>-codex.md` · Claude điều phối, tự kiểm lại phát hiện, giao Sonnet sửa, cập nhật tiến độ.
+
+**Quy tắc cho mọi agent code:** model Sonnet; dùng skill `ui-ux-pro-max` khi làm UI (đẹp, gọn trên điện thoại) nhưng nội dung/luồng/chuỗi giữ đúng web (rà kỹ web trước khi viết); tuân `hs-mobile-app/AGENTS.md` (token màu semantic, `@/components/Icon`, `useDialog`); không commit; không sửa `hs-web-app`/backend; chỉ sửa file mình sở hữu.
 
 **Cổng duyệt (user yêu cầu 25/11):** xong mỗi pha thì DỪNG, báo cáo cho user, cập nhật file này; chỉ sang pha sau khi user cho phép.
 
 **Quyết định đã chốt (user duyệt kế hoạch 25/11):** Q1 PDF xem trong app bằng thư viện native (build lại app), DOCX tải về mở bằng app của máy · Q2 bỏ chế độ "tải minh chứng từ điện thoại qua QR", chọn ảnh/tệp trực tiếp · Q3 web lệch backend → mobile theo web, ghi lại · Q4 đã commit (HEAD 881ea2b).
 **Mục tiêu nghiệm thu:** full luồng cho cả chủ nhà và người thuê, từ gửi yêu cầu thuê → giữ chỗ/cọc → ký hợp đồng → vòng đời (hoá đơn, gia hạn, phụ lục, chấm dứt) → kết thúc (quyết toán, hoàn cọc, khiếu nại).
+
+## BÀN GIAO (đọc trước khi làm tiếp)
+**Hiện trạng cây:** đã xử lý R3-01 đến R3-09 và các phát hiện trong lượt Codex riêng chỉ đọc. Chi tiết từng mã ở [kết quả sửa Pha 3](yeu-cau-thue/phase3-fix-codex.md). Thay đổi nằm trong `hs-mobile-app`, chưa commit hay push.
+
+- `node --test --test-isolation=none tests/*.test.cjs tests/*.test.mjs` → **486/486**, 33 file. Ba file test lỗi lúc bàn giao đã qua. Test tải hợp đồng tiếp tục đối chiếu nội dung và lỗi của web.
+- `npm run typecheck` → đạt. ESLint toàn mã JS/TS ứng dụng → **0 lỗi, 6 cảnh báo**.
+- `expo export --platform android --max-workers 2` → thành công. Bundle Hermes 10,7 MB. Metro còn cảnh báo về `@noble/hashes`.
+- Chưa chạy trên điện thoại. Dùng [kịch bản hai tài khoản](yeu-cau-thue/kich-ban-thu.md) để kiểm tra ô tiền, Back qua lịch hẹn, thông báo, tải và chia sẻ tệp.
+- RD-01 đã được xác nhận bằng dữ liệu giả chạy qua tab Thanh toán và Kết thúc của web cho cả hai vai. Hợp đồng miễn cọc thiếu điểm vào quyết toán. Quyết định sản phẩm và lỗi ký khi chưa xem tài liệu vẫn ở [danh sách lỗi web/backend](yeu-cau-thue/loi-web-backend.md).
 
 ---
 
@@ -106,11 +117,13 @@ API: ~105 lệnh gọi trong 13 service (`rental-request` 11, `rental-onboarding
 | Điều kiện trước (commit) | ✅ | HEAD 881ea2b |
 | 0 — Kiểm kê | ✅ | 737 mục: A 178 · B 164 · C 241 · D 154 → `docs/yeu-cau-thue/parity-{A,B,C,D}.md` |
 | 1 — Nền tảng | ✅ | API 126/126 hàm · logic 62 module · UI kit `components/rental/shared` · điều hướng + deep link + đồng bộ realtime · PDF viewer (chưa màn nào import) · tự kiểm: tsc sạch, 20/20 script test pass, eslint 0 lỗi, Android assembleDebug OK (agent chạy) |
-| 2A — Yêu cầu thuê | ☐ | |
-| 2B — Giữ chỗ & cọc | ☐ | |
-| 2C — Hợp đồng | ☐ | |
-| 2D — Hoá đơn & thanh toán | ☐ | |
-| 3 — Tích hợp & nghiệm thu | ☐ | |
+| 2A — Yêu cầu thuê | ✅ code + review + sửa | `review-A-codex.md` → `review-A-xu-ly.md`; RA-02 → Pha 3 |
+| 2B — Giữ chỗ & cọc | ✅ code + review + sửa | `review-B-codex.md` → `review-B-xu-ly.md` |
+| 2C1 — Hợp đồng: ký, tài liệu, PDF, blockchain | ✅ code + review + sửa | `review-C1-codex.md` → `review-C1-xu-ly.md` |
+| 2C2a — Hợp đồng: danh sách, chi tiết, tab, mục nội dung, nháp | ✅ code + review + sửa | `review-C2-codex.md` → `review-C2-xu-ly.md`; thêm sửa lỗi chặn ký sau khi lưu nháp (lỗi phát sinh từ đợt sửa RC1) |
+| 2C2b — Hợp đồng: phụ lục, gia hạn | ✅ code + review + sửa | như trên |
+| 2D — Hoá đơn & thanh toán | ✅ code + review + sửa | `review-D-codex.md` → `review-D-xu-ly.md`; **RD-01 chờ user quyết** |
+| 3 — Tích hợp & nghiệm thu | ✅ mã, review, kiểm tra tự động | Chờ nghiệm thu thiết bị và quyết định RD-01 |
 
 ## 5. Nhật ký
 - 25/11: rà menu + đồ thị import web (180 file), kiểm kê mobile hiện có, lập kế hoạch.
@@ -141,6 +154,53 @@ API: ~105 lệnh gọi trong 13 service (`rental-request` 11, `rental-onboarding
 - Trước khi thử Pha 2 trên máy: build lại app (`npm run run:android`) vì có 2 thư viện native mới (`react-native-pdf-renderer@2.3.0`, `expo-clipboard`).
 - Chờ duyệt: câu web "Có thể in bằng thanh công cụ PDF." không đúng trên mobile (đề xuất bỏ câu này).
 - Chưa nối thông báo → màn mới (Pha 3). Thanh toán qua `paymentId`: làm theo web (chỉ so khớp trong danh sách của mình).
+
+- 25/11 22:3x: user đã commit (HEAD dcaf6f0, cây sạch). Bỏ câu "Có thể in bằng thanh công cụ PDF." trên mobile (theo đề xuất; user bảo tiếp tục).
+
+### Từ Pha 2B — cần nhớ
+- C phải mount `RentalWorkflowPanel` kind='early-exit' `{rentalRequestId, contractId, onUpdated, onNavigate, focusRequest, agreementId}`.
+- Nghi lỗi WEB (tiền, đọc code): thay minh chứng mà upload lần 2 lỗi thì web vẫn gửi được tệp cũ; upload cũ chậm có thể đè tệp mới. Mobile đã chặn (KHÁC WEB, chờ user duyệt).
+- Pha 3: thêm script `test:rental-onboarding`; ModalShell/ActionButton/AppCalendar thiếu vài prop (nhãn đóng, selected, tháng mở đầu).
+
+- 25/11 23:xx: Codex review B xong. Chạy Codex trên máy này: `codex exec -m gpt-6.2-sol -s read-only -c 'windows.sandbox="unelevated"'` + bỏ thư mục `WindowsApps` khỏi PATH (pwsh bản Store không chạy trong sandbox) + `--skip-git-repo-check -C D:/Projects/homespace -o <file>`; dặn đọc file `-Encoding UTF8`. Đã thử: đọc được, ghi bị chặn.
+
+### Chữ chỉ có trên mobile — chờ user duyệt (từ 2C2a)
+"Email không hợp lệ." · "Số tài khoản gồm 1 đến 34 chữ số." · "Nhập số nguyên từ {min} đến {max}." · "Rời trang?" / "Bỏ các chỉnh sửa chưa lưu trên trang này." / "Rời trang"
+(Từ 2C1: thông báo thiếu module PDF, "Thiết bị chưa hỗ trợ mở hoặc lưu tài liệu.", "Mở hoặc lưu tài liệu".)
+
+- RC1-01/RC1-02: chốt an toàn khác web (chờ duyệt), ghi ở `phase2-C1.md`. Chữ mới chỉ có trên mobile: chủ yếu trong `useSigningConsent.tsx`, thông báo đồng bộ chữ ký (RC1-03), 2 câu RC1-07.
+
+- Chữ mới chỉ có trên mobile từ đợt sửa D (chờ duyệt): "Thông tin khoản chuyển đã thay đổi. Vui lòng chọn lại chứng từ." · "Hồ sơ hoặc thao tác đã thay đổi. Nội dung vẫn được giữ; …" · "Chọn thao tác không phải trao đổi sẽ gỡ tệp đính kèm." · "Chọn lại: {tên thao tác}" · "Máy chủ không ghi nhận tệp vừa gửi cho khoản chuyển này. …"
+
+## Kết thúc Pha 2 (26/11)
+- Codex lần theo handler thật: **13/13 bước luồng thông cho cả hai vai (luồng có cọc)**; kết luận từ đọc code. Đợt sửa cuối và bản sửa lỗi chặn ký CHƯA được Codex review lại.
+- Lỗi web/backend để chuyển người phụ trách: `yeu-cau-thue/loi-web-backend.md`.
+
+### Chờ user quyết
+1. RD-01: hợp đồng miễn cọc không có điểm quyết toán (thêm trên mobile = khác web).
+2. Duyệt các chốt an toàn KHÁC WEB (RB-02, RB chứng từ cũ, RC1-01, RC1-02, RC2-01, RC2-03, RD-03, RD-09, RD-11, báo thành công giả ở modal cọc) — chi tiết mục "Khác web" trong `phase2-*.md`.
+3. Duyệt chữ chỉ có trên mobile (liệt kê bên dưới và trong `phase2-*.md`).
+
+### Việc của Pha 3
+- Nối chạm thông báo/push → `rentalRouteFromActionPath` (RA-02, RB-05, RB-11, RD-02); chuyển lối tắt cũ sang màn mới.
+- Gỡ code rental cũ (`ManagementScreen` phần thuê, `managementApi`, `bookingApi`, `billingApi`, `BillingScreen`, `RentalRequestForm`, `screens/rental/placeholders.tsx`).
+- Dọn cache PDF/chứng từ nhạy cảm (kể cả bản sao do bộ chọn tạo, RD-13) khi đăng xuất.
+- Android Back ở chi tiết nhà.
+- Đối chiếu từng dòng checklist (737 mục) với code; build lại app; kịch bản thử 2 tài khoản.
+
+## Pha 3 — tiến độ
+| Việc | Ai | Trạng thái | Tài liệu |
+|---|---|---|---|
+| 3.1 Điều hướng: thông báo/push, lối tắt cũ → màn mới, Back Android chi tiết nhà | Sonnet | ✅ code (agent: test:rental-nav 16/16). Push chỉ mang {event, category} nên vẫn mở danh sách thông báo | `yeu-cau-thue/phase3-nav.md` |
+| 3.2 Dọn tệp nhạy cảm trong cache (đăng xuất + vòng đời, RD-13) | Sonnet và Codex | ✅ giữ tệp đang dùng đến khi thao tác kết thúc. Bản đã chia sẻ giữ 10 phút. Khóa chống gửi lặp tồn tại đến khi POST trả về | `yeu-cau-thue/phase3-cache.md` |
+| 3.3 Đối chiếu từng mục checklist A, B | Codex | ✅ A 178: 120 khớp · 21 sai · 28 có chủ ý · 9 hoãn. B 164: 127 khớp · 8 sai · 4 thiếu · 6 không tới được (giống web) · 18 có chủ ý · 1 hoãn | `yeu-cau-thue/audit-{A,B}-codex.md` |
+| 3.4 Đối chiếu từng mục checklist C, D | Codex | ✅ C 241: 172 khớp · 14 sai (1 Cao: C-177 dán tiền) · 1 thiếu · 3 không tới được (giống web) · 47 có chủ ý · 1 chưa kiểm được (C-043) · 3 hoãn. D 154: 106 · 23 sai · 2 thiếu · 1 · 21 · 1 hoãn | `audit-{C,D}-codex.md` |
+| 3.5 Gỡ code thuê cũ (sau 3.1) | Sonnet | ✅ xoá 5 file (1.329 dòng), rút gọn ManagementScreen 1073→382, managementApi 696→330; agent: 27 script pass, tsc sạch, export Android OK (sẽ kiểm tổng lại) | `phase3-cleanup.md` |
+| 3.6 Sửa khoảng trống từ đối chiếu | Sonnet | ✅ A, B, C, D. Giữ: A-032, 065b, 076, 114, 124/125; B-001–005/030, 012, 017; C-018, 062, 072, 176, 182, 264, 265; D-014, 064, 125, 151. Còn C-283 (cần prop badge ở PdfViewerModal) → đợt sửa sau review. C-177 cần thử trên Android + iOS | |
+| 3.7 Kiểm tổng + review + kịch bản thử | ⛔ dở | sửa 9 lỗi `review-P3-codex.md` chưa xong. Kịch bản thử đã có: `yeu-cau-thue/kich-ban-thu.md` | |
+
+### Tổng đối chiếu 737/737 mục (Codex, trước đợt sửa)
+Khớp 525 · Khác web có chủ ý 114 · Sai 66 · Thiếu 7 · Có code nhưng không tới được 10 (giống web) · Chưa kiểm được 1 (C-043) · Hoãn do đang làm ở 3.1/3.2: 14.
 
 ## 6. Khác web (đã duyệt)
 _(trống)_

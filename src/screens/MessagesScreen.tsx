@@ -58,6 +58,7 @@ import {
   prepareChatAttachment,
   uploadChatAttachment,
 } from '@/services/chatMediaApi';
+import { fileSessionGuard, withFileLease } from '@/services/rental/cache';
 import type { LocalFile } from '@/services/storageApi';
 import { getUserProfileApi } from '@/services/userApi';
 import type { UserProfileResponse } from '@/types/api';
@@ -344,19 +345,28 @@ export default function MessagesScreen({
         avatarUrl: profile?.avatarUrl ?? undefined,
       };
       const attachments: ChatAttachment[] = [];
-      for (const file of draft.attachments) {
-        const uploaded = file.uploaded ?? (await uploadChatAttachment(conversationId, file));
-        attachments.push(uploaded);
-        if (!file.uploaded) {
-          updateDraft(conversationId, (current) => ({
-            ...current,
-            attachments: current.attachments.map((item) =>
-              item.uri === file.uri ? { ...item, uploaded } : item
-            ),
-          }));
+      const checkSession = fileSessionGuard();
+      // The whole batch is leased: a sign-out must not delete a file still waiting its turn.
+      await withFileLease(
+        draft.attachments.map((file) => file.uri),
+        async () => {
+          for (const file of draft.attachments) {
+            checkSession();
+            const uploaded = file.uploaded ?? (await uploadChatAttachment(conversationId, file));
+            attachments.push(uploaded);
+            if (!file.uploaded) {
+              updateDraft(conversationId, (current) => ({
+                ...current,
+                attachments: current.attachments.map((item) =>
+                  item.uri === file.uri ? { ...item, uploaded } : item
+                ),
+              }));
+            }
+          }
         }
-      }
+      );
 
+      checkSession();
       let message: ChatMessage | null;
       if (isChatSocketConnected()) {
         const { ok, ack } = await emitChatWithAck(
@@ -374,6 +384,7 @@ export default function MessagesScreen({
       } else {
         message = await sendMessage(conversationId, content, listing, senderProfile, attachments);
       }
+      checkSession();
       if (!message || message.conversationId !== conversationId)
         throw new Error('Chưa xác nhận được tin nhắn. Vui lòng thử lại.');
       if (listing) onPendingListingConsumed?.();

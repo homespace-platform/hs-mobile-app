@@ -15,11 +15,14 @@ export default function Dropdown({
   value,
   onChange,
   accessibilityLabel = 'Chọn',
+  disabled = false,
 }: {
   options: RentOption[];
   value: string;
   onChange: (id: string) => void;
   accessibilityLabel?: string;
+  /** The menu cannot be opened (web disabled <select>). */
+  disabled?: boolean;
 }) {
   const button = useRef<View>(null);
   const { width: screenWidth } = useWindowDimensions();
@@ -40,10 +43,11 @@ export default function Dropdown({
       <Pressable
         ref={button}
         onPress={open}
+        disabled={disabled}
         accessibilityRole="button"
         accessibilityLabel={`${accessibilityLabel}: ${selected?.label ?? ''}`}
-        accessibilityState={{ expanded: anchor !== null }}
-        className="min-h-11 flex-1 flex-row items-center rounded-xl border border-border bg-surface px-3">
+        accessibilityState={{ expanded: anchor !== null, disabled }}
+        className={`min-h-11 flex-1 flex-row items-center rounded-xl border border-border bg-surface px-3 ${disabled ? 'opacity-50' : ''}`}>
         <Text numberOfLines={1} className="flex-1 text-sm font-semibold text-foreground">
           {selected?.label}
         </Text>

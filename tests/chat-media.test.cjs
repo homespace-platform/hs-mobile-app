@@ -55,12 +55,24 @@ test('chat checks the local byte count, completes the PUT, and resolves each ID 
           },
         },
         '@/services/storageApi': { getStorageViewUrl: async (id) => `legacy-${id}` },
+        '@/services/rental/cache': {
+          fileSessionGuard: () => () => {},
+          withFileLease: (_uris, run) => run(),
+        },
       }[name];
     },
   });
 
-  for (const [fileName, format] of [['test.PDF', 'pdf'], ['test.docx', 'docx'], ['test.doc', 'doc'], ['test.xlsx', undefined]]) {
-    assert.equal(exports.chatDocumentFormat({ fileName, contentType: 'application/octet-stream' }), format);
+  for (const [fileName, format] of [
+    ['test.PDF', 'pdf'],
+    ['test.docx', 'docx'],
+    ['test.doc', 'doc'],
+    ['test.xlsx', undefined],
+  ]) {
+    assert.equal(
+      exports.chatDocumentFormat({ fileName, contentType: 'application/octet-stream' }),
+      format
+    );
   }
 
   const local = await exports.prepareChatAttachment({

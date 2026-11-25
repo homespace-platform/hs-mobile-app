@@ -8,6 +8,7 @@ import type {
   StorageObjectResponse,
 } from '@/types/rental/storage.type';
 
+import { fileSessionGuard, withFileLease } from './cache';
 import axiosClient from './client';
 
 // Not storageApi.uploadFile: it has no GENERAL purpose, returns another shape and drops the
@@ -50,7 +51,13 @@ async function fileSize(uri: string): Promise<number> {
   return info.exists && !info.isDirectory ? info.size : 0;
 }
 
-async function uploadFile(file: LocalFile, size: number, target: Target): Promise<string> {
+async function uploadFile(
+  file: LocalFile,
+  size: number,
+  target: Target,
+  checkSession: () => void
+): Promise<string> {
+  checkSession();
   const contentType = resolveContentType(file);
   const upload = await axiosClient.post<ApiResponse<CreateStorageUploadResponse>>(
     '/api/v1/storage/uploads',
@@ -58,6 +65,7 @@ async function uploadFile(file: LocalFile, size: number, target: Target): Promis
   );
   const { storageId, uploadUrl } = upload.data.result;
 
+  checkSession();
   const s3Response = await FileSystem.uploadAsync(uploadUrl, file.uri, {
     httpMethod: 'PUT',
     headers: { 'Content-Type': contentType },
@@ -66,12 +74,16 @@ async function uploadFile(file: LocalFile, size: number, target: Target): Promis
     throw new Error(`Không thể tải tệp ${file.fileName} lên kho lưu trữ (${s3Response.status}).`);
   }
 
+  checkSession();
   await axiosClient.post<ApiResponse<unknown>>(`/api/v1/storage/${storageId}/complete`, {});
   return storageId;
 }
 
 async function upload(file: LocalFile, target: Target) {
-  return uploadFile(file, await fileSize(file.uri), target);
+  const checkSession = fileSessionGuard();
+  return withFileLease([file.uri], async () =>
+    uploadFile(file, await fileSize(file.uri), target, checkSession)
+  );
 }
 
 async function uploadEvidence(
@@ -80,14 +92,22 @@ async function uploadEvidence(
   referenceId: string,
   invalid = EVIDENCE_ERROR
 ) {
-  const size = await fileSize(file.uri);
-  if (!EVIDENCE_TYPES.includes(resolveContentType(file)) || size <= 0 || size > 15 * 1024 * 1024)
-    throw new Error(invalid);
-  return uploadFile(file, size, {
-    purpose: 'GENERAL',
-    visibility: 'PRIVATE',
-    referenceType,
-    referenceId,
+  const checkSession = fileSessionGuard();
+  return withFileLease([file.uri], async () => {
+    const size = await fileSize(file.uri);
+    if (!EVIDENCE_TYPES.includes(resolveContentType(file)) || size <= 0 || size > 15 * 1024 * 1024)
+      throw new Error(invalid);
+    return uploadFile(
+      file,
+      size,
+      {
+        purpose: 'GENERAL',
+        visibility: 'PRIVATE',
+        referenceType,
+        referenceId,
+      },
+      checkSession
+    );
   });
 }
 

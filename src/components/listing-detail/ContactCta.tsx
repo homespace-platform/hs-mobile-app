@@ -4,20 +4,21 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { useDialog } from '@/components/AppDialog';
 import { checkKyc } from '@/components/appointment/booking/booking-flow';
 import Icon from '@/components/Icon';
+import {
+  ctaState,
+  RENTAL_HOLD_DURATION_LABEL,
+  runRentalCta,
+} from '@/components/rental/requests/logic';
 import { startKyc } from '@/lib/kyc/client';
 import { PERMISSIONS } from '@/lib/permissions';
 import { useFeatureGate } from '@/lib/use-feature-gate';
-import type { ActiveRentalRequest } from '@/services/bookingApi';
 import { getUserProfileApi } from '@/services/userApi';
+import type { RentalRequestResponse } from '@/types/rental/rental-request.type';
 
-const SOON_TITLE = 'Tính năng đang phát triển';
-const SOON_MESSAGE = 'Tính năng này đang được phát triển, vui lòng thử lại sau.';
-
-// Visitor call-to-action block of the web overview card. "Yêu cầu thuê nhà" and the negotiation
-// button are not built on mobile yet, so they only open an "in development" dialog.
+// Visitor call-to-action block of the web overview card. As on web, the negotiation button only
+// opens a dialog.
 export default function ContactCta({
   status,
-  acceptsNewRequests,
   publicListing,
   isNegotiable,
   isOwner,
@@ -28,13 +29,13 @@ export default function ContactCta({
   onOpenRequests,
   onOpenBookings,
   onBook,
+  onRequestRental,
 }: {
   status?: string;
-  acceptsNewRequests: boolean;
   publicListing: boolean;
   isNegotiable: boolean;
   isOwner: boolean;
-  rentalRequest: ActiveRentalRequest | null;
+  rentalRequest: RentalRequestResponse | null;
   hasActiveBooking: boolean;
   chatting: boolean;
   onChat: () => void;
@@ -42,13 +43,17 @@ export default function ContactCta({
   onOpenBookings: () => void;
   /** Called once the permission and KYC gates pass. */
   onBook: () => void;
+  /** Called once the owner, permission/profile and KYC gates pass. */
+  onRequestRental: () => void;
 }) {
   const showDialog = useDialog();
-  const soon = () => showDialog(SOON_TITLE, SOON_MESSAGE);
   const ownerNotice = (message: string) => showDialog('Thông báo', message);
   const bookingDisabled = !publicListing && !hasActiveBooking;
   const bookGate = useFeatureGate(PERMISSIONS.APPOINTMENT_BOOK);
+  const rentalGate = useFeatureGate(PERMISSIONS.RENTAL_REQUEST_CREATE);
+  const cta = ctaState(rentalRequest?.status, status);
   const [checkingKyc, setCheckingKyc] = useState(false);
+  const [checkingRental, setCheckingRental] = useState(false);
   const checking = useRef(false);
   const mounted = useRef(true);
   useEffect(() => {
@@ -67,6 +72,10 @@ export default function ContactCta({
     if (!mounted.current) return;
     setCheckingKyc(false);
     if (kyc === 'verified') return onBook();
+    explainKyc(kyc);
+  }
+
+  function explainKyc(kyc: 'unverified' | 'unavailable') {
     if (kyc === 'unavailable') {
       return showDialog(
         'Thông báo',
@@ -79,24 +88,49 @@ export default function ContactCta({
     ]);
   }
 
+  async function openRentalForm() {
+    if (checking.current) return;
+    checking.current = true;
+    const outcome = await runRentalCta({
+      isOwner,
+      guard: rentalGate.guard,
+      checkKyc: () => {
+        setCheckingRental(true);
+        return checkKyc(getUserProfileApi);
+      },
+    });
+    checking.current = false;
+    if (!mounted.current) return;
+    setCheckingRental(false);
+    if (outcome === 'owner')
+      return ownerNotice('Bạn là chủ bài đăng này, không thể tự gửi yêu cầu thuê.');
+    if (outcome === 'verified') return onRequestRental();
+    if (outcome !== 'locked') explainKyc(outcome);
+  }
+
   return (
     <View className="mt-5 gap-3 border-t border-border pt-5">
       <Text className="text-base font-bold text-foreground">Bạn quan tâm đến căn này?</Text>
 
-      {rentalRequest ? (
+      {cta === 'pending' || cta === 'accepted' ? (
         <View className="items-center gap-2">
           <Pressable
             onPress={onOpenRequests}
             accessibilityRole="button"
-            className={`min-h-12 w-full flex-row items-center justify-center gap-2 rounded-xl border px-4 py-3.5 ${rentalRequest.status === 'PENDING' ? 'border-warning bg-warning-soft' : 'border-success bg-success-soft'}`}>
+            accessibilityHint={
+              cta === 'pending'
+                ? 'Xem yêu cầu thuê đang chờ duyệt của bạn'
+                : `Yêu cầu thuê đã được duyệt và đang giữ chỗ trong ${RENTAL_HOLD_DURATION_LABEL}! Bấm để xem chi tiết`
+            }
+            className={`min-h-12 w-full flex-row items-center justify-center gap-2 rounded-xl border px-4 py-3.5 ${cta === 'pending' ? 'border-warning bg-warning-soft' : 'border-success bg-success-soft'}`}>
             <Icon
-              name={rentalRequest.status === 'PENDING' ? 'time-outline' : 'checkmark-circle'}
+              name={cta === 'pending' ? 'time-outline' : 'checkmark-circle'}
               size={18}
-              className={rentalRequest.status === 'PENDING' ? 'text-warning' : 'text-success'}
+              className={cta === 'pending' ? 'text-warning' : 'text-success'}
             />
             <Text
-              className={`text-sm font-bold ${rentalRequest.status === 'PENDING' ? 'text-warning' : 'text-success'}`}>
-              {rentalRequest.status === 'PENDING'
+              className={`shrink text-sm font-bold ${cta === 'pending' ? 'text-warning' : 'text-success'}`}>
+              {cta === 'pending'
                 ? 'Đã gửi yêu cầu thuê (Chờ duyệt)'
                 : 'Yêu cầu được duyệt (Đang giữ chỗ)'}
             </Text>
@@ -109,14 +143,17 @@ export default function ContactCta({
             <Icon name="open-outline" size={12} className="text-primary" />
           </Pressable>
         </View>
-      ) : status === 'RESERVED' ? (
+      ) : cta === 'reserved' ? (
         <View
+          accessible
+          accessibilityRole="button"
+          accessibilityHint={`Bất động sản này đang được giữ chỗ trong ${RENTAL_HOLD_DURATION_LABEL} cho một khách thuê khác`}
           accessibilityState={{ disabled: true }}
           className="min-h-12 w-full flex-row items-center justify-center gap-2 rounded-xl border border-border bg-muted px-4 py-3.5">
           <Icon name="shield-checkmark-outline" size={18} className="text-muted-foreground" />
           <Text className="text-sm font-bold text-muted-foreground">Đang giữ chỗ (Tạm khóa)</Text>
         </View>
-      ) : !acceptsNewRequests ? (
+      ) : cta === 'closed' ? (
         <View className="rounded-xl border border-border bg-muted p-3">
           <Text className="text-center text-sm font-medium text-muted-foreground">
             Tin hiện không nhận yêu cầu thuê mới
@@ -124,14 +161,16 @@ export default function ContactCta({
         </View>
       ) : (
         <Pressable
-          onPress={() =>
-            isOwner
-              ? ownerNotice('Bạn là chủ bài đăng này, không thể tự gửi yêu cầu thuê.')
-              : soon()
-          }
+          onPress={() => void openRentalForm()}
           accessibilityRole="button"
+          accessibilityHint={rentalGate.title ?? 'Gửi yêu cầu thuê nhà trực tiếp tới chủ nhà'}
+          accessibilityState={{ busy: checkingRental }}
           className="min-h-12 w-full flex-row items-center justify-center gap-2 rounded-xl bg-brand px-4 py-3.5">
-          <Icon name="home-outline" size={18} className="text-on-brand" />
+          {checkingRental ? (
+            <ActivityIndicator className="text-on-brand" />
+          ) : (
+            <Icon name="home-outline" size={18} className="text-on-brand" />
+          )}
           <Text className="text-sm font-bold text-on-brand">Yêu cầu thuê nhà</Text>
         </Pressable>
       )}

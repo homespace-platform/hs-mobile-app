@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 
 import axiosClient from '@/lib/axios-client';
 import type { ChatAttachment } from '@/services/chatApi';
+import { fileSessionGuard, withFileLease } from '@/services/rental/cache';
 import { getStorageViewUrl, type LocalFile } from '@/services/storageApi';
 import type { ApiResponse } from '@/types/api';
 
@@ -103,7 +104,17 @@ export async function prepareChatAttachment(
   return { ...file, contentType, sizeBytes };
 }
 
-export async function uploadChatAttachment(conversationId: string, file: LocalFile) {
+export function uploadChatAttachment(conversationId: string, file: LocalFile) {
+  const checkSession = fileSessionGuard();
+  return withFileLease([file.uri], () => sendChatAttachment(conversationId, file, checkSession));
+}
+
+async function sendChatAttachment(
+  conversationId: string,
+  file: LocalFile,
+  checkSession: () => void
+) {
+  checkSession();
   const path = mediaPath(conversationId);
   const upload = await axiosClient.post<ApiResponse<{ storageId: string; uploadUrl: string }>>(
     `${path}/uploads`,
@@ -111,16 +122,18 @@ export async function uploadChatAttachment(conversationId: string, file: LocalFi
   );
   const { storageId, uploadUrl } = upload.data.result;
   const headers = { 'Content-Type': file.contentType };
-  const response =
-    Platform.OS === 'web'
-      ? await fetch(uploadUrl, {
-          method: 'PUT',
-          headers,
-          body: await (await fetch(file.uri)).blob(),
-        })
-      : await FileSystem.uploadAsync(uploadUrl, file.uri, { httpMethod: 'PUT', headers });
+  checkSession();
+  let response: { status: number };
+  if (Platform.OS === 'web') {
+    const body = await (await fetch(file.uri)).blob();
+    checkSession();
+    response = await fetch(uploadUrl, { method: 'PUT', headers, body });
+  } else {
+    response = await FileSystem.uploadAsync(uploadUrl, file.uri, { httpMethod: 'PUT', headers });
+  }
   if (response.status < 200 || response.status >= 300)
     throw new Error('Không thể tải tệp lên kho lưu trữ.');
+  checkSession();
   const completed = await axiosClient.post<ApiResponse<ChatAttachment>>(
     `${path}/${encodeURIComponent(storageId)}/complete`,
     {}
