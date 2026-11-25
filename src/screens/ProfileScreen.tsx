@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import ProfileHeader from '@/components/profile/ProfileHeader';
 import ProfileInfoCard from '@/components/profile/ProfileInfoCard';
 import TabHeader from '@/components/TabHeader';
+import ProfileCompletionBanner from '@/components/ProfileCompletionBanner';
 import { useDialog } from '@/components/AppDialog';
 import { PolicyDialog } from '@/components/PolicyDialog';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
@@ -49,8 +50,13 @@ function MenuItem({
 
 export default function ProfileScreen({
   onSelectTab,
+  pendingSettings = null,
+  onSettingsOpened,
 }: {
   onSelectTab: (tab: MainTab) => void;
+  /** Settings section requested from another screen (profile-completion banner / 1010 dialog). */
+  pendingSettings?: SettingsSection | null;
+  onSettingsOpened?: () => void;
 }) {
   const { logout } = useAuth();
   const showDialog = useDialog();
@@ -58,7 +64,9 @@ export default function ProfileScreen({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // null = profile tab; otherwise the settings hub, optionally opened on one section.
-  const [settings, setSettings] = useState<{ section: SettingsSection | null } | null>(null);
+  const [settings, setSettings] = useState<{ section: SettingsSection | null } | null>(
+    pendingSettings ? { section: pendingSettings } : null
+  );
   const [reservationPolicy, setReservationPolicy] = useState<{
     version: string;
     text: string;
@@ -80,10 +88,17 @@ export default function ProfileScreen({
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (!pendingSettings) return;
+    setSettings({ section: pendingSettings });
+    onSettingsOpened?.();
+  }, [pendingSettings, onSettingsOpened]);
+
   const name = displayName(profile);
   if (settings)
     return (
       <SettingsScreen
+        key={settings.section ?? 'hub'}
         profile={profile}
         initialSection={settings.section}
         onBack={() => setSettings(null)}
@@ -107,6 +122,7 @@ export default function ProfileScreen({
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <TabHeader />
+      <ProfileCompletionBanner />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8">
         <View className="bg-brand px-5 pb-8 pt-3">
           <View className="flex-row items-center justify-between">

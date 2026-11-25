@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import './global.css';
@@ -22,6 +22,10 @@ import SearchScreen from '@/screens/SearchScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
 import ListingCollectionScreen from '@/screens/ListingCollectionScreen';
 import type { ManagementSection } from '@/services/managementApi';
+import InitialPasswordGate from '@/components/InitialPasswordGate';
+import { setOpenSettingsHandler } from '@/lib/profile-gate-signal';
+import type { ProfileGateSection } from '@/lib/profile-gate';
+import { useOnboardingSync } from '@/lib/use-onboarding';
 import { usePushEvents } from '@/lib/push/use-push-events';
 import { useRealtimeConnections } from '@/lib/realtime/connections';
 
@@ -46,6 +50,16 @@ function SignedInApp() {
   const [listingId, setListingId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversationDetail, setConversationDetail] = useState<ChatConversation | null>(null);
+  // Settings section requested from anywhere (banner, 1010 dialog); ProfileScreen opens it and clears it.
+  const [pendingSettings, setPendingSettings] = useState<ProfileGateSection | null>(null);
+  useEffect(() => {
+    setOpenSettingsHandler((section) => {
+      setPendingSettings(section);
+      setConversationId(null);
+      setScreen('profile');
+    });
+    return () => setOpenSettingsHandler(undefined);
+  }, []);
   const selectTab = (tab: MainTab) => {
     setConversationId(null);
     setScreen(tab);
@@ -169,7 +183,13 @@ function SignedInApp() {
   }
 
   if (screen === 'profile') {
-    return <ProfileScreen onSelectTab={selectTab} />;
+    return (
+      <ProfileScreen
+        onSelectTab={selectTab}
+        pendingSettings={pendingSettings}
+        onSettingsOpened={() => setPendingSettings(null)}
+      />
+    );
   }
 
   return (
@@ -186,6 +206,16 @@ function SignedInApp() {
   );
 }
 
+function SignedInRoot() {
+  useOnboardingSync();
+  return (
+    <>
+      <SignedInApp />
+      <InitialPasswordGate />
+    </>
+  );
+}
+
 function SignedOutApp() {
   return <LoginScreen />;
 }
@@ -197,7 +227,7 @@ function AuthGate() {
     return <LoadingScreen message="Đang khởi tạo phiên đăng nhập..." />;
   }
 
-  return status === 'signedIn' ? <SignedInApp /> : <SignedOutApp />;
+  return status === 'signedIn' ? <SignedInRoot /> : <SignedOutApp />;
 }
 
 export default function App() {

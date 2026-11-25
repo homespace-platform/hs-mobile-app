@@ -136,6 +136,15 @@ test('reason is offline when every URL fails and weak when responses are slow', 
   assert.deepEqual({ ...weak.state() }, { status: 'offline', reason: 'weak', goodStreak: 0 });
 });
 
+test('while confirming after an outage the reason switches from offline to weak', async () => {
+  const t = setup([FAIL, FAIL, GOOD, GOOD]);
+  await start(t);
+  await t.advance(2_000);
+  assert.equal(t.state().reason, 'offline');
+  await t.advance(2_000);
+  assert.deepEqual({ ...t.state() }, { status: 'offline', reason: 'weak', goodStreak: 1 });
+});
+
 test('unblocks only after 3 consecutive good laps 2s apart; a bad lap resets the streak', async () => {
   const t = setup([FAIL, FAIL, GOOD, GOOD, FAIL, GOOD, GOOD, GOOD]);
   const streaks = [];

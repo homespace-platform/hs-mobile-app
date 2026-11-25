@@ -4,6 +4,7 @@ import { isAxiosError } from 'axios';
 import { useDialog } from '@/components/AppDialog';
 import Icon from '@/components/Icon';
 import { Button, Field } from '@/components/Screen';
+import { refreshOnboarding } from '@/lib/onboarding-store';
 import { mapUrl } from '@/lib/profile-form';
 import { searchBranchAddress, type AddressSuggestion } from '@/services/branchApi';
 import { getLocationPlace, saveUserAddress } from '@/services/userApi';
@@ -125,6 +126,7 @@ export default function AddressEditor({
       setNote(saved.addressNote ?? '');
       setDirty(false);
       showDialog('Thành công', 'Đã lưu địa chỉ.', undefined, 'success');
+      void refreshOnboarding();
       await onSaved();
     } catch (e) {
       setError(failure(e, 'Không thể lưu địa chỉ. Vui lòng thử lại.'));

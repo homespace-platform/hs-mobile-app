@@ -27,6 +27,7 @@ import {
   type BankAccount,
   type BankAccountInput,
 } from '@/services/bankAccountApi';
+import { refreshOnboarding } from '@/lib/onboarding-store';
 
 // Full account number stays in memory only this long (same as web).
 const REVEAL_MS = 30000;
@@ -233,6 +234,7 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
         undefined,
         'success'
       );
+      void refreshOnboarding();
       await load(true);
     } catch (cause) {
       setFormError(apiError(cause));
@@ -247,6 +249,7 @@ export default function PaymentSettingsScreen({ onBack }: { onBack: () => void }
     try {
       await action();
       showDialog('Thành công', success, undefined, 'success');
+      void refreshOnboarding();
       await load(true);
     } catch (cause) {
       setNotice(apiError(cause));

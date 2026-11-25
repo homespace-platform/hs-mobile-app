@@ -19,6 +19,7 @@ import { useDialog } from '@/components/AppDialog';
 import { PolicyNotice } from '@/components/PolicyDialog';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import TabHeader from '@/components/TabHeader';
+import ProfileCompletionBanner from '@/components/ProfileCompletionBanner';
 import { Button, ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
 import BookingForm from '@/components/BookingForm';
 import AppointmentCalendar, { type CalendarState } from '@/components/AppointmentCalendar';
@@ -793,6 +794,7 @@ export default function ManagementScreen({
           </Text>
         </TabHeader>
       )}
+      {section ? null : <ProfileCompletionBanner />}
       <ScrollView
         contentContainerClassName="px-5 pb-8 pt-5"
         refreshControl={

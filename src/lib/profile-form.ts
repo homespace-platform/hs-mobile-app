@@ -1,4 +1,3 @@
-import { validDate } from '@/lib/form-validation';
 import type { ProfileUpdate } from '@/services/userApi';
 import type { UserProfileResponse } from '@/types/api';
 
@@ -16,11 +15,6 @@ export function profileToForm(profile: UserProfileResponse): ProfileUpdate {
     firstName: profile.firstName ?? '',
     lastName: profile.lastName ?? '',
     phone: profile.phone ?? null,
-    dob: profile.dob || null,
-    gender:
-      profile.gender === 'MALE' || profile.gender === 'FEMALE' || profile.gender === 'OTHER'
-        ? profile.gender
-        : null,
   };
 }
 
@@ -32,7 +26,6 @@ export function normalizeProfileForm(form: ProfileUpdate): ProfileUpdate {
     firstName: form.firstName.trim(),
     lastName: form.lastName.trim(),
     phone: form.phone?.trim() || null,
-    dob: form.dob?.trim() || null,
   };
 }
 
@@ -51,8 +44,6 @@ export function validateProfileForm(form: ProfileUpdate): ProfileErrors {
   else if (value.lastName.length > 50) errors.lastName = 'Họ không được quá 50 ký tự';
   if (value.phone && !VIETNAMESE_PHONE_REGEX.test(value.phone))
     errors.phone = 'Số điện thoại Việt Nam không đúng định dạng (ví dụ: 0353999798)';
-  // dob/gender exist only on mobile (not in the web form).
-  if (value.dob && !validDate(value.dob)) errors.dob = 'Ngày sinh phải đúng định dạng YYYY-MM-DD';
   return errors;
 }
 

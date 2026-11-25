@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import TabHeader from '@/components/TabHeader';
+import ProfileCompletionBanner from '@/components/ProfileCompletionBanner';
 import ListingCard from '@/components/ListingCard';
 import { ErrorNotice } from '@/components/Screen';
 import { useFavoriteListings } from '@/lib/use-favorite-listings';
@@ -356,6 +357,7 @@ export default function SearchScreen({
           Lọc theo nhu cầu để tìm nơi ở phù hợp
         </Text>
       </TabHeader>
+      <ProfileCompletionBanner />
       <ScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerClassName="px-5 pb-10 pt-4"

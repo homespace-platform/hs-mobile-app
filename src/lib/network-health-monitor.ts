@@ -63,7 +63,8 @@ export function createNetworkHealthMonitor(
       }
       const goodStreak = state.goodStreak + 1;
       if (goodStreak < GOOD_TO_UNBLOCK) {
-        publish({ ...state, goodStreak });
+        // Back in contact but still confirming: not "no connection" any more (same as the web monitor).
+        publish({ ...state, reason: 'weak', goodStreak });
         return;
       }
       publish({ status: 'online', reason: state.reason, goodStreak: 0 });

@@ -11,6 +11,7 @@
       "tsconfigPaths": true
     },
     "plugins": [
+      "@react-native-community/datetimepicker",
       [
         "expo-splash-screen",
         {

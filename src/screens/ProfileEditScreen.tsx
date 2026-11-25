@@ -21,11 +21,10 @@ import {
   validateProfileForm,
 } from '@/lib/profile-form';
 import { getUserProfileApi, updateUserAvatar, updateUserProfile } from '@/services/userApi';
+import { refreshOnboarding } from '@/lib/onboarding-store';
 import type { ProfileUpdate } from '@/services/userApi';
 import { getStorageViewUrl, listUserAvatars, uploadFile } from '@/services/storageApi';
 import type { UserProfileResponse } from '@/types/api';
-
-const GENDERS = { MALE: 'Nam', FEMALE: 'Nữ', OTHER: 'Khác' } as const;
 
 function ReadOnlyField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
@@ -91,6 +90,7 @@ export default function ProfileEditScreen({
     setError(null);
     try {
       await updateUserProfile(payload);
+      void refreshOnboarding();
       changed.current = true;
       setBaseline(payload);
       setForm(payload);
@@ -185,7 +185,7 @@ export default function ProfileEditScreen({
 
   const back = () => (changed.current ? onSaved() : onBack());
   const field = (
-    key: 'firstName' | 'lastName' | 'username' | 'phone' | 'email' | 'dob',
+    key: 'firstName' | 'lastName' | 'username' | 'phone' | 'email',
     label: string
   ) => (
     <View key={key}>
@@ -195,14 +195,13 @@ export default function ProfileEditScreen({
         onChangeText={(value) =>
           setForm((state) => ({
             ...state,
-            [key]: key === 'phone' || key === 'dob' ? value || null : value,
+            [key]: key === 'phone' ? value || null : value,
           }))
         }
         autoCapitalize={key === 'firstName' || key === 'lastName' ? 'words' : 'none'}
         autoCorrect={false}
         editable={!busy}
         keyboardType={key === 'phone' ? 'phone-pad' : key === 'email' ? 'email-address' : 'default'}
-        placeholder={key === 'dob' ? 'YYYY-MM-DD' : undefined}
       />
       {errors[key] ? (
         <Text accessibilityRole="alert" className="mt-1 text-xs font-medium text-danger">
@@ -293,21 +292,6 @@ export default function ProfileEditScreen({
           {field('username', 'Tên đăng nhập')}
           {field('phone', 'Số điện thoại')}
           {field('email', 'Email')}
-          {field('dob', 'Ngày sinh (YYYY-MM-DD)')}
-          <Text className="mt-4 text-sm font-semibold text-secondary">Giới tính</Text>
-          <View className="mt-2 flex-row gap-2">
-            {(Object.keys(GENDERS) as (keyof typeof GENDERS)[]).map((value) => (
-              <Pressable
-                key={value}
-                disabled={busy}
-                onPress={() => setForm((state) => ({ ...state, gender: value }))}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: form.gender === value }}
-                className={`min-h-12 flex-1 items-center justify-center rounded-xl border ${form.gender === value ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
-                <Text className="text-foreground">{GENDERS[value]}</Text>
-              </Pressable>
-            ))}
-          </View>
           <Button
             label={saving ? 'Đang cập nhật...' : 'Cập nhật thông tin'}
             onPress={() => void save()}

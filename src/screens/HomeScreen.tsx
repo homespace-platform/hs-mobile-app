@@ -3,6 +3,7 @@ import { RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import HomeAiPanel from '@/components/HomeAiPanel';
+import ProfileCompletionBanner from '@/components/ProfileCompletionBanner';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import FeaturedListings from '@/components/home/FeaturedListings';
 import HomeDrawer from '@/components/home/HomeDrawer';
@@ -143,6 +144,7 @@ export default function HomeScreen({
         onOpenNotifications={onOpenNotifications}
         onOpenMenu={() => setMenuOpen(true)}
       />
+      <ProfileCompletionBanner />
       <ScrollView
         keyboardShouldPersistTaps="handled"
         refreshControl={

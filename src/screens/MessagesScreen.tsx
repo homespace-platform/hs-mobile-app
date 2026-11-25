@@ -20,6 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import Avatar from '@/components/Avatar';
 import TabHeader from '@/components/TabHeader';
+import ProfileCompletionBanner from '@/components/ProfileCompletionBanner';
 import { useDialog } from '@/components/AppDialog';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import {
@@ -563,6 +564,7 @@ export default function MessagesScreen({
           />
         </View>
       </TabHeader>
+      <ProfileCompletionBanner />
 
       <ScrollView
         className="flex-1"

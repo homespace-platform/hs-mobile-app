@@ -16,6 +16,7 @@
     "test:auth": "node --test tests/registration.test.cjs",
     "test:api": "node --test tests/api.test.cjs",
     "test:push": "node --test tests/push-realtime.test.cjs",
+    "test:profile-gate": "node --test tests/profile-gate.test.cjs",
     "test:health": "node --test tests/backend-health.test.cjs",
     "test:network": "node --test tests/network-health.test.cjs",
     "run:android": "expo run:android --port 4000",
@@ -27,6 +28,7 @@
   },
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
+    "@react-native-community/datetimepicker": "8.4.4",
     "axios": "^1.19.0",
     "babel-preset-expo": "~54.0.10",
     "expo": "~54.0.37",

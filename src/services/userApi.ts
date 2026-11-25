@@ -40,8 +40,6 @@ export type ProfileUpdate = {
   firstName: string;
   lastName: string;
   phone: string | null;
-  dob: string | null;
-  gender: 'MALE' | 'FEMALE' | 'OTHER' | null;
 };
 export async function updateUserProfile(payload: ProfileUpdate) {
   await axiosClient.post('/api/v1/users/me/profile', payload);
