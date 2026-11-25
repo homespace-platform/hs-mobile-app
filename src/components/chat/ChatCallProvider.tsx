@@ -45,7 +45,7 @@ export function ChatCallProvider({ children }: { children: ReactNode }) {
     calls.setForeground(AppState.currentState === 'active');
     const subscription = AppState.addEventListener('change', (state) => {
       calls.setForeground(state === 'active');
-      if (state === 'background') calls.end();
+      // The call room handles active calls, including temporary pauses for system permissions.
     });
     return () => {
       subscription.remove();
@@ -54,7 +54,7 @@ export function ChatCallProvider({ children }: { children: ReactNode }) {
       calls.end();
     };
   }, [calls]);
-  // End the call before tearing down its signaling socket on background or sign-out.
+  // Subscribe to call signaling before starting the shared socket.
   useRealtimeConnections();
 
   const incoming = session?.phase === 'ringing' ? session : null;

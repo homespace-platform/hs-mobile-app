@@ -178,6 +178,18 @@ test('leaving the foreground cancels pending invites and ignores their late ACKs
   );
 });
 
+test('an Android permission prompt keeps the accepted call active', () => {
+  const { calls, signals, session } = setup();
+  calls.receive('chat:call:incoming', incoming);
+  calls.accept(incoming);
+
+  calls.setForeground(false);
+  calls.setForeground(true);
+
+  assert.equal(session().phase, 'active');
+  assert.equal(signals.length, 0);
+});
+
 test('sign-out ends the active room and a stale end callback cannot close a different call', () => {
   const { calls, signals, session } = setup();
   calls.receive('chat:call:incoming', incoming);

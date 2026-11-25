@@ -61,12 +61,18 @@ export default function ChatCallRoom({ call, participantName, onEnd }: ChatCallR
       // Load calling modules on demand so an older APK can still open chat.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { Camera } = require('expo-camera') as typeof import('expo-camera');
-      if (!(await Camera.requestMicrophonePermissionsAsync()).granted) {
+      const microphone = await Camera.getMicrophonePermissionsAsync();
+      if (closed) return;
+      if (!microphone.granted && !(await Camera.requestMicrophonePermissionsAsync()).granted) {
         throw new Error('Bạn cần cấp quyền micrô để gọi điện.');
       }
       if (closed) return;
-      if (video && !(await Camera.requestCameraPermissionsAsync()).granted) {
-        throw new Error('Bạn cần cấp quyền camera để gọi video.');
+      if (video) {
+        const camera = await Camera.getCameraPermissionsAsync();
+        if (closed) return;
+        if (!camera.granted && !(await Camera.requestCameraPermissionsAsync()).granted) {
+          throw new Error('Bạn cần cấp quyền camera để gọi video.');
+        }
       }
       if (closed) return;
 
