@@ -10,6 +10,7 @@ npm run start:tunnel
 
 ```
 npm run start:dev-client
+npm run start:dev-client:tunnel
 ```
 
 # Checks
@@ -54,9 +55,11 @@ tenant/landlord accounts before release.
 
 # Device testing
 
-For a fresh Windows checkout and Samsung Remote Test Lab, see the [step-by-step guide](docs/huong-dan-chay-mobile.md).
+For setup on Windows, Samsung Remote Test Lab, or an Android phone over an Expo tunnel, see the [step-by-step guide](docs/huong-dan-chay-mobile.md).
 
-Optional `EXPO_PUBLIC_WEB_BASE_URL` (public web origin) enables the profile "Sao chép liên kết" button (`/u/{username}`); without it the button is hidden.
+`EXPO_PUBLIC_WEB_BASE_URL` (public web origin) is **required for KYC** and also enables the profile "Sao chép liên kết" button (`/u/{username}`; hidden without it). Without it, "Xác minh danh tính" shows a configuration error and opens nothing.
+
+KYC runs on the web page `/kyc` (VNPT eKYC): the app opens `${EXPO_PUBLIC_WEB_BASE_URL}/kyc?client=app&state=<one-use state>` in a system browser session (`WebBrowser.openAuthSessionAsync`; switch to `openBrowserAsync` via `USE_AUTH_SESSION` in `src/lib/kyc/client.ts` if the camera fails in the iOS embedded browser) and returns through `homespace://kyc/result?state=...&status=...`. The `homespace` scheme is already in `app.json`, so no new native build is needed. `status` is only a hint: the app checks `state` (30 minutes, single use) and always re-reads `GET /api/v1/users/me/kyc`. Keycloak/web must allow the `homespace://` redirect where the web page requires it. Test with `npm run test:kyc`.
 
 For Android Studio's emulator with services on this computer, keep the
 `localhost` URLs in `.env` and set `EXPO_PUBLIC_ANDROID_API_HOST=10.0.2.2`.

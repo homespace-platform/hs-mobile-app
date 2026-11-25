@@ -3,7 +3,8 @@ import { AppState } from 'react-native';
 
 import { useDialog } from '@/components/AppDialog';
 import { createThrottle, onboardingStore, refreshOnboarding } from '@/lib/onboarding-store';
-import { firstGateSection } from '@/lib/profile-gate';
+import { startKyc } from '@/lib/kyc/client';
+import { gateAction } from '@/lib/profile-gate';
 import { openSettings, setProfileGateDeniedHandler } from '@/lib/profile-gate-signal';
 
 export const useOnboarding = () =>
@@ -31,12 +32,15 @@ export function useOnboardingSync() {
     setProfileGateDeniedHandler(({ message, missing }) => {
       void refreshOnboarding();
       if (!allowDialog()) return;
+      const action = gateAction(missing);
       showDialog('Cần hoàn thiện hồ sơ', message?.trim() || 'Vui lòng cập nhật đầy đủ hồ sơ.', [
         { text: 'Đóng', style: 'cancel' },
-        {
-          text: 'Cập nhật hồ sơ',
-          onPress: () => openSettings(firstGateSection(missing) ?? 'profile'),
-        },
+        action?.kind === 'kyc'
+          ? { text: 'Xác minh danh tính', onPress: () => void startKyc() }
+          : {
+              text: 'Cập nhật hồ sơ',
+              onPress: () => openSettings(action?.kind === 'settings' ? action.section : 'profile'),
+            },
       ]);
     });
     return () => setProfileGateDeniedHandler(undefined);

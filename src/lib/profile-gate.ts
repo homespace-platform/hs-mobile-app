@@ -1,4 +1,4 @@
-// Pure port of hs-web-app lib/profile-gate.ts (no React/RN). Mobile has no KYC screen, so KYC maps to no section.
+// Pure port of hs-web-app lib/profile-gate.ts (no React/RN). KYC has no settings section: it starts the web /kyc flow (gateAction).
 export type ProfileRequirement = 'PROFILE' | 'ADDRESS' | 'BANK_ACCOUNT' | 'KYC';
 /** Settings sections that can complete a requirement on mobile (a subset of SettingsSection). */
 export type ProfileGateSection = 'profile' | 'bank-accounts';
@@ -13,7 +13,7 @@ export const PROFILE_REQUIREMENTS: readonly {
   // The profile screen already contains the address block.
   { code: 'ADDRESS', label: 'Địa chỉ', section: 'profile' },
   { code: 'BANK_ACCOUNT', label: 'Tài khoản ngân hàng', section: 'bank-accounts' },
-  // KYC is switched off on mobile: wire its screen here (section id) when the in-app KYC flow exists.
+  // KYC runs on the web page /kyc; see gateAction.
   { code: 'KYC', label: 'Xác minh danh tính (KYC)', section: null },
 ];
 
@@ -68,6 +68,16 @@ export function firstGateSection(
   missing: readonly ProfileRequirement[]
 ): ProfileGateSection | null {
   return missingItems(missing).find((item) => item.section)?.section ?? null;
+}
+
+export type GateAction = { kind: 'settings'; section: ProfileGateSection } | { kind: 'kyc' };
+
+/** What to do for the first missing item: open its settings section, or start KYC. null = nothing to offer. */
+export function gateAction(missing: readonly ProfileRequirement[]): GateAction | null {
+  const first = missingItems(missing)[0];
+  if (!first) return null;
+  if (first.code === 'KYC') return { kind: 'kyc' };
+  return first.section ? { kind: 'settings', section: first.section } : null;
 }
 
 /** Backend 403 with ApiResponse code 1010 (profile incomplete); the server message is kept. */

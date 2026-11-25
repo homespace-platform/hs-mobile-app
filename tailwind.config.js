@@ -36,6 +36,7 @@ module.exports = {
         'success-soft',
         'warning',
         'warning-soft',
+        'news-legal',
         'preview-light',
         'preview-light-card',
         'preview-dark',

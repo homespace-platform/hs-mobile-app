@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as WebBrowser from 'expo-web-browser';
 import { Button, ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
 import { useDialog } from '@/components/AppDialog';
 import { PolicyNotice } from '@/components/PolicyDialog';
@@ -9,19 +8,17 @@ import { isAxiosError } from 'axios';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { validatePasswordChange } from '@/lib/password';
 import { apiError } from '@/lib/api-error';
-import {
-  createKycSession,
-  getKycStatus,
-  hasPassword,
-  savePassword,
-  type KycStatus,
-} from '@/services/userApi';
+import { hasPassword, savePassword } from '@/services/userApi';
+import { getKycStatus, type KycStatusResponse } from '@/services/kycApi';
+import { startKyc, subscribeKycFinished, useKycBusy } from '@/lib/kyc/client';
+import { KYC_STATUS_LABELS } from '@/lib/kyc/pure';
 
 export default function AccountSecurityScreen({ onBack }: { onBack: () => void }) {
   const showDialog = useDialog();
   const { logout } = useAuth();
   const [passwordExists, setPasswordExists] = useState<boolean | null>(null);
-  const [kyc, setKyc] = useState<KycStatus | null>(null);
+  const [kyc, setKyc] = useState<KycStatusResponse | null>(null);
+  const kycBusy = useKycBusy();
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -44,6 +41,8 @@ export default function AccountSecurityScreen({ onBack }: { onBack: () => void }
   useEffect(() => {
     void load();
   }, [load]);
+  // Outcome of a KYC attempt (also from a cold-start link): show the fresh status.
+  useEffect(() => subscribeKycFinished(() => void load()), [load]);
   async function update() {
     if (busy || passwordExists === null) return;
     const invalid = validatePasswordChange(oldPassword, newPassword, confirmation, passwordExists);
@@ -82,19 +81,6 @@ export default function AccountSecurityScreen({ onBack }: { onBack: () => void }
       setBusy(false);
     }
   }
-  async function verify() {
-    setBusy(true);
-    setError(null);
-    try {
-      const session = await createKycSession();
-      await WebBrowser.openBrowserAsync(session.url);
-      await load();
-    } catch (e) {
-      setError(apiError(e));
-    } finally {
-      setBusy(false);
-    }
-  }
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <ScreenHeader title="Bảo mật & định danh" onBack={onBack} />
@@ -107,7 +93,7 @@ export default function AccountSecurityScreen({ onBack }: { onBack: () => void }
         <View className="rounded-2xl border border-border bg-surface p-4">
           <Text className="text-lg font-bold text-foreground">Xác minh danh tính</Text>
           <Text className="mt-2 text-sm text-secondary">
-            Trạng thái: {kyc?.status || 'Đang tải...'}
+            Trạng thái: {kyc ? (KYC_STATUS_LABELS[kyc.status] ?? kyc.status) : 'Đang tải...'}
           </Text>
           {kyc?.rejectionReason ? (
             <Text className="mt-2 text-sm text-danger">{kyc.rejectionReason}</Text>
@@ -119,10 +105,19 @@ export default function AccountSecurityScreen({ onBack }: { onBack: () => void }
             summary="Cần xác minh danh tính để đặt lịch xem và gửi yêu cầu thuê."
             text="Cần xác minh danh tính để đặt lịch xem và gửi yêu cầu thuê. Trạng thái được lấy từ hệ thống định danh."
           />
-          {kyc && kyc.status !== 'VERIFIED' ? (
-            <Button label="Tiếp tục xác minh danh tính" onPress={verify} busy={busy} />
+          {kyc && kyc.status !== 'VERIFIED' && kyc.status !== 'REVIEW_REQUIRED' ? (
+            <Button
+              label={kyc.status === 'NOT_VERIFIED' ? 'Bắt đầu xác minh' : 'Thử lại xác minh'}
+              onPress={() => void startKyc()}
+              busy={kycBusy}
+              disabled={busy}
+            />
           ) : null}
-          <Button label="Kiểm tra trạng thái" onPress={load} disabled={busy || loading} />
+          <Button
+            label="Kiểm tra trạng thái"
+            onPress={load}
+            disabled={busy || loading || kycBusy}
+          />
         </View>
         {passwordExists !== null ? (
           <>

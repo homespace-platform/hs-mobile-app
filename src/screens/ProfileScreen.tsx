@@ -12,6 +12,7 @@ import { PolicyDialog } from '@/components/PolicyDialog';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { getUserProfileApi } from '@/services/userApi';
+import { startKyc, subscribeKycFinished, useKycBusy } from '@/lib/kyc/client';
 import type { UserProfileResponse } from '@/types/api';
 import SettingsScreen, { type SettingsSection } from '@/screens/SettingsScreen';
 import { apiError } from '@/lib/api-error';
@@ -59,6 +60,7 @@ export default function ProfileScreen({
   onSettingsOpened?: () => void;
 }) {
   const { logout } = useAuth();
+  const kycBusy = useKycBusy();
   const showDialog = useDialog();
   const [profile, setProfile] = useState<UserProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,6 +89,17 @@ export default function ProfileScreen({
   useEffect(() => {
     load();
   }, [load]);
+
+  // KYC outcome (also from a cold-start link): reload so the verified badge is current.
+  useEffect(
+    () =>
+      subscribeKycFinished(() => {
+        getUserProfileApi(true)
+          .then(setProfile)
+          .catch(() => undefined);
+      }),
+    []
+  );
 
   useEffect(() => {
     if (!pendingSettings) return;
@@ -147,6 +160,8 @@ export default function ProfileScreen({
               name={name}
               onEdit={() => setSettings({ section: 'profile' })}
               onShareLink={profileLink ? () => void shareLink() : undefined}
+              onVerify={() => void startKyc()}
+              verifying={kycBusy}
             />
           ) : null}
         </View>

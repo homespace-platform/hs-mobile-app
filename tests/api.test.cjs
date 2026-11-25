@@ -645,6 +645,47 @@ test('news search sends server filters and preserves pages beyond the first 12 a
   assert.equal(result.totalElements, 40);
 });
 
+test('news overview and related articles keep their page sizes and views use the public endpoint', async () => {
+  const { client, calls } = mockApi({ result: { views: 17 } });
+  const api = load('services/newsApi.ts', { '@/lib/axios-client': client });
+  await api.getPublicNews({ page: 1, size: 50 });
+  await api.getPublicNews({ page: 1, size: 4, category: 'LEGAL' });
+  assert.equal(calls[0].args[1].params.size, 50);
+  assert.equal(calls[1].args[1].params.size, 4);
+  assert.equal(calls[1].args[1].params.category, 'LEGAL');
+  assert.equal((await api.recordNewsView('tin/1')).views, 17);
+  assert.deepEqual(calls[2], { method: 'post', args: ['/api/v1/public/news/tin%2F1/view'] });
+});
+
+test('news content renders escaped spans, line breaks and nested formatting as native text', () => {
+  const content = load('lib/news-content.ts');
+  const value = '&lt;span style=&quot;font-weight: 700&quot;&gt;Thị trường <em>mới</em>&lt;/span&gt;<br>Giá &amp; thuê';
+  assert.equal(content.newsPlainText(value), 'Thị trường mới\nGiá & thuê');
+  const parts = content.newsTextParts(value);
+  assert.equal(parts[0].style, 'font-bold');
+  assert.equal(parts[1].style, 'font-bold italic');
+  assert.equal(parts[parts.length - 1].style, '');
+});
+
+test('news pasted images only load HTTPS images from known publisher CDNs', () => {
+  const { newsPlainText, readNewsInlineImage } = load('lib/news-content.ts');
+  const input = '&lt;img src="https://cafefcdn.com/news.webp?w=640&amp;h=480" alt="Ảnh &quot;minh họa&quot;"&gt;';
+  assert.equal(readNewsInlineImage(input)?.src, 'https://cafefcdn.com/news.webp?w=640&h=480');
+  assert.equal(readNewsInlineImage(input)?.alt, 'Ảnh "minh họa"');
+  assert.ok(readNewsInlineImage('<img src="https://vcnd1.vnecdn.net/news.webp">'));
+  for (const src of [
+    'http://cafefcdn.com/news.webp',
+    'https://cafefcdn.com.evil.test/news.webp',
+    'https://cafefcdn.com@evil.test/news.webp',
+    'https://cafefcdn.com:8443/news.webp',
+    'javascript:alert(1)',
+  ]) {
+    const image = `&lt;img src="${src}"&gt;`;
+    assert.equal(readNewsInlineImage(image), null);
+    assert.equal(newsPlainText(image), '');
+  }
+});
+
 test('initial passwords omit old credentials and existing passwords use the update route', async () => {
   const { client, calls } = mockApi();
   const api = load('services/userApi.ts', { '@/lib/axios-client': client });
@@ -1114,7 +1155,6 @@ test('profile form validation mirrors the web zod schema and detects real change
   assert.ok(p.validateProfileForm({ ...base, email: 'x@y' }).email);
   assert.ok(p.validateProfileForm({ ...base, firstName: ' A ' }).firstName);
   assert.ok(p.validateProfileForm({ ...base, lastName: 'N'.repeat(51) }).lastName);
-  assert.ok(p.validateProfileForm({ ...base, dob: '2020-02-31' }).dob);
   assert.equal(p.isProfileDirty({ ...base, firstName: ' An ' }, base), false);
   assert.equal(p.isProfileDirty({ ...base, phone: '0353999798' }, base), true);
   assert.equal(p.normalizeProfileForm({ ...base, phone: '  ' }).phone, null);

@@ -1,18 +1,19 @@
 import { Pressable, Text, View } from 'react-native';
 
 import Icon from '@/components/Icon';
-import { firstGateSection, missingItems } from '@/lib/profile-gate';
+import { useKycBusy, startKyc } from '@/lib/kyc/client';
+import { gateAction, missingItems } from '@/lib/profile-gate';
 import { openSettings } from '@/lib/profile-gate-signal';
 import { useOnboarding } from '@/lib/use-onboarding';
 
 // Counterpart of web ProfileCompletionBanner: shown under the header of the main tabs while the profile is incomplete.
 export default function ProfileCompletionBanner() {
   const { onboarding } = useOnboarding();
+  const kycBusy = useKycBusy();
   const items = missingItems(onboarding?.missing ?? []);
   if (!items.length) return null;
 
-  // null when nothing missing can be completed on mobile (only KYC for now): the button is hidden.
-  const section = firstGateSection(items.map((item) => item.code));
+  const action = gateAction(items.map((item) => item.code));
 
   return (
     <View
@@ -25,13 +26,16 @@ export default function ProfileCompletionBanner() {
           {items.map((item) => item.label).join(', ')}.
         </Text>
       </View>
-      {section ? (
+      {action ? (
         <Pressable
-          onPress={() => openSettings(section)}
+          onPress={() => (action.kind === 'kyc' ? void startKyc() : openSettings(action.section))}
+          disabled={action.kind === 'kyc' && kycBusy}
           accessibilityRole="button"
           hitSlop={10}
           className="mt-1 min-h-7 justify-center px-3">
-          <Text className="text-xs font-bold text-warning underline">Cập nhật thông tin</Text>
+          <Text className="text-xs font-bold text-warning underline">
+            {action.kind === 'kyc' ? 'Xác minh danh tính' : 'Cập nhật thông tin'}
+          </Text>
         </Pressable>
       ) : null}
     </View>

@@ -102,7 +102,7 @@ test('isProfileIncomplete needs 403 and code 1010', () => {
   assert.equal(gate.isProfileIncomplete(undefined), false);
 });
 
-test('target section: profile, address -> profile; bank -> bank-accounts; KYC -> none', () => {
+test('target section: profile, address -> profile; bank -> bank-accounts; KYC has no section', () => {
   const section = (code) => gate.PROFILE_REQUIREMENTS.find((item) => item.code === code).section;
   assert.equal(section('PROFILE'), 'profile');
   assert.equal(section('ADDRESS'), 'profile');
@@ -114,6 +114,24 @@ test('target section: profile, address -> profile; bank -> bank-accounts; KYC ->
   const response = { data: { result: { missing: ['x', 'BANK_ACCOUNT', 'KYC'] } } };
   assert.deepEqual(plain(gate.profileGateMissing(response)), ['BANK_ACCOUNT', 'KYC']);
   assert.deepEqual(plain(gate.profileGateMissing({ data: {} })), []);
+});
+
+test('gateAction: first missing item decides; KYC starts the web flow', () => {
+  assert.deepEqual(plain(gate.gateAction(['KYC'])), { kind: 'kyc' });
+  assert.deepEqual(plain(gate.gateAction(['KYC', 'BANK_ACCOUNT'])), {
+    kind: 'settings',
+    section: 'bank-accounts',
+  });
+  assert.deepEqual(plain(gate.gateAction(['ADDRESS', 'KYC'])), {
+    kind: 'settings',
+    section: 'profile',
+  });
+  assert.deepEqual(plain(gate.gateAction(['BANK_ACCOUNT'])), {
+    kind: 'settings',
+    section: 'bank-accounts',
+  });
+  assert.equal(gate.gateAction([]), null);
+  assert.equal(gate.gateAction(['bogus']), null);
 });
 
 test('store: loads, keeps old data on failure, serializes and re-runs after a concurrent refresh', async () => {

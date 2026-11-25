@@ -35,6 +35,7 @@
     --color-success-soft: 236 253 245;
     --color-warning: 146 64 14;
     --color-warning-soft: 255 251 235;
+    --color-news-legal: 126 34 206;
     /* Fixed mini-screens in Giao diện settings; identical in both modes on purpose. */
     --color-preview-light: 241 245 249;
     --color-preview-light-card: 255 255 255;
@@ -73,6 +74,7 @@
     --color-success-soft: 6 46 37;
     --color-warning: 252 211 77;
     --color-warning-soft: 69 26 3;
+    --color-news-legal: 126 34 206;
     --color-preview-light: 241 245 249;
     --color-preview-light-card: 255 255 255;
     --color-preview-dark: 15 23 42;

@@ -28,6 +28,7 @@ import type { ProfileGateSection } from '@/lib/profile-gate';
 import { useOnboardingSync } from '@/lib/use-onboarding';
 import { usePushEvents } from '@/lib/push/use-push-events';
 import { useRealtimeConnections } from '@/lib/realtime/connections';
+import { useKycDeepLink } from '@/lib/kyc/use-kyc-deep-link';
 
 function SignedInApp() {
   const [screen, setScreen] = useState<
@@ -70,6 +71,7 @@ function SignedInApp() {
   };
 
   useRealtimeConnections();
+  useKycDeepLink();
   // Push taps (also from a killed app): chat opens the Messages tab, everything else the notification center.
   usePushEvents((route) =>
     route === 'messages' ? selectTab('messages') : setScreen('notifications')

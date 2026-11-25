@@ -1,6 +1,6 @@
-# Chạy HomeSpace Mobile trên Windows và Samsung Remote Test Lab
+# Chạy HomeSpace Mobile từ Windows
 
-Hướng dẫn này chạy bản Development Build từ máy Windows trên Samsung Remote Test Lab. Cấu hình kết nối được cấp riêng.
+Hướng dẫn này chạy bản Development Build từ Windows trên Samsung Remote Test Lab hoặc điện thoại Android cá nhân. Cấu hình kết nối được cấp riêng.
 
 ## Tóm tắt: setup máy mới
 
@@ -8,7 +8,7 @@ Hướng dẫn này chạy bản Development Build từ máy Windows trên Samsu
 2. `git clone` rồi `npm ci` (mục 2).
 3. Thêm `.env` và `google-services.json` vào thư mục gốc `hs-mobile-app` (mục 2b). Hai file này không có trong git.
 4. `npx expo prebuild --platform android --clean --no-install`, rồi `.\gradlew.bat :app:assembleDebug ...` (mục 3).
-5. Cài APK, chạy Metro (mục 4 và 5).
+5. Cài APK và chạy Metro theo Option 1 (Samsung) hoặc Option 2 (điện thoại thật).
 6. Thử thông báo đẩy (mục 6).
 
 ## 1. Chuẩn bị máy mới
@@ -83,14 +83,16 @@ Test-Path android\app\google-services.json   # phải ra True
 
 Sau khi thấy `BUILD SUCCESSFUL`, lấy APK tại `android/app/build/outputs/apk/debug/app-debug.apk`.
 
-## 4. Kết nối Samsung và cài APK
+## Option 1 – Samsung Remote Test Lab
+
+### 4. Kết nối Samsung và cài APK
 
 Mở phiên Samsung Remote Test Lab, chạy `rdb.exe` ở một cửa sổ riêng, rồi bật **Remote Debug Bridge** trong phiên Samsung. Giữ cửa sổ RDB mở. Lấy số cổng từ dòng `RDB server listening on port:`. [Hướng dẫn RDB của Samsung](https://developer.samsung.com/remote-test-lab/blog/en/2022/07/13/connect-to-devices-on-remote-test-lab-using-rdb-in-android-studio)
 
-Trong PowerShell đang ở repo, đổi `localhost:30193` trong lệnh bên dưới thành cổng thực tế của phiên (dòng `RDB server listening on port:`). Khi `adb devices -l` báo `device`, cài APK nếu phiên này chưa có HomeSpace.
+Trong PowerShell đang ở repo, đổi cổng `35910` trong lệnh bên dưới thành cổng thực tế của phiên (dòng `RDB server listening on port:`). Khi `adb devices -l` báo `device`, cài APK nếu phiên này chưa có HomeSpace.
 
 ```powershell
-$serial = "localhost:35910"
+$serial = "localhost:56275"
 adb disconnect $serial
 adb connect $serial
 adb -s $serial shell echo OK
@@ -99,13 +101,33 @@ adb -s $serial install -r .\android\app\build\outputs\apk\debug\app-debug.apk
 adb -s $serial reverse tcp:4002 tcp:4002
 ```
 
-## 5. Mở HomeSpace
+### 5. Mở HomeSpace
 
 ```powershell
 npx expo start --dev-client --localhost --port 4002
 ```
 
 Khi Metro báo **Using development build**, bấm **a**. Giữ Metro và RDB mở trong lúc test.
+
+## Option 2 – Điện thoại Android thật qua Expo tunnel
+
+1. Nếu đang chạy Option 1, bấm **Ctrl+C** trong terminal Metro rồi dừng RDB.
+2. Nếu điện thoại chưa có APK dev HomeSpace hoặc APK cũ hơn bản native hiện tại, bật **USB debugging**, cắm USB, chấp nhận hộp thoại cấp quyền và chạy trong thư mục `hs-mobile-app`. Dùng APK đã có từ mục 3.
+
+   ```powershell
+   adb -d install -r .\android\app\build\outputs\apk\debug\app-debug.apk
+   ```
+
+3. Nếu máy chưa có ngrok cho Expo, cài một lần rồi mở tunnel. [Tài liệu Expo CLI](https://docs.expo.dev/more/expo-cli/#tunneling)
+
+   ```powershell
+   npm install --global @expo/ngrok
+   npm run start:dev-client:tunnel
+   ```
+
+4. Chờ Metro báo **Tunnel ready** và hiển thị mã QR. Quét QR bằng camera điện thoại để mở HomeSpace Development Build. Có thể rút USB sau khi cài APK. Giữ terminal mở trong lúc test và bấm **Ctrl+C** để đóng tunnel khi xong. [Hướng dẫn Expo Development Build](https://docs.expo.dev/develop/development-builds/use-development-builds/)
+
+Tunnel chuyển tiếp Metro. Điện thoại vẫn phải truy cập được Gateway và Keycloak để dùng API và đăng nhập.
 
 ## 6. Thử thông báo đẩy khi tắt app
 
@@ -120,7 +142,7 @@ Giới hạn của Android: bấm **Force stop** trong cài đặt app sẽ ch�
 
 | Nếu gặp                                                      | Cách xử lý                                                                                                                                                                                                                                |
 | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `No development build (com.homespace.mobile)`                | Cài APK vào đúng thiết bị ở bước 4, chờ `Success`, rồi bấm **a** lại.                                                                                                                                                                     |
+| `No development build (com.homespace.mobile)`                | Cài APK vào đúng thiết bị theo Option 1 hoặc Option 2, chờ `Success`, rồi mở lại app theo option đang dùng. |
 | Thẻ thông báo không báo đăng ký, hoặc không có thông báo đẩy | Kiểm tra APK được build **sau khi** có `google-services.json`, đã bấm **Cho phép** quyền thông báo, backend chạy bản mới. Nếu vẫn không được, gửi log notification-service và `status`, `errorCode` trong bảng `notification_deliveries`. |
 | Chuông và chat không cập nhật ngay khi đang mở app           | Kiểm tra `EXPO_PUBLIC_REALTIME_ORIGIN` trong `.env`, origin đó có trong `NOTIFICATION_REALTIME_ORIGINS` của server, rồi chạy lại Metro với `-c`.                                                                                          |
 | `adb devices -l` báo `offline`                               | Kiểm tra cổng RDB hiện tại, chạy `adb disconnect $serial` rồi `adb connect $serial`, sau đó chuyển tiếp lại cổng `4002`.                                                                                                                  |

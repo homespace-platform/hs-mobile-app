@@ -14,7 +14,7 @@ import type { UserProfileResponse } from '@/types/api';
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
 // Same five sections, labels and order as the web settings menu (components/settings/settings-nav.ts).
-// KYC is intentionally absent: it is switched off for now.
+// KYC is not a section: it opens the web /kyc page (Account & security card, profile badge, banner).
 export const SETTINGS_SECTIONS: { id: SettingsSection; label: string; icon: IconName }[] = [
   { id: 'profile', label: 'Thông tin cá nhân', icon: 'person-outline' },
   { id: 'account-security', label: 'Tài khoản và bảo mật', icon: 'shield-outline' },

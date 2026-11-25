@@ -8,15 +8,32 @@ import type { UserProfileResponse } from '@/types/api';
 function Chip({
   icon,
   text,
+  onPress,
+  disabled,
 }: {
-  icon: 'calendar-outline' | 'location-outline' | 'shield-checkmark-outline';
+  icon: 'calendar-outline' | 'location-outline' | 'shield-checkmark-outline' | 'shield-outline';
   text: string;
+  onPress?: () => void;
+  disabled?: boolean;
 }) {
-  return (
-    <View className="flex-row items-center rounded-full bg-on-brand/20 px-3 py-1">
+  const content = (
+    <>
       <Ionicons name={icon} size={13} className="text-on-brand" />
       <Text className="ml-1 text-xs font-semibold text-on-brand">{text}</Text>
-    </View>
+    </>
+  );
+  const style = 'flex-row items-center rounded-full bg-on-brand/20 px-3 py-1';
+  return onPress ? (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      hitSlop={6}
+      className={`${style} ${disabled ? 'opacity-60' : ''}`}>
+      {content}
+    </Pressable>
+  ) : (
+    <View className={style}>{content}</View>
   );
 }
 
@@ -25,12 +42,17 @@ export default function ProfileHeader({
   name,
   onEdit,
   onShareLink,
+  onVerify,
+  verifying,
 }: {
   profile: UserProfileResponse;
   name: string;
   onEdit: () => void;
   /** Omitted when no public web URL is configured: the button is hidden. */
   onShareLink?: () => void;
+  /** Starts KYC from the "not verified" badge. */
+  onVerify?: () => void;
+  verifying?: boolean;
 }) {
   const joined = formatMonthYear(profile.createdAt);
   const area = profile.address?.city;
@@ -55,7 +77,14 @@ export default function ProfileHeader({
         {area ? <Chip icon="location-outline" text={area} /> : null}
         {profile.kycVerified ? (
           <Chip icon="shield-checkmark-outline" text="Đã xác minh danh tính" />
-        ) : null}
+        ) : (
+          <Chip
+            icon="shield-outline"
+            text="Chưa xác minh danh tính"
+            onPress={onVerify}
+            disabled={verifying}
+          />
+        )}
       </View>
       <View className="mt-5 flex-row flex-wrap justify-center gap-2">
         <Pressable

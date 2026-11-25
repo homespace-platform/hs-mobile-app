@@ -79,11 +79,3 @@ export async function savePassword(newPassword: string, oldPassword?: string) {
     { newPassword, ...(oldPassword === undefined ? {} : { oldPassword }) }
   );
 }
-export type KycStatus = { status: string; sessionUrl?: string; rejectionReason?: string };
-export async function getKycStatus() {
-  return (await axiosClient.get<ApiResponse<KycStatus>>('/api/v1/users/me/kyc')).data.result;
-}
-export async function createKycSession() {
-  return (await axiosClient.post<ApiResponse<{ url: string }>>('/api/v1/users/me/kyc/session')).data
-    .result;
-}
