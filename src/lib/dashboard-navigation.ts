@@ -7,7 +7,6 @@ export type ManagementRole = 'landlord' | 'tenant';
 export type ManagementDestination =
   | ManagementSection
   | 'landlord-analytics'
-  | 'landlord-customers'
   | 'landlord-membership';
 
 type ManagementNavItem = {
@@ -18,7 +17,6 @@ type ManagementNavItem = {
 
 export const MANAGEMENT_TITLES: Record<ManagementDestination, string> = {
   'landlord-analytics': 'Phân tích & Báo cáo',
-  'landlord-customers': 'Khách hàng',
   'landlord-properties': 'Tin đăng',
   'landlord-membership': 'Gói hội viên & Lượt đăng',
   'landlord-branches': 'Chi nhánh / Tòa nhà',
@@ -54,7 +52,6 @@ export const MANAGEMENT_NAVIGATION: Record<
     {
       title: 'QUẢN LÝ',
       items: [
-        navItem('landlord-customers', 'people-outline'),
         navItem('landlord-properties', 'document-text-outline'),
         navItem('landlord-membership', 'ribbon-outline'),
         navItem('landlord-branches', 'business-outline'),
