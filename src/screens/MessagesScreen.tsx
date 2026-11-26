@@ -112,20 +112,28 @@ type ComposerDraft = {
 
 const EMPTY_DRAFT: ComposerDraft = { text: '', attachments: [] };
 
-function ListingCard({ listing, mine }: { listing: RelatedListing; mine: boolean }) {
+function ListingCard({ listing, mine, onOpen }: { listing: RelatedListing; mine: boolean; onOpen: () => void }) {
   return (
     <View
-      className={`mt-1 w-64 max-w-full flex-row rounded-2xl border border-border bg-surface p-2 ${mine ? 'self-end' : 'self-start'}`}>
+      className={`mt-1 w-64 max-w-full flex-row items-center rounded-2xl border border-border bg-surface p-2 ${mine ? 'self-end' : 'self-start'}`}>
       <Image
         source={{ uri: listingImage(listing.image) }}
         className="h-14 w-16 rounded-xl bg-muted"
       />
-      <View className="ml-3 flex-1">
+      <View className="ml-3 min-w-0 flex-1">
         <Text className="text-xs font-semibold text-foreground" numberOfLines={2}>
           {listing.title}
         </Text>
         <Text className="mt-1 text-xs font-bold text-primary">{listing.price}</Text>
       </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Xem tin đăng ${listing.title}`}
+        onPress={onOpen}
+        className="ml-2 min-h-11 min-w-11 shrink-0 flex-row items-center justify-center gap-1 rounded-lg bg-primary/10 px-2 active:opacity-70">
+        <Text className="text-xs font-semibold text-primary">Xem</Text>
+        <Ionicons name="open-outline" size={13} className="text-primary" />
+      </Pressable>
     </View>
   );
 }
@@ -136,12 +144,14 @@ export default function MessagesScreen({
   onPendingListingConsumed,
   onSelectTab,
   onOpenConversationDetails,
+  onOpenListing,
 }: {
   initialConversationId?: string | null;
   pendingListing?: RelatedListing | null;
   onPendingListingConsumed?: () => void;
   onSelectTab: (tab: MainTab) => void;
   onOpenConversationDetails: (conversation: ChatConversation) => void;
+  onOpenListing: (listingId: string, conversationId: string) => void;
 }) {
   const showDialog = useDialog();
   const { session, startCall } = useChatCalls();
@@ -640,6 +650,7 @@ export default function MessagesScreen({
             ) : messages.length ? (
               messages.map((message) => {
                 const mine = message.senderId === profile?.id;
+                const listing = message.listing;
                 const caption = chatMessageCaption(message);
                 const call = readChatCallHistory(message.call);
                 const callback = call?.mode === 'video' ? CALL_OPTIONS[1] : CALL_OPTIONS[0];
@@ -699,7 +710,13 @@ export default function MessagesScreen({
                         ) : null}
                       </View>
                     )}
-                    {message.listing ? <ListingCard listing={message.listing} mine={mine} /> : null}
+                    {listing ? (
+                      <ListingCard
+                        listing={listing}
+                        mine={mine}
+                        onOpen={() => onOpenListing(listing.id, selected.id)}
+                      />
+                    ) : null}
                     <Text className="mt-1 px-1 text-[10px] text-subtle">
                       {formatTime(message.createdAt)}
                     </Text>

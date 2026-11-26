@@ -187,6 +187,10 @@ function SignedInApp() {
         pendingListing={pendingListing}
         onPendingListingConsumed={() => setPendingListing(null)}
         onSelectTab={selectTab}
+        onOpenListing={(id, fromConversationId) => {
+          setConversationId(fromConversationId);
+          openListing(id);
+        }}
         onOpenConversationDetails={(conversation) => {
           setConversationId(conversation.id);
           setConversationDetail(conversation);
