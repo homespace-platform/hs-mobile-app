@@ -32,13 +32,19 @@ export default function ManagementDashboardScreen({
   role,
   onSelectRole,
   onSelectTab,
-  onOpenAppointments,
+  onOpenSection,
   onOpenRental,
 }: {
   role: ManagementRole;
   onSelectRole: (role: ManagementRole) => void;
   onSelectTab: (tab: MainTab) => void;
-  onOpenAppointments: (section: 'tenant-appointments' | 'landlord-appointments') => void;
+  onOpenSection: (
+    section:
+      | 'tenant-appointments'
+      | 'landlord-appointments'
+      | 'landlord-properties'
+      | 'landlord-membership'
+  ) => void;
   onOpenRental: (route: RentalRoute) => void;
 }) {
   const { width } = useWindowDimensions();
@@ -61,12 +67,17 @@ export default function ManagementDashboardScreen({
     };
   }, []);
 
-  // Appointments and the rental flow have screens; the rest stay on the title-only placeholder.
+  // Listings, membership, appointments and the rental flow have screens; the rest stay title-only.
   function openDestination(next: ManagementDestination) {
     const rentalRoute = rentalRouteForDestination(next);
     if (rentalRoute) onOpenRental(rentalRoute);
-    else if (next === 'tenant-appointments' || next === 'landlord-appointments')
-      onOpenAppointments(next);
+    else if (
+      next === 'tenant-appointments' ||
+      next === 'landlord-appointments' ||
+      next === 'landlord-properties' ||
+      next === 'landlord-membership'
+    )
+      onOpenSection(next);
     else setDestination(next);
   }
 

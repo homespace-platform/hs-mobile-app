@@ -98,28 +98,6 @@ test('a delayed authenticated response or 401 cannot run in the next login sessi
   assert.equal(replays.length, 1);
 });
 
-test('own listings call their real endpoint and preserve pagination', async () => {
-  const { client, calls } = mockApi({ result: [], hasMore: true, totalElements: 30 });
-  const api = load('services/managementApi.ts', { '@/lib/axios-client': client });
-  const result = await api.getManagementPage(2);
-  assert.equal(calls[0].args[0], '/api/v1/listings/me');
-  assert.equal(calls[0].args[1].params.page, 2);
-  assert.equal(result.hasMore, true);
-  assert.equal(result.total, 30);
-});
-
-test('a listing status change sends only an action offered for that listing', async () => {
-  const { client, calls } = mockApi();
-  const api = load('services/managementApi.ts', { '@/lib/axios-client': client });
-  const entry = { id: 'listing/1', actions: [{ action: 'hide' }] };
-  await assert.rejects(api.performManagementAction(entry, 'publish'));
-  assert.equal(calls.length, 0);
-  await api.performManagementAction(entry, 'hide');
-  assert.equal(calls[0].method, 'patch');
-  assert.equal(calls[0].args[0], '/api/v1/listings/listing%2F1/status');
-  assert.equal(calls[0].args[1].status, 'HIDDEN');
-});
-
 test('management badges reuse fresh counts across tabs and reload for another account', async () => {
   let token = 'account-a';
   let userId = 'user-a';
@@ -194,101 +172,6 @@ test('province search accepts names typed without Vietnamese accents', () => {
   assert.equal(matchesProvince('Thành phố Đà Nẵng', 'DA NANG'), true);
   assert.equal(matchesProvince('Tỉnh Bình Dương', 'binh duong'), true);
   assert.equal(matchesProvince('Tỉnh An Giang', 'da nang'), false);
-});
-
-test('listing draft has six steps and distinct required fields for each property type', () => {
-  const draft = load('lib/listing-draft.ts');
-  assert.equal(draft.LISTING_STEPS.length, 6);
-  assert.deepEqual(
-    Array.from(draft.LISTING_CATEGORIES, (item) => item.key),
-    ['apartment', 'house', 'room']
-  );
-  for (const category of draft.LISTING_CATEGORIES) {
-    const fields = draft.DETAIL_FIELDS[category.key];
-    assert.ok(fields.main.some((field) => field.required));
-    assert.ok(fields.more.length > 0);
-    assert.equal(
-      new Set([...fields.main, ...fields.more].map((field) => field.key)).size,
-      fields.main.length + fields.more.length
-    );
-  }
-  assert.ok(draft.DETAIL_FIELDS.apartment.main.some((field) => field.key === 'projectName'));
-  assert.ok(draft.DETAIL_FIELDS.house.main.some((field) => field.key === 'totalUsableAreaM2'));
-  assert.ok(draft.DETAIL_FIELDS.room.main.some((field) => field.key === 'roomCode'));
-});
-
-test('listing form maps each property type and required policies to the upsert payload', () => {
-  const { buildListingPayload } = load('lib/listing-create.ts', {
-    '@/lib/listing-draft': load('lib/listing-draft.ts'),
-  });
-  const base = {
-    category: 'apartment',
-    title: 'Căn hộ gần trường đại học',
-    branchId: '',
-    availableDate: '2099-12-31',
-    addressRefId: 'vm:address-1',
-    addressNote: 'Lối sau',
-    details: { projectName: 'Tòa A', areaM2: '45', floor: '3', furnishing: 'Bàn giao thô' },
-    amenities: ['WIFI'],
-    assets: [],
-    pricing: {
-      priceMonthly: '5000000',
-      priceUnit: 'VNĐ / tháng',
-      depositType: 'Không cọc',
-      minimumLeaseMonths: '6',
-      electricityType: 'Đã bao gồm',
-      waterType: 'Đã bao gồm',
-    },
-    customFees: [],
-    days: ['MONDAY'],
-    slots: ['MORNING'],
-    description: 'Căn hộ thoáng mát và gần trường đại học, có bảo vệ.',
-    policyValues: { PETS: 'NOT_ALLOWED' },
-    catalog: {
-      amenities: [{ code: 'WIFI', name: 'WiFi' }],
-      furnishings: [],
-      policies: [{ code: 'PETS', label: 'Vật nuôi', valueType: 'PERMISSION', required: true }],
-    },
-    media: [{ storageObjectId: 'image-1', mediaType: 'IMAGE' }],
-  };
-  const apartment = buildListingPayload(base, 'SUBMIT_FOR_REVIEW');
-  assert.equal(apartment.category, 'APARTMENT');
-  assert.equal(apartment.apartmentDetail.floorNumber, 3);
-  assert.equal(apartment.houseDetail, null);
-  assert.equal(apartment.addressSource.address.refId, 'vm:address-1');
-  assert.equal(apartment.media[0].cover, true);
-  assert.equal(apartment.policies[0].value, 'NOT_ALLOWED');
-  assert.equal(apartment.charges[0].billingMethod, 'INCLUDED');
-  const house = buildListingPayload(
-    {
-      ...base,
-      category: 'house',
-      details: { totalUsableAreaM2: '70', totalFloors: '2', furnishing: 'Bàn giao thô' },
-    },
-    'SAVE_DRAFT'
-  );
-  assert.equal(house.houseDetail.totalFloors, 2);
-  assert.equal(house.houseDetail.hasGarage, null);
-  const room = buildListingPayload(
-    {
-      ...base,
-      category: 'room',
-      details: {
-        areaM2: '24',
-        roomCode: 'P101',
-        maxOccupants: '2',
-        toiletType: 'Riêng',
-        furnishing: 'Bàn giao thô',
-      },
-    },
-    'SAVE_DRAFT'
-  );
-  assert.equal(room.roomDetail.roomCode, 'P101');
-  assert.equal(room.roomDetail.balconyType, null);
-  assert.throws(
-    () => buildListingPayload({ ...base, policyValues: {} }, 'SUBMIT_FOR_REVIEW'),
-    /Vật nuôi/
-  );
 });
 
 test('listing creation calls catalog and upsert endpoints', async () => {
@@ -678,7 +561,7 @@ test('chat call token preserves the web Agora channel and signed string account'
   }
 });
 
-test('membership card status follows the web rules and /membership/me failures degrade safely', async () => {
+test('/membership/me is normalized and missing fields degrade safely', async () => {
   const { client, calls } = mockApi({ result: { tier: 'pro', remainingUses: 7, expiresAt: null } });
   const api = load('services/membershipApi.ts', { '@/lib/axios-client': client });
   const me = await api.getMyMembership();
@@ -693,26 +576,6 @@ test('membership card status follows the web rules and /membership/me failures d
       unlimited: false,
     }
   );
-  const lib = load('lib/membership.ts', {});
-  const plan = (code) => lib.mergeMembershipPlans(null).find((item) => item.code === code);
-  const status = (code, view, unlimited = false) => lib.planCardStatus(plan(code), view, unlimited);
-  assert.equal(status('FREE', me).label, 'Gói khởi đầu mặc định');
-  assert.equal(status('FREE', null).label, 'Đang áp dụng (Còn 3 lượt)');
-  assert.equal(status('STARTER', me).label, 'Đang sử dụng gói cao hơn');
-  assert.deepEqual(
-    { ...status('PRO', me) },
-    {
-      current: true,
-      kind: 'info',
-      label: 'Đang kích hoạt (Có thể nâng cấp gói cao hơn)',
-    }
-  );
-  assert.equal(status('BUSINESS', { ...me, tier: 'BUSINESS' }).label, 'Đang kích hoạt');
-  assert.match(status('BUSINESS', me).label, /^Nâng cấp lên Business/);
-  assert.equal(status('STARTER', null).kind, 'info');
-  assert.equal(status('STARTER', { ...me, tier: 'FREE' }).label, 'Mua gói Starter');
-  assert.equal(status('PRO', { ...me, expiresAt: '2000-01-01T00:00:00Z' }).label, 'Mua gói Pro');
-  assert.equal(status('PRO', me, true).label, 'ADMIN: Đã có lượt không giới hạn');
 });
 
 test('membership checkout quotes, creates, checks and cancels through the authenticated API', async () => {
@@ -731,8 +594,8 @@ test('membership checkout quotes, creates, checks and cancels through the authen
   assert.equal(calls[3].args[0], `/api/v1/membership/orders/${id}/cancel`);
 });
 
-test('membership checkout submits only a matching signed Sandbox form', () => {
-  const { buildSandboxCheckout, isSandboxPaymentPage, isMembershipQuote } = load(
+test('membership checkout submits only a matching signed SePay form', () => {
+  const { buildSepayCheckout, isSepayPaymentPage, isMembershipQuote } = load(
     'lib/membership-checkout.ts',
     {}
   );
@@ -761,7 +624,7 @@ test('membership checkout submits only a matching signed Sandbox form', () => {
   assert.equal(isMembershipQuote({ ...quote, amountVnd: 0 }, 'STARTER'), false);
   assert.equal(isMembershipQuote(quote, 'PRO'), false);
 
-  const hosted = buildSandboxCheckout(checkout, 49000);
+  const hosted = buildSepayCheckout(checkout, 49000);
   const form = new URLSearchParams(hosted.source.body);
   assert.equal(hosted.source.method, 'POST');
   assert.equal(hosted.source.uri, checkout.paymentUrl);
@@ -782,25 +645,24 @@ test('membership checkout submits only a matching signed Sandbox form', () => {
       'signature',
     ]
   );
-  assert.equal(isSandboxPaymentPage(hosted.source.uri), true);
-  assert.equal(isSandboxPaymentPage(checkout.formFields.success_url), false);
-  assert.equal(isSandboxPaymentPage('https://pay-sandbox.sepay.vn.evil.example/'), false);
-  assert.throws(() => buildSandboxCheckout(checkout, 129000), /Số tiền đã thay đổi/);
-  assert.throws(() => buildSandboxCheckout({ ...checkout, provider: 'ETH' }, 49000), /Sandbox/);
+  assert.equal(isSepayPaymentPage(hosted.source.uri), true);
+  assert.equal(isSepayPaymentPage(checkout.formFields.success_url), false);
+  assert.equal(isSepayPaymentPage('https://pay-sandbox.sepay.vn.evil.example/'), false);
+  assert.throws(() => buildSepayCheckout(checkout, 129000), /Số tiền đã thay đổi/);
+  assert.throws(() => buildSepayCheckout({ ...checkout, provider: 'ETH' }, 49000), /SePay/);
+  const live = 'https://pay.sepay.vn/v1/checkout/init';
+  assert.equal(buildSepayCheckout({ ...checkout, paymentUrl: live }, 49000).source.uri, live);
   assert.throws(
     () =>
-      buildSandboxCheckout(
-        {
-          ...checkout,
-          paymentUrl: 'https://pay.sepay.vn/v1/checkout/init',
-        },
+      buildSepayCheckout(
+        { ...checkout, paymentUrl: 'https://pay.sepay.vn.evil.example/v1/checkout/init' },
         49000
       ),
-    /Sandbox/
+    /SePay/
   );
   assert.throws(
     () =>
-      buildSandboxCheckout(
+      buildSepayCheckout(
         {
           ...checkout,
           formFields: { ...checkout.formFields, order_amount: '129000' },
@@ -811,7 +673,7 @@ test('membership checkout submits only a matching signed Sandbox form', () => {
   );
   assert.throws(
     () =>
-      buildSandboxCheckout(
+      buildSepayCheckout(
         {
           ...checkout,
           formFields: {
@@ -1036,13 +898,22 @@ test('notification actionPath is validated and mapped only to existing mobile sc
     'landlord-payments'
   );
   for (const path of [
-    '/dashboard/membership/return?orderId=o',
+    '/dashboard/membership/other',
     '/settings/account-security',
     '/notifications',
     '/chat?conversationId=1',
     '/dashboard/contracts',
   ])
     assert.equal(target(path).kind, 'none', path);
+  const membership = { kind: 'management', section: 'landlord-membership' };
+  const orderId = 'ab'.repeat(16);
+  assert.deepEqual(target('/dashboard/membership'), membership);
+  assert.deepEqual(target(`/dashboard/membership/return?orderId=${orderId}`), {
+    ...membership,
+    orderId,
+  });
+  // A malformed order id opens the membership screen only.
+  assert.deepEqual(target('/dashboard/membership/return?orderId=o'), membership);
 });
 
 test('notification badges, dates and chat exclusion follow the web rules', () => {

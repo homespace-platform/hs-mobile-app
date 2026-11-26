@@ -333,7 +333,7 @@ export function getNotificationRecipientSideLabel(
 export type NotificationTarget =
   | { kind: 'listing'; id: string; own: boolean }
   // `query` is kept for viewing schedules only: it names the appointment to open.
-  | { kind: 'management'; section: ManagementSection; query?: string }
+  | { kind: 'management'; section: ManagementSection; query?: string; orderId?: string }
   // Contracts/payments/invoices: the path does not say if the user is tenant or landlord.
   | { kind: 'management-choice'; tenant: ManagementSection; landlord: ManagementSection }
   | { kind: 'news' }
@@ -371,6 +371,18 @@ export function notificationTarget(actionPath: unknown): NotificationTarget {
   if (second === 'properties' && third === 'view' && segments.length === 3) {
     const id = param('id');
     return UUID.test(id) ? { kind: 'listing', id, own: true } : NONE;
+  }
+  // The membership page and its payment result; only a well-formed order id opens an order.
+  if (
+    second === 'membership' &&
+    (segments.length === 2 || (segments.length === 3 && (third === 'return' || third === 'eth')))
+  ) {
+    const orderId = param('orderId');
+    return {
+      kind: 'management',
+      section: 'landlord-membership',
+      ...(/^[0-9a-f]{32}$/i.test(orderId) ? { orderId } : {}),
+    };
   }
   if (second === 'viewing-schedules' && (segments.length === 2 || third === 'my-bookings'))
     return {

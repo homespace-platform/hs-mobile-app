@@ -46,6 +46,10 @@ export type ListingDetail = {
   subtype: string;
   rentalMode: string;
   status: string;
+  /** Set while a change to this listing waits for admin review. */
+  pendingEditId?: string | null;
+  /** Owner only: why the last edit was refused. */
+  editRejectionReason?: string | null;
   availableFrom: string;
   areaM2: number;
   maxMotorbikeCount?: number | null;
@@ -92,6 +96,9 @@ export type ListingDetail = {
     unit?: string | null;
     includedInRent: boolean;
     customName?: string | null;
+    description?: string | null;
+    currency?: string | null;
+    sortOrder?: number;
   }[];
   address?: (VietmapAddress & { id?: string; listingId?: string }) | null;
   owner?: {
@@ -145,11 +152,4 @@ export async function getAccessibleListing(id: string) {
   return (
     await axiosClient.get<ApiResponse<ListingDetail>>(`/api/v1/listings/${encodeURIComponent(id)}`)
   ).data.result;
-}
-
-export async function getPublicListing(id: string) {
-  const response = await axiosClient.get<ApiResponse<ListingDetail>>(
-    `/api/v1/public/listings/${id}`
-  );
-  return response.data.result;
 }

@@ -8,6 +8,8 @@ import AppointmentsScreen from '@/components/appointment/manage/AppointmentsScre
 import type { MainTab } from '@/components/BottomTabBar';
 import ListingCard from '@/components/ListingCard';
 import { Button } from '@/components/Screen';
+import ListingStatusBanner from '@/components/listing-detail/ListingStatusBanner';
+import { useListingNotifications } from '@/components/listing-manage/useListingNotifications';
 import ContactCta from '@/components/listing-detail/ContactCta';
 import { rentalModalProps } from '@/components/rental/requests/logic';
 import RentalRequestModal from '@/components/rental/requests/RentalRequestModal';
@@ -27,7 +29,6 @@ import {
 import { createConversation, sendMessage, type RelatedListing } from '@/services/chatApi';
 import {
   getAccessibleListing,
-  getPublicListing,
   getPublicListings,
   listingImage,
   type ListingDetail,
@@ -36,8 +37,16 @@ import {
 import { getFavoriteIds, toggleFavorite, recordListingHistory } from '@/services/favoriteApi';
 import { getUserProfileApi } from '@/services/userApi';
 import ListingDraftScreen from '@/screens/ListingDraftScreen';
+import MembershipScreen from '@/components/membership/MembershipScreen';
 import { apiError } from '@/lib/api-error';
 import { isActiveBooking } from '@/lib/appointment';
+import {
+  canDuplicateListing,
+  canEditListing,
+  createApplyGate,
+  ownerDetailError,
+  visitorDetailError,
+} from '@/lib/listing-manage';
 import {
   formatPrice,
   getQuickMetrics,
@@ -64,7 +73,6 @@ export default function ListingDetailScreen({
   onSelectTab,
   onOpenListing,
   own = false,
-  accessible = false,
 }: {
   listingId: string;
   onBack: () => void;
@@ -73,9 +81,6 @@ export default function ListingDetailScreen({
   onSelectTab: (tab: MainTab) => void;
   onOpenListing: (listingId: string) => void;
   own?: boolean;
-  /** Opened from a rental record: read with the viewer's identity (the listing may not be public).
-   * Access only, never ownership. */
-  accessible?: boolean;
 }) {
   const [listing, setListing] = useState<ListingDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,7 +93,13 @@ export default function ListingDetailScreen({
   // From the session: a favorites or profile failure must not hide the visitor actions.
   const { userId } = useViewer();
   const [senderProfile, setSenderProfile] = useState<SenderProfile | undefined>();
-  const [editing, setEditing] = useState(false);
+  // Membership opened from the editor; Back returns to this listing.
+  const [membershipView, setMembershipView] = useState<{ addon: boolean } | null>(null);
+  // The editor shown over this screen: this listing, or a new one copied from it.
+  const [editor, setEditor] = useState<{ listingId?: string; duplicateFromId?: string } | null>(
+    null
+  );
+  const detailGate = useRef(createApplyGate());
   const [quickMessage, setQuickMessage] = useState('');
   const [rentalRequest, setRentalRequest] = useState<RentalRequestResponse | null>(null);
   const [rentalFormOpen, setRentalFormOpen] = useState(false);
@@ -111,7 +122,8 @@ export default function ListingDetailScreen({
 
   // Android Back = the header button. The request list and the editor have their own ScreenHeader;
   // modals take Back themselves.
-  const hasOwnHeader = viewingRequests || editing || appointmentsOpen;
+  const hasOwnHeader =
+    viewingRequests || Boolean(editor) || Boolean(membershipView) || appointmentsOpen;
   useEffect(() => {
     if (hasOwnHeader) return;
     const handler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -192,27 +204,44 @@ export default function ListingDetailScreen({
     }
   }
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const detail = await (own || accessible
-        ? getAccessibleListing(listingId)
-        : getPublicListing(listingId));
-      setListing(detail);
-      // As on web, only a publicly visible listing goes into the view history.
-      if (!own && (!accessible || ['PUBLISHED', 'RESERVED'].includes(detail.status)))
-        void recordListingHistory(listingId).catch(() => undefined);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Không tải được bài đăng');
-    } finally {
-      setLoading(false);
-    }
-  }, [listingId, own, accessible]);
+  // `silent`: a background refresh that keeps the shown data.
+  const load = useCallback(
+    async (silent = false) => {
+      const gate = detailGate.current;
+      const request = gate.next();
+      if (!silent) {
+        setLoading(true);
+        setError(null);
+      }
+      try {
+        // Every viewer here is signed in: as web, the server decides access (never ownership), so an
+        // owner or a related renter still opens a listing that is no longer public.
+        const detail = await getAccessibleListing(listingId);
+        if (!gate.claim(request)) return;
+        setListing(detail);
+        setError(null);
+        setLoading(false);
+        // As on web, only a publicly visible listing goes into the view history.
+        if (!own && ['PUBLISHED', 'RESERVED'].includes(detail.status))
+          void recordListingHistory(listingId).catch(() => undefined);
+      } catch (loadError) {
+        const status = (loadError as { response?: { status?: number } }).response?.status;
+        // A transient background failure keeps the last loaded data.
+        if (silent && status !== 403 && status !== 404) return;
+        if (!gate.claim(request)) return;
+        setLoading(false);
+        setError(own ? ownerDetailError(status) : visitorDetailError(status));
+      }
+    },
+    [listingId, own]
+  );
 
   useEffect(() => {
-    load();
+    detailGate.current.reset();
+    void load();
   }, [load]);
+
+  useListingNotifications(() => load(true), { listingId, enabled: own });
 
   useEffect(() => {
     let active = true;
@@ -269,7 +298,6 @@ export default function ListingDetailScreen({
       <ListingDetailScreen
         key={recordListingId}
         listingId={recordListingId}
-        accessible
         onBack={() => setRecordListingId(null)}
         onOpenListing={setRecordListingId}
         onSelectTab={onSelectTab}
@@ -293,15 +321,41 @@ export default function ListingDetailScreen({
       />
     );
 
-  if (editing)
+  if (membershipView)
     return (
-      <ListingDraftScreen
-        listingId={listingId}
-        onBack={() => setEditing(false)}
-        onSaved={() => {
-          setEditing(false);
+      <MembershipScreen
+        initialAddon={membershipView.addon}
+        onBack={() => {
+          setMembershipView(null);
           void load();
         }}
+        onManageListings={() => onOpenManagement('landlord-properties')}
+      />
+    );
+
+  if (editor)
+    return (
+      <ListingDraftScreen
+        key={`${editor.listingId}-${editor.duplicateFromId}`}
+        {...editor}
+        onBack={() => setEditor(null)}
+        onSaved={() => {
+          setEditor(null);
+          // A copy is a new listing: show the list, as web does.
+          if (editor.duplicateFromId) onOpenManagement('landlord-properties');
+          else void load();
+        }}
+        // The edited listing is the one shown here.
+        onViewListing={() => {
+          setEditor(null);
+          void load();
+        }}
+        onDuplicate={(id) => setEditor({ duplicateFromId: id })}
+        onOpenMembership={(addon) => {
+          setEditor(null);
+          setMembershipView({ addon: addon === true });
+        }}
+        onManageListings={() => onOpenManagement('landlord-properties')}
       />
     );
 
@@ -314,13 +368,22 @@ export default function ListingDetailScreen({
     );
   }
 
-  if (!listing || !property || error) {
+  // The owner view never shows another account's listing.
+  const notOwner = own && Boolean(userId && listing && listing.ownerId !== userId);
+
+  if (!listing || !property || error || notOwner) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-background px-6">
         <Text className="text-center text-base font-semibold text-foreground">
           Không thể mở bài đăng
         </Text>
-        <Pressable onPress={load} className="mt-4 rounded-xl bg-brand px-5 py-3">
+        <Text className="mt-2 text-center text-sm text-muted-foreground">
+          {notOwner ? ownerDetailError(403) : error}
+        </Text>
+        <Pressable
+          onPress={() => void load()}
+          accessibilityRole="button"
+          className="mt-4 rounded-xl bg-brand px-5 py-3">
           <Text className="font-semibold text-on-brand">Thử lại</Text>
         </Pressable>
         <Pressable onPress={onBack} className="mt-3 px-5 py-3">
@@ -342,10 +405,7 @@ export default function ListingDetailScreen({
   const status = String(property.status || '')
     .trim()
     .toUpperCase();
-  const canEdit =
-    ['APARTMENT', 'HOUSE', 'ROOM'].includes(listing.category) &&
-    status !== 'RENTED_EXTERNALLY' &&
-    status !== 'VIOLATION';
+  const canEdit = canEditListing(status, listing.category);
   const address = listing.address;
 
   // Same flow as web openPropertyChat: create/reuse the conversation, optionally send the quick
@@ -414,6 +474,8 @@ export default function ListingDetailScreen({
           onLayout={(event) => {
             bodyY.current = event.nativeEvent.layout.y;
           }}>
+          <ListingStatusBanner status={status} isOwner={isOwnerView} />
+
           <View
             onLayout={(event) => {
               contactY.current = event.nativeEvent.layout.y;
@@ -457,7 +519,12 @@ export default function ListingDetailScreen({
             <OwnListingCard
               landlord={property.landlord}
               canEdit={canEdit}
-              onEdit={() => setEditing(true)}
+              onEdit={() => setEditor({ listingId })}
+              onDuplicate={
+                canDuplicateListing(status, listing.category)
+                  ? () => setEditor({ duplicateFromId: listingId })
+                  : undefined
+              }
               onManage={() => onOpenManagement('landlord-properties')}
             />
           ) : showVisitorCta ? (

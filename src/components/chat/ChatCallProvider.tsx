@@ -17,7 +17,7 @@ import {
   subscribeChatEvents,
   useRealtimeConnections,
 } from '@/lib/realtime/connections';
-import { listConversations } from '@/services/chatApi';
+import { getChatParticipantProfile, listConversations } from '@/services/chatApi';
 
 const ChatCallContext = createContext<{
   session: ChatCallSession | null;
@@ -34,6 +34,8 @@ export function ChatCallProvider({ children }: { children: ReactNode }) {
       isConnected: isChatSocketConnected,
       newCallId: randomUUID,
       async lookupParticipantName(conversationId, callerId) {
+        const profile = await getChatParticipantProfile(callerId).catch(() => null);
+        if (profile?.participantName) return profile.participantName;
         const conversation = (await listConversations()).find(
           (item) => item.id === conversationId && item.participantId === callerId
         );

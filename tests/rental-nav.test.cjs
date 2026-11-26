@@ -489,8 +489,9 @@ test('non-rental notifications keep their previous target', () => {
     [`/chat?channel=direct&conversationId=${ID}`, none],
     ['/notifications', none],
     ['/settings/account-security', none],
-    ['/dashboard/membership', none],
-    [`/dashboard/membership/return?orderId=${ID}`, none],
+    ['/dashboard/membership', section('landlord-membership')],
+    // A UUID is not a membership order id (32 hex), so only the screen opens.
+    [`/dashboard/membership/return?orderId=${ID}`, section('landlord-membership')],
     ['/dashboard/viewing-schedules', section('landlord-appointments')],
     [
       `/dashboard/viewing-schedules/my-bookings?appointmentId=${ID}`,

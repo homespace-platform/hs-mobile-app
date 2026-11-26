@@ -5,19 +5,11 @@ import Avatar from '@/components/Avatar';
 import Ionicons from '@/components/Icon';
 import { useDialog } from '@/components/AppDialog';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { isUnlimitedMembership } from '@/lib/membership';
+import { getAddonBalanceLabel, getTierShortLabel, isUnlimitedMembership } from '@/lib/membership';
 import type { MembershipView } from '@/services/membershipApi';
 import type { UserProfileResponse } from '@/types/api';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
-
-const TIER_LABEL: Record<string, string> = {
-  FREE: 'Free',
-  STARTER: 'Starter',
-  PRO: 'Pro',
-  BUSINESS: 'Business',
-  ADMIN: 'ADMIN',
-};
 
 function Item({
   icon,
@@ -59,11 +51,12 @@ function Heading({ children }: { children: ReactNode }) {
   );
 }
 
+/** Web UserDropdown summary line. */
 function membershipNote(me: MembershipView | null, unlimited: boolean) {
-  if (unlimited) return 'Không giới hạn lượt đăng';
-  if (!me) return 'Chưa tải được thông tin gói & lượt đăng';
-  const expired = Boolean(me.expiresAt) && new Date(me.expiresAt!).getTime() <= Date.now();
-  return `Còn ${me.remainingUses} lượt khả dụng${me.reservedUses > 0 ? ` • ${me.reservedUses} chờ duyệt` : ''}${expired ? ' • Đã hết hạn' : ''}`;
+  if (unlimited) return 'Không giới hạn lượt đăng (∞)';
+  if (!me) return 'Tạm thời chưa tải được hạn mức • Xem chi tiết';
+  const held = me.reservedUses + (me.addonReserved ?? 0);
+  return `Lượt gói còn: ${me.remainingUses}${held > 0 ? ` • ${held} chờ duyệt` : ''}`;
 }
 
 /** Mobile counterpart of the web avatar menu, as a bottom sheet. */
@@ -73,6 +66,7 @@ export default function HomeDrawer({
   profile,
   userName,
   membership,
+  onMembership,
   onDashboard,
   onFavorites,
   onHistory,
@@ -85,6 +79,7 @@ export default function HomeDrawer({
   profile: UserProfileResponse | null;
   userName: string;
   membership: MembershipView | null;
+  onMembership: () => void;
   onDashboard: () => void;
   onFavorites: () => void;
   onHistory: () => void;
@@ -96,6 +91,7 @@ export default function HomeDrawer({
   const showDialog = useDialog();
   const { logout } = useAuth();
   const unlimited = isUnlimitedMembership(membership, profile?.role);
+  const addonBalance = getAddonBalanceLabel(membership);
   const go = (action: () => void) => () => {
     onClose();
     action();
@@ -152,8 +148,10 @@ export default function HomeDrawer({
 
             <Item icon="grid-outline" label="Bảng điều khiển" onPress={go(onDashboard)} />
 
-            {/* Info only: the app has no membership screen and no web URL to open. */}
-            <View className="my-1 flex-row items-center rounded-xl border border-primary-border bg-primary-soft px-3 py-2.5">
+            <Pressable
+              onPress={go(onMembership)}
+              accessibilityRole="button"
+              className="my-1 min-h-12 flex-row items-center rounded-xl border border-primary-border bg-primary-soft px-3 py-2.5 active:opacity-80">
               <Ionicons
                 name={unlimited ? 'infinite' : 'ribbon-outline'}
                 size={20}
@@ -166,15 +164,19 @@ export default function HomeDrawer({
                   </Text>
                   {unlimited || membership ? (
                     <Text className="text-xs font-extrabold text-primary">
-                      {unlimited ? 'ADMIN' : (TIER_LABEL[membership!.tier] ?? membership!.tier)}
+                      {unlimited ? 'ADMIN' : getTierShortLabel(membership!.tier)}
                     </Text>
                   ) : null}
                 </View>
                 <Text className="mt-0.5 text-xs text-muted-foreground">
                   {membershipNote(membership, unlimited)}
                 </Text>
+                {!unlimited && addonBalance ? (
+                  <Text className="mt-0.5 text-xs text-muted-foreground">{addonBalance}</Text>
+                ) : null}
               </View>
-            </View>
+              <Ionicons name="chevron-forward" size={16} className="text-primary" />
+            </Pressable>
             <Divider />
 
             <Heading>Tiện ích</Heading>

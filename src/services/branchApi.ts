@@ -1,8 +1,10 @@
 import axiosClient from '@/lib/axios-client';
-import type { ApiResponse } from '@/types/api';
+import type { ApiResponse, VietmapAddress } from '@/types/api';
 
 export type BranchCategory = 'APARTMENT' | 'HOUSE' | 'ROOM';
 export type BranchCharge = {
+  id?: string;
+  description?: string;
   chargeType: string;
   billingMethod: string;
   amount?: number;
@@ -12,7 +14,8 @@ export type BranchCharge = {
   customName?: string;
   sortOrder?: number;
 };
-export type Branch = {
+// The API also returns the branch's Vietmap parts (street, ward, city...).
+export type Branch = Partial<VietmapAddress> & {
   id: string;
   name: string;
   code?: string;

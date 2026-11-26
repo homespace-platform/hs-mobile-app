@@ -425,7 +425,7 @@ test('every upload path leases its file before the first await', () => {
     'services/rental/storage.service.ts',
     // Batches: files still waiting their turn.
     'screens/MessagesScreen.tsx',
-    'screens/ListingDraftScreen.tsx',
+    'services/listingEditorApi.ts',
     'components/rental/billing/ClosureProposalForm.tsx',
     'components/rental/billing/ClosureProposalView.tsx',
     'components/rental/billing/ComplaintPanel.tsx',

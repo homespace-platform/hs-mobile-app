@@ -17,6 +17,7 @@ export default function VndMoneyInput({
   max = 1_000_000_000,
   placeholder = 'Nhập số tiền',
   hint,
+  error: formError,
   className,
 }: {
   label?: string;
@@ -29,6 +30,8 @@ export default function VndMoneyInput({
   max?: number;
   placeholder?: string;
   hint?: string;
+  /** The form's own validation message; the input's range check takes precedence. */
+  error?: string | null;
   className?: string;
 }) {
   const [focused, setFocused] = useState(false);
@@ -42,8 +45,9 @@ export default function VndMoneyInput({
   const [restored, setRestored] = useState<{ display: string; selection: TextSelection }>();
   const raw = canonicalVnd(value);
   const display = formatVndInput(value);
-  const error = inputError || vndRangeError(value, min, max);
-  const suggestions = focused && edited && !disabled && !error ? vndSuggestions(raw, max) : [];
+  const ownError = inputError || vndRangeError(value, min, max);
+  const error = ownError || formError;
+  const suggestions = focused && edited && !disabled && !ownError ? vndSuggestions(raw, max) : [];
 
   return (
     <FieldFrame label={label} hint={hint} error={error} className={className}>

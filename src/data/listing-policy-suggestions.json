@@ -1,0 +1,112 @@
+{
+  "HOUSE": {
+    "petPolicy": {
+      "ALLOWED": "Được nuôi thú cưng nhỏ, đã tiêm phòng. Người thuê giữ vệ sinh, không gây ồn và bồi thường nếu làm hư hỏng.",
+      "NOT_ALLOWED": "Không nuôi thú cưng trong nhà thuê.",
+      "APPROVAL_REQUIRED": "Báo loại và số lượng thú cưng cho chủ nhà; chỉ nuôi sau khi được đồng ý bằng văn bản hoặc tin nhắn."
+    },
+    "smokingPolicy": {
+      "ALLOWED": "Được hút thuốc ở nơi thoáng khí. Không để khói làm phiền hàng xóm, dập tàn thuốc cẩn thận để phòng cháy.",
+      "NOT_ALLOWED": "Không hút thuốc trong nhà thuê.",
+      "APPROVAL_REQUIRED": "Hỏi chủ nhà trước khi hút thuốc; chỉ hút tại khu vực và theo điều kiện đã được đồng ý."
+    },
+    "subleasePolicy": {
+      "ALLOWED": "Được cho thuê lại. Người thuê báo trước thông tin người thuê lại cho chủ nhà và vẫn chịu trách nhiệm về nhà thuê.",
+      "NOT_ALLOWED": "Không cho thuê lại toàn bộ hoặc một phần nhà và không chuyển giao quyền thuê cho người khác.",
+      "APPROVAL_REQUIRED": "Muốn cho thuê lại hoặc chuyển giao quyền thuê, hãy gửi thông tin người nhận cho chủ nhà và chỉ thực hiện sau khi được đồng ý."
+    },
+    "overnightGuestPolicy": {
+      "ALLOWED": "Được có khách ở qua đêm. Người thuê đăng ký lưu trú theo quy định hiện hành, giữ trật tự với hàng xóm và chịu trách nhiệm về khách.",
+      "NOT_ALLOWED": "Không cho khách ở qua đêm tại nhà thuê.",
+      "APPROVAL_REQUIRED": "Báo trước cho chủ nhà và chỉ cho khách ở qua đêm sau khi được đồng ý. Việc đăng ký lưu trú thực hiện theo quy định hiện hành."
+    },
+    "alterationsPolicy": {
+      "ALLOWED": "Được sửa chữa nhỏ và lắp thêm thiết bị nếu không ảnh hưởng kết cấu nhà. Khi trả nhà, hai bên thống nhất phần giữ lại hoặc khôi phục.",
+      "NOT_ALLOWED": "Không tự cải tạo, khoan đục hoặc lắp đặt thêm trong nhà thuê. Khi có hư hỏng, hãy báo chủ nhà.",
+      "APPROVAL_REQUIRED": "Gửi nội dung sửa chữa hoặc lắp đặt cho chủ nhà; chỉ làm sau khi được đồng ý và thống nhất việc khôi phục khi trả nhà."
+    },
+    "propertyInspectionNotice": {
+      "note": "Chủ nhà báo trước theo thời gian đã nêu và hẹn giờ phù hợp với người thuê. Trường hợp khẩn cấp thì liên hệ sớm nhất có thể."
+    },
+    "noticeDaysBeforeTermination": {
+      "note": "Bên muốn kết thúc hoặc chấm dứt thuê báo cho bên kia bằng văn bản hoặc tin nhắn theo thời hạn đã nêu, rồi cùng hẹn lịch bàn giao nhà."
+    },
+    "depositRefundDays": {
+      "note": "Hoàn cọc trong thời hạn đã nêu, tính từ khi người thuê đồng ý đề xuất quyết toán sau khi trả nhà. Khoản khấu trừ nếu có cần được giải thích rõ."
+    }
+  },
+  "APARTMENT": {
+    "petPolicy": {
+      "ALLOWED": "Được nuôi thú cưng theo nội quy chung cư. Giữ vệ sinh, không gây ồn và không làm phiền cư dân khác.",
+      "NOT_ALLOWED": "Không nuôi thú cưng trong căn hộ thuê.",
+      "APPROVAL_REQUIRED": "Báo loại và số lượng thú cưng cho chủ nhà; chỉ nuôi khi được đồng ý và phù hợp với nội quy chung cư."
+    },
+    "smokingPolicy": {
+      "ALLOWED": "Chỉ hút thuốc tại nơi nội quy chung cư cho phép. Không để khói, tàn thuốc ảnh hưởng đến căn hộ khác.",
+      "NOT_ALLOWED": "Không hút thuốc trong căn hộ thuê.",
+      "APPROVAL_REQUIRED": "Hỏi chủ nhà trước khi hút thuốc; nếu được đồng ý, vẫn phải tuân theo nội quy chung cư."
+    },
+    "subleasePolicy": {
+      "ALLOWED": "Được cho thuê lại. Người thuê báo trước cho chủ nhà, hỗ trợ đăng ký cư dân với ban quản lý và vẫn chịu trách nhiệm về căn hộ.",
+      "NOT_ALLOWED": "Không cho thuê lại toàn bộ hoặc một phần căn hộ và không chuyển giao quyền thuê cho người khác.",
+      "APPROVAL_REQUIRED": "Muốn cho thuê lại hoặc chuyển giao quyền thuê, hãy gửi thông tin người nhận cho chủ nhà và chỉ thực hiện sau khi được đồng ý."
+    },
+    "overnightGuestPolicy": {
+      "ALLOWED": "Được có khách ở qua đêm. Khách theo nội quy chung cư, đăng ký với ban quản lý nếu được yêu cầu; đăng ký lưu trú theo quy định hiện hành.",
+      "NOT_ALLOWED": "Không cho khách ở qua đêm tại căn hộ thuê.",
+      "APPROVAL_REQUIRED": "Báo trước cho chủ nhà và chỉ cho khách ở qua đêm sau khi được đồng ý. Đăng ký lưu trú theo quy định hiện hành và nội quy chung cư."
+    },
+    "propertyInspectionNotice": {
+      "note": "Chủ nhà báo trước theo thời gian đã nêu và hẹn giờ phù hợp với người thuê. Trường hợp khẩn cấp thì liên hệ sớm nhất có thể."
+    },
+    "noticeDaysBeforeTermination": {
+      "note": "Bên muốn kết thúc hoặc chấm dứt thuê báo cho bên kia bằng văn bản hoặc tin nhắn theo thời hạn đã nêu, rồi cùng hẹn lịch bàn giao căn hộ."
+    },
+    "depositRefundDays": {
+      "note": "Hoàn cọc trong thời hạn đã nêu, tính từ khi người thuê đồng ý đề xuất quyết toán sau khi trả căn hộ. Khoản khấu trừ nếu có cần được giải thích rõ."
+    },
+    "buildingRulesPolicy": {
+      "value": "Người thuê tuân theo nội quy của chung cư và ban quản lý, giữ trật tự, vệ sinh và an toàn phòng cháy."
+    },
+    "sharedAmenitiesPolicy": {
+      "value": "Người thuê dùng tiện ích và không gian chung theo quy định của ban quản lý, giữ vệ sinh, dùng cẩn thận và báo khi phát hiện hư hỏng."
+    }
+  },
+  "ROOM": {
+    "petPolicy": {
+      "ALLOWED": "Được nuôi thú cưng nhỏ, đã tiêm phòng. Giữ vệ sinh, không gây ồn, không làm phiền người khác và bồi thường nếu làm hư hỏng.",
+      "NOT_ALLOWED": "Không nuôi thú cưng trong phòng thuê.",
+      "APPROVAL_REQUIRED": "Báo loại và số lượng thú cưng cho chủ trọ; chỉ nuôi sau khi được đồng ý và không làm phiền người thuê khác."
+    },
+    "smokingPolicy": {
+      "ALLOWED": "Được hút thuốc ở nơi thoáng khí. Không để khói làm phiền người khác, dập tàn thuốc cẩn thận để phòng cháy.",
+      "NOT_ALLOWED": "Không hút thuốc trong phòng thuê.",
+      "APPROVAL_REQUIRED": "Hỏi chủ trọ trước khi hút thuốc; chỉ hút theo điều kiện đã được đồng ý và không làm phiền người khác."
+    },
+    "subleasePolicy": {
+      "ALLOWED": "Được cho thuê lại phòng. Người thuê báo trước thông tin người thuê lại cho chủ trọ và vẫn chịu trách nhiệm về phòng.",
+      "NOT_ALLOWED": "Không cho thuê lại một phần hoặc toàn bộ phòng và không chuyển giao quyền thuê cho người khác.",
+      "APPROVAL_REQUIRED": "Muốn cho thuê lại hoặc chuyển giao quyền thuê phòng, hãy gửi thông tin người nhận cho chủ trọ và chỉ thực hiện sau khi được đồng ý."
+    },
+    "overnightGuestPolicy": {
+      "ALLOWED": "Được có khách ở qua đêm. Người thuê báo để chủ trọ nắm thông tin, đăng ký lưu trú theo quy định hiện hành và không làm phiền phòng khác.",
+      "NOT_ALLOWED": "Không cho khách ở qua đêm tại phòng thuê.",
+      "APPROVAL_REQUIRED": "Báo trước cho chủ trọ và chỉ cho khách ở qua đêm sau khi được đồng ý. Việc đăng ký lưu trú thực hiện theo quy định hiện hành."
+    },
+    "propertyInspectionNotice": {
+      "note": "Chủ trọ báo trước theo thời gian đã nêu và hẹn lúc người thuê có thể có mặt. Trường hợp khẩn cấp thì liên hệ sớm nhất có thể."
+    },
+    "noticeDaysBeforeTermination": {
+      "note": "Bên muốn kết thúc hoặc chấm dứt thuê báo cho bên kia bằng văn bản hoặc tin nhắn theo thời hạn đã nêu, rồi cùng hẹn lịch trả phòng."
+    },
+    "depositRefundDays": {
+      "note": "Hoàn cọc trong thời hạn đã nêu, tính từ khi người thuê đồng ý đề xuất quyết toán sau khi trả phòng. Khoản khấu trừ nếu có cần được giải thích rõ."
+    },
+    "sharedAmenitiesPolicy": {
+      "value": "Người thuê giữ vệ sinh, dùng cẩn thận các tiện ích và không gian chung, tôn trọng người khác và báo chủ trọ khi có hư hỏng."
+    },
+    "quietHoursPolicy": {
+      "value": "Giữ yên tĩnh trong giờ nghỉ, nhất là ban đêm. Không gây ồn làm ảnh hưởng đến người xung quanh."
+    }
+  }
+}

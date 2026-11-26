@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import './global.css';
@@ -9,6 +9,8 @@ import BackendHealthGate from '@/components/BackendHealthGate';
 import NetworkGate from '@/components/NetworkGate';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 import type { MainTab } from '@/components/BottomTabBar';
+import { TabHeaderNavigation, type HeaderShortcut } from '@/components/TabHeader';
+import MembershipScreen from '@/components/membership/MembershipScreen';
 import type { ChatConversation, RelatedListing } from '@/services/chatApi';
 import LoadingScreen from '@/screens/LoadingScreen';
 import LoginScreen from '@/screens/LoginScreen';
@@ -29,6 +31,7 @@ import type { ManagementRole } from '@/lib/dashboard-navigation';
 import type { ManagementSection } from '@/services/managementApi';
 import InitialPasswordGate from '@/components/InitialPasswordGate';
 import { setOpenSettingsHandler } from '@/lib/profile-gate-signal';
+import { leaveThen } from '@/lib/leave-guard';
 import type { ProfileGateSection } from '@/lib/profile-gate';
 import { useOnboardingSync } from '@/lib/use-onboarding';
 import { usePushEvents } from '@/lib/push/use-push-events';
@@ -39,22 +42,21 @@ function SignedInApp() {
     | MainTab
     | 'detail'
     | 'conversation-detail'
-    | 'favorites'
-    | 'history'
+    | HeaderShortcut
     | 'browse'
-    | 'news'
-    | 'notifications'
   >('home');
   const [returnScreen, setReturnScreen] = useState<
-    MainTab | 'favorites' | 'history' | 'browse' | 'news' | 'notifications'
+    MainTab | HeaderShortcut | 'browse'
   >('home');
+  const [shortcutReturnTab, setShortcutReturnTab] = useState<MainTab>('home');
   const [ownListing, setOwnListing] = useState(false);
-  const [listingFromRental, setListingFromRental] = useState(false);
   const [managementRole, setManagementRole] = useState<ManagementRole>('tenant');
   const [managementSection, setManagementSection] = useState<ManagementSection | null>(null);
   // Appointment of a tapped notification; the appointments screen opens it and clears it on close.
   const [linkedAppointmentId, setLinkedAppointmentId] = useState<string | null>(null);
-  const [managementOrigin, setManagementOrigin] = useState<'detail' | 'notifications' | null>(null);
+  const [managementOrigin, setManagementOrigin] = useState<
+    'detail' | 'notifications' | 'membership' | null
+  >(null);
   // Back stack of the rental flow, shown inside the Quản lý tab while not empty.
   const [rentalStack, setRentalStack] = useState<RentalRoute[]>([]);
   // Back on the first rental screen returns to the notification center, not the Quản lý menu.
@@ -67,11 +69,13 @@ function SignedInApp() {
   // Settings section requested from anywhere (banner, 1010 dialog); ProfileScreen opens it and clears it.
   const [pendingSettings, setPendingSettings] = useState<ProfileGateSection | null>(null);
   useEffect(() => {
-    setOpenSettingsHandler((section) => {
-      setPendingSettings(section);
-      setConversationId(null);
-      setScreen('profile');
-    });
+    setOpenSettingsHandler((section) =>
+      leaveThen(() => {
+        setPendingSettings(section);
+        setConversationId(null);
+        setScreen('profile');
+      })
+    );
     return () => setOpenSettingsHandler(undefined);
   }, []);
   const selectTab = (tab: MainTab) => {
@@ -90,18 +94,18 @@ function SignedInApp() {
   useKycDeepLink();
   // Push taps (also from a killed app): chat opens the Messages tab, everything else the notification center.
   usePushEvents((route) =>
-    route === 'messages' ? selectTab('messages') : setScreen('notifications')
+    leaveThen(() => {
+      if (route === 'messages') selectTab('messages');
+      else {
+        setShortcutReturnTab('home');
+        setScreen('notifications');
+      }
+    })
   );
 
-  const openListing = (
-    id: string,
-    own = false,
-    section?: ManagementSection,
-    fromRental = false
-  ) => {
+  const openListing = (id: string, own = false, section?: ManagementSection) => {
     if (screen !== 'detail' && screen !== 'conversation-detail') setReturnScreen(screen);
     setOwnListing(own);
-    setListingFromRental(fromRental);
     setListingId(id);
     setScreen('detail');
     if (section) setManagementSection(section);
@@ -123,20 +127,35 @@ function SignedInApp() {
     if (screen !== 'detail') setRentalStack([]);
     setManagementSection(section);
     setLinkedAppointmentId(appointmentId ?? null);
-    setManagementOrigin(screen === 'detail' || screen === 'notifications' ? screen : null);
+    setManagementOrigin(
+      screen === 'detail' || screen === 'notifications' || screen === 'membership' ? screen : null
+    );
     setScreen('management');
   };
   const browse = (nextFilters: Record<string, string | number>) => {
     setFilters(nextFilters);
     setScreen('search'); // Home entry points land on the "Tìm nhà" screen with these initial filters
   };
+  const closeShortcut = () => setScreen(shortcutReturnTab);
+  const withTabHeader = (tab: MainTab, content: ReactNode) => (
+    <TabHeaderNavigation.Provider
+      value={{
+        onSelectTab: (next) => leaveThen(() => selectTab(next)),
+        onOpenShortcut: (shortcut) => leaveThen(() => {
+          setShortcutReturnTab(tab);
+          setScreen(shortcut);
+        }),
+      }}>
+      {content}
+    </TabHeaderNavigation.Provider>
+  );
 
   if (screen === 'favorites' || screen === 'history' || screen === 'browse')
     return (
       <ListingCollectionScreen
         mode={screen}
         filters={filters}
-        onBack={() => setScreen('home')}
+        onBack={screen === 'browse' ? () => setScreen('home') : closeShortcut}
         onOpenListing={openListing}
         onExplore={() => selectTab('search')}
       />
@@ -147,7 +166,6 @@ function SignedInApp() {
       <ListingDetailScreen
         listingId={listingId}
         own={ownListing}
-        accessible={listingFromRental}
         onSelectTab={selectTab}
         onBack={() => setScreen(returnScreen)}
         onOpenManagement={openManagement}
@@ -162,7 +180,8 @@ function SignedInApp() {
   }
 
   if (screen === 'messages') {
-    return (
+    return withTabHeader(
+      'messages',
       <MessagesScreen
         initialConversationId={conversationId}
         pendingListing={pendingListing}
@@ -173,7 +192,7 @@ function SignedInApp() {
           setConversationDetail(conversation);
           setScreen('conversation-detail');
         }}
-      />
+      />,
     );
   }
 
@@ -188,13 +207,13 @@ function SignedInApp() {
   }
 
   if (screen === 'news') {
-    return <NewsScreen onBack={() => setScreen('home')} />;
+    return <NewsScreen onBack={closeShortcut} />;
   }
 
   if (screen === 'notifications') {
     return (
       <NotificationsScreen
-        onBack={() => setScreen('home')}
+        onBack={closeShortcut}
         onOpenListing={openListing}
         onOpenManagement={openManagement}
         rentalRole={managementRole}
@@ -204,9 +223,19 @@ function SignedInApp() {
     );
   }
 
-  if (screen === 'search') {
+  if (screen === 'membership') {
     return (
-      <SearchScreen onSelectTab={selectTab} onOpenListing={openListing} initialFilters={filters} />
+      <MembershipScreen
+        onBack={closeShortcut}
+        onManageListings={() => openManagement('landlord-properties')}
+      />
+    );
+  }
+
+  if (screen === 'search') {
+    return withTabHeader(
+      'search',
+      <SearchScreen onSelectTab={selectTab} onOpenListing={openListing} initialFilters={filters} />,
     );
   }
 
@@ -218,7 +247,7 @@ function SignedInApp() {
           stack={rentalStack}
           onStackChange={setRentalStack}
           role={managementRole}
-          onOpenListing={(id) => openListing(id, false, undefined, true)}
+          onOpenListing={(id) => openListing(id)}
           onBrowseListings={() => selectTab('search')}
           onExit={
             rentalFromNotifications
@@ -232,14 +261,15 @@ function SignedInApp() {
       );
     }
     if (!managementSection) {
-      return (
+      return withTabHeader(
+        'management',
         <ManagementDashboardScreen
           role={managementRole}
           onSelectRole={setManagementRole}
-          onOpenAppointments={openManagement}
+          onOpenSection={openManagement}
           onOpenRental={openRental}
           onSelectTab={selectTab}
-        />
+        />,
       );
     }
     return (
@@ -260,26 +290,24 @@ function SignedInApp() {
   }
 
   if (screen === 'profile') {
-    return (
+    return withTabHeader(
+      'profile',
       <ProfileScreen
         onSelectTab={selectTab}
         pendingSettings={pendingSettings}
         onSettingsOpened={() => setPendingSettings(null)}
-      />
+      />,
     );
   }
 
-  return (
+  return withTabHeader(
+    'home',
     <HomeScreen
       onSelectTab={selectTab}
       onOpenListing={openListing}
       onBrowse={browse}
-      onOpenNews={() => setScreen('news')}
       onOpenManagement={openManagement}
-      onOpenNotifications={() => setScreen('notifications')}
-      onOpenFavorites={() => setScreen('favorites')}
-      onOpenHistory={() => setScreen('history')}
-    />
+    />,
   );
 }
 

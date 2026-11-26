@@ -649,7 +649,9 @@ test('viewer id comes from the token subject, without any API', () => {
 test('a listing opened from a rental record: viewer access, no owner UI, Back to the list', () => {
   const read = (file) => fs.readFileSync(path.resolve(__dirname, '..', file), 'utf8');
   const screen = read('src/screens/ListingDetailScreen.tsx');
-  assert.match(screen, /own \|\| accessible\s+\? getAccessibleListing/);
+  // Every signed-in viewer reads with their identity, as web lib/listing-detail-access.ts.
+  assert.ok(screen.includes('await getAccessibleListing(listingId)'));
+  assert.ok(!screen.includes('getPublicListing(listingId)'));
   // Ownership still comes from `own` or the signed-in id only.
   assert.ok(
     screen.includes('const isOwnerView = own || (Boolean(userId) && userId === property.ownerId);')
@@ -657,9 +659,9 @@ test('a listing opened from a rental record: viewer access, no owner UI, Back to
   // Nested list: the listing sits on top of it and the list stack is kept.
   assert.ok(screen.includes('onBack={() => setRecordListingId(null)}'));
   assert.ok(screen.includes('onOpenListing={setRecordListingId}'));
-  // Management tab: App keeps rentalStack and marks only this path as accessible.
+  // Management tab: App keeps rentalStack under the listing.
   const app = read('App.tsx');
-  assert.ok(app.includes('openListing(id, false, undefined, true)'));
+  assert.ok(app.includes('onOpenListing={(id) => openListing(id)}'));
   // "Quản lý tin đăng" on that listing keeps the stack and draws its section above it.
   assert.ok(app.includes("if (screen !== 'detail') setRentalStack([]);"));
   assert.ok(app.includes("if (rentalStack.length && managementOrigin !== 'detail')"));

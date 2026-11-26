@@ -246,3 +246,72 @@ test('chat preserves history cards and uses the file name as a captionless previ
   });
   assert.equal(result.conversations[0].lastMessage, 'ảnh.png');
 });
+
+test('a late incoming message increments unread without replacing a newer preview', () => {
+  const newer = {
+    id: 'a',
+    lastMessage: 'newer',
+    lastMessageAt: '2026-11-26T10:00:00.000Z',
+    lastMessageId: 'b',
+    unreadCount: 1,
+  };
+  const older = {
+    id: 'a',
+    conversationId: 'a',
+    senderId: 'peer',
+    content: 'older',
+    createdAt: newer.lastMessageAt,
+  };
+  const result = realtime.applyChatMessage([{ id: 'first' }, newer], older, {
+    myId: 'me',
+  });
+  assert.deepEqual(plain(result.conversations), [
+    { id: 'first' },
+    { ...newer, unreadCount: 2 },
+  ]);
+});
+
+test('a chat profile event refreshes the current participant and keeps the newest response', async () => {
+  let profiles = {};
+  let receive;
+  let cleanup;
+  const pending = [];
+  const { useChatParticipantProfiles } = load('lib/use-chat-participant-profiles.ts', {
+    react: {
+      useState: () => [profiles, (update) => { profiles = update(profiles); }],
+      useEffect: (effect) => { cleanup = effect(); },
+    },
+    '@/lib/realtime/connections': {
+      subscribeChatEvents: (listener) => { receive = listener; return () => {}; },
+    },
+    '@/services/chatApi': {
+      getChatParticipantProfile: (id) => new Promise((resolve) => pending.push({ id, resolve })),
+    },
+  });
+
+  useChatParticipantProfiles(['peer']);
+  receive('chat:profile:changed', { userId: 'stranger' });
+  receive('chat:profile:changed', { userId: 'peer' });
+  assert.deepEqual(pending.map((request) => request.id), ['peer', 'peer']);
+  pending[1].resolve({ participantName: 'New name', participantAvatar: undefined });
+  pending[0].resolve({ participantName: 'Old name', participantAvatar: 'old.jpg' });
+  await new Promise(setImmediate);
+  assert.equal(profiles.peer.participantName, 'New name');
+  assert.equal(profiles.peer.participantAvatar, undefined);
+  cleanup();
+});
+
+test('chat uses the public profile endpoint and falls back to the current username', async () => {
+  const { getChatParticipantProfile } = load('services/chatApi.ts', {
+    '@/lib/axios-client': {
+      default: { get: async (url) => {
+        assert.equal(url, '/api/v1/users/user%40example/profile');
+        return { data: { result: { username: 'new-name', avatarUrl: null } } };
+      } },
+    },
+  });
+  const profile = await getChatParticipantProfile('user@example');
+  assert.equal(profile.participantName, 'new-name');
+  assert.ok(Object.hasOwn(profile, 'participantAvatar'));
+  assert.equal(profile.participantAvatar, undefined);
+});

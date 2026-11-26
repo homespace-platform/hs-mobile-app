@@ -230,7 +230,7 @@ export default function NotificationsScreen({
     const target = notificationTarget(item.actionPath);
     if (target.kind === 'listing') onOpenListing(target.id, target.own);
     else if (target.kind === 'management')
-      onOpenManagement(target.section, parseDeepLink(target.query ?? '')?.id);
+      onOpenManagement(target.section, target.orderId ?? parseDeepLink(target.query ?? '')?.id);
     else if (target.kind === 'news') onOpenNews();
     else if (target.kind === 'management-choice')
       showDialog(item.title, `${item.body}\n\nBạn đang xem với vai trò nào?`, [

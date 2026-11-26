@@ -19,6 +19,14 @@ export type MembershipView = {
   reservedUses: number;
   expiresAt: string | null;
   unlimited: boolean;
+  // Absent when the server omits them; `remainingUses` above is the plan balance only.
+  freeUsed?: number;
+  /** Next FREE refill (ISO instant); only set while tier is FREE. */
+  quotaResetsAt?: string | null;
+  addonRemaining?: number;
+  addonReserved?: number;
+  /** Earliest expiry among extra uses still remaining. */
+  addonExpiresAt?: string | null;
 };
 
 const TIERS = ['FREE', 'STARTER', 'PRO', 'BUSINESS', 'ADMIN'];
@@ -36,6 +44,11 @@ export async function getMyMembership(): Promise<MembershipView> {
     reservedUses: count(me.reservedUses),
     expiresAt: me.expiresAt || null,
     unlimited: Boolean(me.unlimited) || tier === 'ADMIN',
+    ...(me.freeUsed != null && { freeUsed: count(me.freeUsed) }),
+    ...(me.quotaResetsAt && { quotaResetsAt: me.quotaResetsAt }),
+    ...(me.addonRemaining != null && { addonRemaining: count(me.addonRemaining) }),
+    ...(me.addonReserved != null && { addonReserved: count(me.addonReserved) }),
+    ...(me.addonExpiresAt && { addonExpiresAt: me.addonExpiresAt }),
   };
 }
 
@@ -47,7 +60,12 @@ export type MembershipQuote = {
   amountVnd: number;
   remainingUsesAfter: number;
   expiresAtAfter: string | null;
+  mode?: 'UPGRADE' | 'NEW';
+  upgrade?: boolean;
+  upgradeDeadline?: string | null;
 };
+
+export type MembershipAddonOffer = { unitPriceVnd: number; validDays: number; maxQuantity: number };
 
 export type MembershipCheckout = {
   orderId: string;
@@ -61,7 +79,14 @@ export type MembershipOrder = {
   id: string;
   provider: string;
   amountVnd: number;
-  status: 'PENDING' | 'PAID' | 'FAILED' | 'EXPIRED' | 'CANCELLED' | 'REVIEW';
+  /** PENDING, PAID, REVIEW, FAILED, EXPIRED or CANCELLED. */
+  status: string;
+  kind?: 'PLAN' | 'ADDON';
+  /** null for ADDON orders. */
+  tier?: string | null;
+  quantity?: number | null;
+  createdAt?: string | null;
+  paidAt?: string | null;
 };
 
 export type MembershipEthQuote = {
@@ -69,6 +94,7 @@ export type MembershipEthQuote = {
   payer: string;
   recipient: string;
   amountVnd: number;
+  ethVnd?: number;
   amountWei: string;
   expiresAt: string;
   chainId: number;
@@ -94,14 +120,52 @@ export async function createMembershipCheckout(tier: PaidMembershipTier, provide
   return data.result;
 }
 
-export async function getMembershipOrder(id: string) {
-  const { data } = await axiosClient.get<ApiResponse<MembershipOrder>>(orderPath(id));
+/** Price, validity and largest quantity of one-off extra uses. No fallback price. */
+export async function getMembershipAddonOffer(): Promise<MembershipAddonOffer> {
+  const { data } = await axiosClient.get<ApiResponse<Partial<MembershipAddonOffer> | null>>(
+    `${membershipPath}/addons`
+  );
+  const offer = {
+    unitPriceVnd: count(data.result?.unitPriceVnd),
+    validDays: count(data.result?.validDays),
+    maxQuantity: Math.floor(count(data.result?.maxQuantity)),
+  };
+  if (!offer.unitPriceVnd || !offer.validDays || !offer.maxQuantity)
+    throw new Error('Máy chủ chưa trả về giá lượt mua thêm.');
+  return offer;
+}
+
+export async function createMembershipAddonCheckout(
+  quantity: number,
+  provider: MembershipPaymentMethod
+) {
+  const { data } = await axiosClient.post<ApiResponse<MembershipCheckout>>(
+    `${membershipPath}/addons/checkout`,
+    { quantity, provider }
+  );
   return data.result;
 }
 
+const upper = (value: unknown) => String(value ?? '').trim().toUpperCase();
+
+function toOrder(raw: MembershipOrder): MembershipOrder {
+  return {
+    ...raw,
+    status: upper(raw?.status) || 'PENDING',
+    provider: upper(raw?.provider),
+    kind: upper(raw?.kind) === 'ADDON' ? 'ADDON' : 'PLAN',
+  };
+}
+
+export async function getMembershipOrder(id: string) {
+  const { data } = await axiosClient.get<ApiResponse<MembershipOrder>>(orderPath(id));
+  return toOrder(data.result);
+}
+
+/** A finished order is returned unchanged, so read the status of the answer. */
 export async function cancelMembershipOrder(id: string) {
   const { data } = await axiosClient.post<ApiResponse<MembershipOrder>>(`${orderPath(id)}/cancel`);
-  return data.result;
+  return toOrder(data.result);
 }
 
 export async function getMembershipEthChallenge(id: string, wallet: string) {
@@ -124,5 +188,5 @@ export async function settleMembershipEth(id: string, paymentId: string, txHash:
     paymentId,
     txHash,
   });
-  return data.result;
+  return toOrder(data.result);
 }

@@ -7,6 +7,8 @@ export type Anchors = {
   laidOut: (id: string) => void;
   /** Scrolls now, or as soon as the anchor appears (a tab that is about to be drawn). */
   scrollTo: (id: string) => void;
+  /** Scrolls to the topmost mounted anchor of `ids`; with none mounted, to `ids[0]` once drawn. */
+  scrollToFirst: (ids: string[]) => void;
   /** Scrolls once the anchor is laid out again, even if it is currently mounted. */
   scrollWhenDrawn: (id: string) => void;
 };
@@ -26,14 +28,17 @@ export function useAnchorController(
   const views = useRef(new Map<string, View>());
   const pending = useRef<{ id: string; until: number } | null>(null);
   return useMemo(() => {
-    const go = (view: View) => {
+    const jump = (y: number) =>
+      scroll.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
+    const measure = (view: View, done: (y: number) => void) => {
       if (!content.current) return;
       view.measureLayout(
         content.current,
-        (_x, y) => scroll.current?.scrollTo({ y: Math.max(0, y - 8), animated: true }),
+        (_x, y) => done(y),
         () => {}
       );
     };
+    const go = (view: View) => measure(view, jump);
     const remember = (id: string) => {
       pending.current = { id, until: Date.now() + PENDING_MS };
     };
@@ -53,6 +58,18 @@ export function useAnchorController(
         const view = views.current.get(id);
         if (view) go(view);
         else remember(id);
+      },
+      scrollToFirst(ids) {
+        const found = ids.flatMap((id) => views.current.get(id) ?? []);
+        if (!found.length) return remember(ids[0]);
+        let top = Infinity;
+        let left = found.length;
+        found.forEach((view) =>
+          measure(view, (y) => {
+            top = Math.min(top, y);
+            if (--left === 0) jump(top);
+          })
+        );
       },
       scrollWhenDrawn: remember,
     };

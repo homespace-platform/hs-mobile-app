@@ -16,24 +16,9 @@ export type ManagementSection =
   | 'landlord-payments'
   | 'landlord-properties'
   | 'landlord-branches'
+  | 'landlord-membership'
   | 'tenant-contracts'
   | 'landlord-contracts';
-export type ManagementAction = 'hide' | 'publish' | 'resubmit';
-export type ActionOption = {
-  action: ManagementAction;
-  label: string;
-  danger?: boolean;
-};
-export type ManagementEntry = {
-  id: string;
-  title: string;
-  status: string;
-  category?: string;
-  date?: string | null;
-  listingId?: string;
-  fields: [string, string][];
-  actions: ActionOption[];
-};
 export type Appointment = AppointmentResponse;
 /** The fields the attention dot reads from a rental request. */
 type RentalRequest = {
@@ -43,99 +28,6 @@ type RentalRequest = {
   acceptedAt?: string | null;
   updatedAt?: string | null;
 };
-type OwnListing = {
-  id: string;
-  title: string;
-  fullAddress?: string | null;
-  priceAmount: number;
-  areaM2: number;
-  status: string;
-  category: string;
-  statusReason?: string | null;
-  branchName?: string | null;
-  expiresAt?: string | null;
-  createdAt?: string | null;
-};
-function money(value?: number | null) {
-  return value == null ? 'Chưa xác định' : `${value.toLocaleString('vi-VN')} đ`;
-}
-export function statusLabel(status: string) {
-  return (
-    (
-      {
-        PENDING: 'Chờ duyệt',
-        CONFIRMED: 'Đã xác nhận',
-        REJECTED: 'Đã từ chối',
-        CANCELLED: 'Đã hủy',
-        COMPLETED: 'Hoàn thành',
-        EXPIRED: 'Hết hạn',
-        ACCEPTED: 'Đã chấp thuận',
-        CANCELLED_BY_SYSTEM: 'Hệ thống đã hủy',
-        CANCELLED_BY_RENTER: 'Người thuê đã hủy',
-        CANCELLED_BY_OWNER: 'Chủ nhà đã hủy',
-        PUBLISHED: 'Đang hiển thị',
-        HIDDEN: 'Đã ẩn',
-        DRAFT: 'Bản nháp',
-        PENDING_REVIEW: 'Chờ kiểm duyệt',
-        RENTED: 'Đã cho thuê',
-        AWAITING_TRANSFER: 'Chờ chuyển khoản',
-        TRANSFER_REPORTED: 'Đã báo chuyển khoản',
-        OVERDUE: 'Quá hạn',
-        UNPAID: 'Chưa thanh toán',
-        PAID: 'Đã thanh toán',
-        ROLLED_OVER: 'Đã chuyển kỳ',
-        LANDLORD_SIGNATURE_PENDING: 'Chờ chủ nhà ký',
-        TENANT_SIGNATURE_PENDING: 'Chờ người thuê ký',
-        CLOSED: 'Đã kết thúc',
-        TERMINATED: 'Đã chấm dứt',
-        FAILED: 'Tạo thất bại',
-        SIGNED: 'Đã ký',
-        ACTIVE: 'Đang hiệu lực',
-        SENT: 'Đã gửi',
-        READY: 'Sẵn sàng',
-      } as Record<string, string>
-    )[status] ?? status
-  );
-}
-
-function listingEntry(row: OwnListing): ManagementEntry {
-  return {
-    id: row.id,
-    title: row.title,
-    listingId: row.id,
-    status: row.status,
-    category: row.category,
-    date: row.createdAt,
-    fields: [
-      ['Địa chỉ', row.fullAddress || '—'],
-      ['Giá thuê', money(row.priceAmount)],
-      ['Diện tích', `${row.areaM2} m²`],
-      ['Chi nhánh', row.branchName || '—'],
-      ['Lý do trạng thái', row.statusReason || '—'],
-    ],
-    actions:
-      row.status === 'PUBLISHED'
-        ? [{ action: 'hide', label: 'Ẩn tin đăng', danger: true }]
-        : ['HIDDEN', 'RENTED_EXTERNALLY'].includes(row.status) &&
-            row.expiresAt &&
-            new Date(row.expiresAt).getTime() > Date.now()
-          ? [{ action: 'publish', label: 'Hiển thị lại tin' }]
-          : ['HIDDEN', 'EXPIRED', 'REJECTED'].includes(row.status)
-            ? [{ action: 'resubmit', label: 'Gửi duyệt lại tin' }]
-            : [],
-  };
-}
-export async function getManagementPage(page: number) {
-  const response = await axiosClient.get<PageResponse<OwnListing>>('/api/v1/listings/me', {
-    params: { page, size: 12 },
-  });
-  return {
-    items: response.data.result.map(listingEntry),
-    hasMore: response.data.hasMore,
-    total: response.data.totalElements,
-  };
-}
-
 let managementAttentionCache: Partial<Record<ManagementSection, number>> | null = null;
 let managementAttentionCacheAt = 0;
 let managementAttentionCacheToken = '';
@@ -319,12 +211,4 @@ async function loadManagementAttentionCounts(userId: string) {
   counts['tenant-requests'] = tenantRequests;
   counts['landlord-requests'] = landlordRequests;
   return counts;
-}
-
-export async function performManagementAction(entry: ManagementEntry, action: ManagementAction) {
-  if (!entry.actions.some((option) => option.action === action))
-    throw new Error('Thao tác không khả dụng cho trạng thái hiện tại.');
-  await axiosClient.patch(`/api/v1/listings/${encodeURIComponent(entry.id)}/status`, {
-    status: action === 'hide' ? 'HIDDEN' : action === 'resubmit' ? 'PENDING_REVIEW' : 'PUBLISHED',
-  });
 }

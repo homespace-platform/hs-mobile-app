@@ -14,6 +14,7 @@ import {
 import PresenceLabel from '@/components/PresenceLabel';
 import { chatMessageCaption } from '@/lib/chat-threads';
 import { useChatPresence } from '@/lib/use-chat-presence';
+import { useChatParticipantProfiles } from '@/lib/use-chat-participant-profiles';
 
 const ROLE_OPTIONS = [
   { value: 'TENANT' as const, label: 'Người hỏi thuê', icon: 'person-outline' as const },
@@ -25,7 +26,7 @@ function roleLabel(role?: ChatConversation['participantRole']) {
 }
 
 export default function ConversationDetailScreen({
-  conversation,
+  conversation: initialConversation,
   onBack,
   onUpdated,
 }: {
@@ -33,6 +34,12 @@ export default function ConversationDetailScreen({
   onBack: () => void;
   onUpdated: (conversation: ChatConversation) => void;
 }) {
+  const presence = useChatPresence([initialConversation.participantId])[initialConversation.participantId];
+  const profiles = useChatParticipantProfiles([initialConversation.participantId]);
+  const conversation = {
+    ...initialConversation,
+    ...profiles[initialConversation.participantId],
+  };
   const [role, setRole] = useState(conversation.participantRole);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +52,6 @@ export default function ConversationDetailScreen({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const requestId = useRef(0);
-  const presence = useChatPresence([conversation.participantId])[conversation.participantId];
 
   async function loadHistory(mode: 'search' | 'images', search?: string, before?: string) {
     const currentRequest = before ? requestId.current : ++requestId.current;

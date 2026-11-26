@@ -104,7 +104,7 @@ function ActionButton({
   primary,
   onPress,
 }: {
-  icon: 'create-outline' | 'layers-outline';
+  icon: 'create-outline' | 'copy-outline' | 'layers-outline';
   label: string;
   primary?: boolean;
   onPress: () => void;
@@ -127,11 +127,13 @@ export function OwnListingCard({
   landlord,
   canEdit,
   onEdit,
+  onDuplicate,
   onManage,
 }: {
   landlord: RentProperty['landlord'];
   canEdit: boolean;
   onEdit: () => void;
+  onDuplicate?: () => void;
   onManage: () => void;
 }) {
   return (
@@ -157,6 +159,9 @@ export function OwnListingCard({
       <View className="gap-2">
         {canEdit ? (
           <ActionButton icon="create-outline" label="Chỉnh sửa bài đăng" primary onPress={onEdit} />
+        ) : null}
+        {onDuplicate ? (
+          <ActionButton icon="copy-outline" label="Nhân bản bài đăng" onPress={onDuplicate} />
         ) : null}
         <ActionButton icon="layers-outline" label="Quản lý tin đăng" onPress={onManage} />
       </View>

@@ -149,7 +149,7 @@ export default function SearchScreen({
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <TabHeader>
+      <TabHeader favoriteCount={favoriteIds.size}>
         <View className="mt-2 flex-row items-center">
           <Text
             accessibilityRole="header"

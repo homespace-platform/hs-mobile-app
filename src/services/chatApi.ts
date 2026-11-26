@@ -21,6 +21,7 @@ export type ChatConversation = {
   listing?: RelatedListing;
   lastMessage?: string;
   lastMessageAt?: string;
+  lastMessageId?: string;
   lastMessageSenderId?: string;
   unreadCount: number;
   participantRole?: 'TENANT' | 'LANDLORD';
@@ -53,6 +54,21 @@ export type ChatCallHistory = {
 
 type MessagePage = { items: ChatMessage[]; nextBefore?: string };
 type ParticipantProfile = { displayName?: string; email?: string; avatarUrl?: string };
+
+export async function getChatParticipantProfile(userId: string) {
+  const response = await axiosClient.get<ApiResponse<{
+    firstName?: string;
+    lastName?: string;
+    username: string;
+    avatarUrl?: string | null;
+  }>>('/api/v1/users/' + encodeURIComponent(userId) + '/profile');
+  const profile = response.data.result;
+  return {
+    participantName: [profile.firstName, profile.lastName].filter(Boolean).join(' ').trim() ||
+      profile.username,
+    participantAvatar: profile.avatarUrl || undefined,
+  };
+}
 
 export async function createConversation(
   participantId: string,

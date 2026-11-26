@@ -42,9 +42,15 @@ import {
   dedupeConversationsByParticipant,
   shouldAttachPendingListing,
 } from '@/lib/chat-threads';
-import { applyChatMessage, readChatCallHistory, toChatMessage } from '@/lib/realtime/pure';
+import {
+  applyChatMessage,
+  isLatestChatMessage,
+  readChatCallHistory,
+  toChatMessage,
+} from '@/lib/realtime/pure';
 import PresenceLabel from '@/components/PresenceLabel';
 import { useChatPresence } from '@/lib/use-chat-presence';
+import { useChatParticipantProfiles } from '@/lib/use-chat-participant-profiles';
 import {
   emitChatWithAck,
   isChatSocketConnected,
@@ -140,7 +146,15 @@ export default function MessagesScreen({
   const showDialog = useDialog();
   const { session, startCall } = useChatCalls();
   const [profile, setProfile] = useState<UserProfileResponse | null>(null);
-  const [conversations, setConversations] = useState<ChatConversation[]>([]);
+  const [rawConversations, setConversations] = useState<ChatConversation[]>([]);
+  const [profileRefreshVersion, setProfileRefreshVersion] = useState(0);
+  const participantIds = rawConversations.map((item) => item.participantId);
+  const presence = useChatPresence(participantIds);
+  const participantProfiles = useChatParticipantProfiles(participantIds, profileRefreshVersion);
+  const conversations = useMemo(() => rawConversations.map((item) => ({
+    ...item,
+    ...participantProfiles[item.participantId],
+  })), [rawConversations, participantProfiles]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [search, setSearch] = useState('');
@@ -160,7 +174,6 @@ export default function MessagesScreen({
   const seenMessageIds = useRef(new Set<string>());
   const conversationsRef = useRef(conversations);
   conversationsRef.current = conversations;
-  const presence = useChatPresence(conversations.map((item) => item.participantId));
   const lastLoadAt = useRef(0);
 
   const load = useCallback(async (refresh = false) => {
@@ -172,6 +185,7 @@ export default function MessagesScreen({
       const [currentProfile, items] = await Promise.all([getUserProfileApi(), listConversations()]);
       setProfile(currentProfile);
       setConversations(dedupeConversationsByParticipant(items, initialIdRef.current));
+      if (refresh) setProfileRefreshVersion((version) => version + 1);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Không tải được cuộc trò chuyện');
     } finally {
@@ -262,7 +276,9 @@ export default function MessagesScreen({
           void load(true);
           return;
         }
-        setConversations(result.conversations);
+        setConversations((current) =>
+          applyChatMessage(current, message, { myId, openId: selectedId }).conversations
+        );
         if (result.appendToOpen)
           setMessages((current) =>
             current.some((item) => item.id === message.id) ? current : [...current, message]
@@ -398,11 +414,12 @@ export default function MessagesScreen({
       setConversations((current) =>
         current.map((conversation) =>
           conversation.id === conversationId &&
-          (!conversation.lastMessageAt || conversation.lastMessageAt <= confirmed.createdAt)
+          isLatestChatMessage(conversation, confirmed)
             ? {
                 ...conversation,
                 lastMessage: chatMessageCaption(confirmed) || confirmed.attachments?.[0]?.fileName,
                 lastMessageAt: confirmed.createdAt,
+                lastMessageId: confirmed.id,
                 lastMessageSenderId: confirmed.senderId,
               }
             : conversation
@@ -832,7 +849,7 @@ export default function MessagesScreen({
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <TabHeader title="Tin nhắn">
+      <TabHeader title="Tin nhắn" profile={profile}>
         <View className="mt-4 flex-row items-center rounded-2xl bg-muted px-4">
           <Ionicons name="search-outline" size={19} className="text-subtle" />
           <TextInput

@@ -139,6 +139,11 @@ export function toChatMessage(value: unknown): ChatMessage | null {
   };
 }
 
+export function isLatestChatMessage(conversation: ChatConversation, message: ChatMessage) {
+  return !conversation.lastMessageAt || message.createdAt > conversation.lastMessageAt ||
+    (message.createdAt === conversation.lastMessageAt && message.id >= (conversation.lastMessageId ?? ''));
+}
+
 // Applies chat:message to the conversation list: latest message, move to top, unread for incoming messages
 // in conversations that are not open. `unknown` tells the caller to reload the list.
 export function applyChatMessage(
@@ -151,15 +156,21 @@ export function applyChatMessage(
   const incoming = !!context.myId && message.senderId !== context.myId;
   const open = context.openId === message.conversationId;
   const current = conversations[index];
+  const latest = isLatestChatMessage(current, message);
   const updated: ChatConversation = {
     ...current,
-    lastMessage: chatMessageCaption(message) || message.attachments?.[0]?.fileName,
-    lastMessageAt: message.createdAt,
-    lastMessageSenderId: message.senderId,
+    ...(latest && {
+      lastMessage: chatMessageCaption(message) || message.attachments?.[0]?.fileName,
+      lastMessageAt: message.createdAt,
+      lastMessageId: message.id,
+      lastMessageSenderId: message.senderId,
+    }),
     unreadCount: incoming && !open ? current.unreadCount + 1 : open ? 0 : current.unreadCount,
   };
   return {
-    conversations: [updated, ...conversations.filter((_, i) => i !== index)],
+    conversations: latest
+      ? [updated, ...conversations.filter((_, i) => i !== index)]
+      : conversations.map((item, i) => i === index ? updated : item),
     unknown: false,
     appendToOpen: open,
     markRead: incoming && open,

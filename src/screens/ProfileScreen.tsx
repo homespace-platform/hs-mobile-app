@@ -134,7 +134,7 @@ export default function ProfileScreen({
     );
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <TabHeader />
+      <TabHeader profile={profile} />
       <ProfileCompletionBanner />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8">
         <View className="bg-brand px-5 pb-8 pt-3">

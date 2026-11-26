@@ -1,31 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, RefreshControl, ScrollView, View } from 'react-native';
+import { RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import HomeAiPanel from '@/components/HomeAiPanel';
-import { useDialog } from '@/components/AppDialog';
 import ProfileCompletionBanner from '@/components/ProfileCompletionBanner';
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import FeaturedListings from '@/components/home/FeaturedListings';
-import HomeDrawer from '@/components/home/HomeDrawer';
-import HomeHeader from '@/components/home/HomeHeader';
+import HomeLocationFilter from '@/components/home/HomeLocationFilter';
+import TabHeader from '@/components/TabHeader';
 import type { City } from '@/components/home/LocationPicker';
-import MembershipCheckout from '@/components/home/MembershipCheckout';
 import MembershipSection from '@/components/home/MembershipSection';
 import PopularAreas from '@/components/home/PopularAreas';
 import PriceExplorer from '@/components/home/PriceExplorer';
-import { mergeMembershipPlans, type MembershipPlanInfo } from '@/lib/membership';
-import { isPaidMembershipTier } from '@/lib/membership-checkout';
+import MyListingsScreen from '@/components/listing-manage/MyListingsScreen';
+import MembershipScreen from '@/components/membership/MembershipScreen';
+import { useMembershipPricing } from '@/components/membership/useMembershipPricing';
 import { useFavoriteListings } from '@/lib/use-favorite-listings';
 import { wardsOfCity } from '@/lib/wards';
 import { getPublicListings, type ListingSummary } from '@/services/listingApi';
 import { getUserProfileApi } from '@/services/userApi';
-import {
-  getMembershipPlans,
-  getMyMembership,
-  type MembershipView,
-  type PaidMembershipTier,
-} from '@/services/membershipApi';
 import type { ManagementSection } from '@/services/managementApi';
 import type { UserProfileResponse } from '@/types/api';
 import provinces from '@/data/provinces.json';
@@ -34,29 +27,21 @@ export default function HomeScreen({
   onSelectTab,
   onOpenListing,
   onBrowse,
-  onOpenNews,
   onOpenManagement,
-  onOpenFavorites,
-  onOpenNotifications,
-  onOpenHistory,
 }: {
   onSelectTab?: (tab: MainTab) => void;
   onOpenListing?: (id: string) => void;
   onBrowse: (filters: Record<string, string | number>) => void;
-  onOpenNews: () => void;
   onOpenManagement: (section: ManagementSection) => void;
-  onOpenFavorites: () => void;
-  onOpenNotifications: () => void;
-  onOpenHistory: () => void;
 }) {
-  const showDialog = useDialog();
   const [listings, setListings] = useState<ListingSummary[]>([]);
   const [category, setCategory] = useState<string | undefined>();
   const [profile, setProfile] = useState<UserProfileResponse | null>(null);
-  const [membershipPlans, setMembershipPlans] = useState<MembershipPlanInfo[] | null>(null);
-  const [membership, setMembership] = useState<MembershipView | null>(null);
-  const [checkoutTier, setCheckoutTier] = useState<PaidMembershipTier | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+  // Open over Home; `tier` starts that plan's checkout, `listings` is its listing list.
+  const [membershipView, setMembershipView] = useState<{
+    tier?: string;
+    listings?: boolean;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -119,55 +104,53 @@ export default function HomeScreen({
       .catch(() => undefined);
   }, []);
 
-  const refreshMembership = useCallback(() => {
-    void getMyMembership().then(setMembership).catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    getMembershipPlans()
-      .then((plans) => setMembershipPlans(mergeMembershipPlans(plans)))
-      .catch(() => setMembershipPlans(mergeMembershipPlans(null)));
-    refreshMembership();
-  }, [refreshMembership]);
-
-  function openMembershipCheckout(tier: string) {
-    if (!isPaidMembershipTier(tier)) return;
-    if (Platform.OS === 'web') {
-      showDialog('Thanh toán hội viên', 'Mở ứng dụng HomeSpace trên điện thoại để dùng thanh toán thử.');
-      return;
-    }
-    if (!profile?.id) {
-      showDialog('Chưa tải được tài khoản', 'Hãy tải lại trang chủ rồi thử thanh toán lại.');
-      return;
-    }
-    setCheckoutTier(tier);
-  }
+  const pricing = useMembershipPricing(profile?.role);
 
   // One favorite set for the cards and the header heart count.
   const { favoriteIds, toggle: toggleFavoriteListing } = useFavoriteListings();
 
-  const userName =
-    [profile?.firstName, profile?.lastName].filter(Boolean).join(' ') ||
-    profile?.username ||
-    'HomeSpace';
+  // Kept inside Home so that Back from the listings returns to the membership screen.
+  if (membershipView?.listings)
+    return (
+      <MyListingsScreen
+        onBack={() => setMembershipView({})}
+        onSelectTab={(tab) => {
+          // Home is already the app's screen: only close what is shown over it.
+          if (tab === 'home') setMembershipView(null);
+          onSelectTab?.(tab);
+        }}
+      />
+    );
+
+  if (membershipView)
+    return (
+      <MembershipScreen
+        initialTier={membershipView.tier}
+        onBack={() => {
+          setMembershipView(null);
+          void pricing.reload();
+        }}
+        onManageListings={() => setMembershipView({ listings: true })}
+      />
+    );
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <HomeHeader
-        city={city}
-        wardId={wardId}
-        locationLabel={ward?.name_with_type ?? city.name}
-        onChangeLocation={(nextCity, nextWardId) => {
-          setCity(nextCity);
-          setWardId(nextWardId);
-        }}
-        avatarUri={profile?.avatarUrl}
-        userName={userName}
+      <TabHeader
+        profile={profile}
         favoriteCount={favoriteIds.size}
-        onOpenFavorites={onOpenFavorites}
-        onOpenNotifications={onOpenNotifications}
-        onOpenMenu={() => setMenuOpen(true)}
-      />
+        membership={pricing.membership}
+        onOpenMembership={() => setMembershipView({})}>
+        <HomeLocationFilter
+          city={city}
+          wardId={wardId}
+          locationLabel={ward?.name_with_type ?? city.name}
+          onChangeLocation={(nextCity, nextWardId) => {
+            setCity(nextCity);
+            setWardId(nextWardId);
+          }}
+        />
+      </TabHeader>
       <ProfileCompletionBanner />
       <ScrollView
         keyboardShouldPersistTaps="handled"
@@ -176,8 +159,11 @@ export default function HomeScreen({
             refreshing={refreshing}
             onRefresh={() => {
               void loadListings(true);
-              refreshMembership();
-              if (!profile) void getUserProfileApi().then(setProfile).catch(() => undefined);
+              void pricing.reload();
+              if (!profile)
+                void getUserProfileApi()
+                  .then(setProfile)
+                  .catch(() => undefined);
             }}
           />
         }
@@ -226,36 +212,16 @@ export default function HomeScreen({
         />
 
         <MembershipSection
-          plans={membershipPlans}
-          membership={membership}
-          role={profile?.role}
+          plans={pricing.plans}
+          error={pricing.plansError}
+          cardState={pricing.cardState}
+          onRetry={() => void pricing.reload()}
           onPostListing={() => onOpenManagement('landlord-properties')}
-          onPurchase={openMembershipCheckout}
+          onOpenMembership={(tier) => setMembershipView({ tier })}
         />
       </ScrollView>
 
       <BottomTabBar active="home" onSelect={(tab) => onSelectTab?.(tab)} />
-      {checkoutTier && profile?.id ? (
-        <MembershipCheckout
-          tier={checkoutTier}
-          userId={profile.id}
-          onClose={() => setCheckoutTier(null)}
-          onPaid={refreshMembership}
-        />
-      ) : null}
-      <HomeDrawer
-        visible={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        profile={profile}
-        userName={userName}
-        membership={membership}
-        onDashboard={() => onSelectTab?.('management')}
-        onFavorites={onOpenFavorites}
-        onHistory={onOpenHistory}
-        onSettings={() => onSelectTab?.('profile')}
-        onRentals={() => onSelectTab?.('search')}
-        onNews={onOpenNews}
-      />
     </SafeAreaView>
   );
 }
