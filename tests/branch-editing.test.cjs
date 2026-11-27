@@ -322,3 +322,94 @@ test('the shown floor survives new ids and removals; room search ignores accents
   assert.ok(logic.matchesText('Khu Đông', 'dong'));
   assert.ok(!logic.matchesText('101', '102'));
 });
+
+// R-D: acknowledgedDetach and 409/4093.
+const { saveWithLinks } = mobile('src/lib/branch-layout-save.ts');
+const conflict = (code) =>
+  Object.assign(new Error('409'), { isAxiosError: true, response: { status: 409, data: { code } } });
+const linksOf = (listing, contract) => ({
+  rooms: [
+    {
+      roomId: 's1',
+      manualStatus: 'NONE',
+      listings: listing ? [{ id: listing }] : [],
+      contracts: contract ? [{ id: contract, status: 'CLOSED' }] : [],
+      holds: [],
+    },
+  ],
+});
+function rdHarness({ reads, saves }) {
+  const sent = [];
+  const asked = [];
+  const api = {
+    getLayout: async () => LAYOUT,
+    saveLayout: async (_id, request) => {
+      sent.push(request);
+      const next = saves.shift();
+      if (next instanceof Error) throw next;
+      return next;
+    },
+  };
+  const readLinks = async () => reads.shift() ?? null;
+  const ask = async (lost, links) => (asked.push({ lost, links }), true);
+  return { api, readLinks, ask, sent, asked };
+}
+const baseDraft = layoutLib.fromLayout(LAYOUT);
+const removed = layoutLib.fromLayout({
+  ...LAYOUT,
+  floors: [{ ...LAYOUT.floors[0], rows: [{ ...LAYOUT.floors[0].rows[0], slots: [{ id: 's1', roomCode: null }] }] }],
+});
+
+test('a save without a removed room sends empty acknowledgedDetach and reads nothing', async () => {
+  const h = rdHarness({ reads: [], saves: [{ revision: 3, floors: [] }] });
+  const out = await saveWithLinks(h.api, h.readLinks, h.ask, 'b', baseDraft, baseDraft, 2);
+  assert.equal(out.kind, 'saved');
+  assert.deepEqual(h.sent[0].acknowledgedDetach, { listingIds: [], contractIds: [] });
+  assert.equal(h.asked.length, 0);
+});
+
+test('a removed room sends the listing and contract ids the owner confirmed', async () => {
+  const h = rdHarness({ reads: [linksOf('L1', 'C1')], saves: [{ revision: 3, floors: [] }] });
+  const out = await saveWithLinks(h.api, h.readLinks, h.ask, 'b', removed, baseDraft, 2);
+  assert.equal(out.kind, 'saved');
+  assert.deepEqual(h.sent[0].acknowledgedDetach, { listingIds: ['L1'], contractIds: ['C1'] });
+});
+
+test('4093 re-reads, asks again with the new links and resends only what was confirmed', async () => {
+  const h = rdHarness({
+    reads: [linksOf('L1', null), linksOf('L1', 'C2')],
+    saves: [conflict(4093), { revision: 3, floors: [] }],
+  });
+  const out = await saveWithLinks(h.api, h.readLinks, h.ask, 'b', removed, baseDraft, 2);
+  assert.equal(out.kind, 'saved');
+  assert.equal(h.asked.length, 2);
+  assert.deepEqual(h.sent.map((r) => r.acknowledgedDetach), [
+    { listingIds: ['L1'], contractIds: [] },
+    { listingIds: ['L1'], contractIds: ['C2'] },
+  ]);
+});
+
+test('declining the second question after 4093 sends nothing more and keeps the draft', async () => {
+  const h = rdHarness({ reads: [linksOf('L1', null), linksOf('L1', 'C2')], saves: [conflict(4093)] });
+  let n = 0;
+  const out = await saveWithLinks(h.api, h.readLinks, async () => ++n === 1, 'b', removed, baseDraft, 2);
+  assert.equal(out.kind, 'cancelled');
+  assert.equal(h.sent.length, 1);
+});
+
+test('4093 repeating with the same confirmation is not resent forever', async () => {
+  const h = rdHarness({
+    reads: [linksOf('L1', null), linksOf('L1', null)],
+    saves: [conflict(4093), conflict(4093)],
+  });
+  const out = await saveWithLinks(h.api, h.readLinks, h.ask, 'b', removed, baseDraft, 2);
+  assert.equal(out.kind, 'failed');
+  assert.equal(h.sent.length, 1);
+});
+
+test('the editor saves through one guarded path (no double submit, draft kept by the dirty effect)', () => {
+  const src = read('src/components/branch/editing/BranchMapEditor.tsx');
+  assert.ok(src.includes('saveWithLinks('));
+  assert.ok(/if \(savingRef\.current \|\| !dirty/.test(src));
+  assert.equal(src.includes('acceptsLostRooms'), false);
+});

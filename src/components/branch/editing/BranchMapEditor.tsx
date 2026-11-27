@@ -11,7 +11,6 @@ import { useViewer } from '@/components/rental/requests/useViewer';
 import { useActionDialog } from '@/components/rental/shared/ActionDialog';
 import { ErrorBlock, LoadingBlock } from '@/components/rental/shared/StateBlocks';
 import { ScreenHeader } from '@/components/Screen';
-import { lostAttachedRooms, roomOptions } from '@/lib/branch-assignment';
 import { branchError } from '@/lib/branch-error';
 import {
   MAX_FLOORS,
@@ -30,10 +29,11 @@ import {
   type DraftHistory,
 } from '@/lib/branch-layout';
 import type { StoredDraft } from '@/lib/branch-layout-draft';
-import { saveLayoutDraft } from '@/lib/branch-layout-save';
+import { saveWithLinks, type LostRoom } from '@/lib/branch-layout-save';
 import { setLeaveGuard } from '@/lib/leave-guard';
 import { branchDraftStore } from '@/services/branchDraftStore';
 import { branchAssignmentApi, branchLayoutApi } from '@/services/branchMonitorApi';
+import type { BranchAssignments } from '@/types/branch-assignment';
 import type { BranchLayout, LayoutDraft } from '@/types/branch-layout';
 
 import LayoutBoard from './LayoutBoard';
@@ -236,9 +236,7 @@ export default function BranchMapEditor({
   };
 
   /** Warns before a save that removes a room with attachments; the server decides what is allowed. */
-  const acceptsLostRooms = async () => {
-    const kept = new Set(roomOptions(draft).map((room) => room.id));
-    if (roomOptions(saved).every((room) => kept.has(room.id))) return true;
+  const askAboutLinks = async (lost: LostRoom[], links: BranchAssignments | null) => {
     const ask = (title: string, description: string) =>
       confirm({
         title,
@@ -247,16 +245,11 @@ export default function BranchMapEditor({
         cancelLabel: 'Quay lại',
         tone: 'warning',
       });
-    // Read now: the owner is warned from this answer, and without one must accept the unknown.
-    const links = await branchAssignmentApi.getAssignments(branchId).catch(() => null);
     if (!links)
       return ask(
         'Chưa kiểm tra được liên kết phòng',
         'Chưa đọc được liên kết của các phòng sắp bỏ. Nếu vẫn lưu, liên kết trên những phòng này có thể bị gỡ: tin được gỡ khỏi phòng, hợp đồng cũ chuyển về khay Chưa xếp phòng. Nếu còn hợp đồng hiệu lực hoặc giữ chỗ, máy chủ sẽ từ chối cả lần lưu.'
       );
-    const byId = new Map(links.rooms.map((room) => [room.roomId, room]));
-    const lost = lostAttachedRooms(saved, draft, byId);
-    if (lost.length === 0) return true;
     const lines = lost.slice(0, 5).map((room) => `• Phòng ${room.code}: ${room.text}`);
     if (lost.length > 5) lines.push(`• và ${lost.length - 5} phòng khác`);
     return ask(
@@ -277,8 +270,16 @@ export default function BranchMapEditor({
     setSaveErrors([]);
     setTarget(null);
     try {
-      if (!(await acceptsLostRooms())) return;
-      const outcome = await saveLayoutDraft(branchLayoutApi, branchId, draft, saved, revision);
+      const outcome = await saveWithLinks(
+        branchLayoutApi,
+        () => branchAssignmentApi.getAssignments(branchId).catch(() => null),
+        askAboutLinks,
+        branchId,
+        draft,
+        saved,
+        revision
+      );
+      if (outcome.kind === 'cancelled') return;
       if (outcome.kind === 'saved') {
         adopt(outcome.layout);
         await session.forget();

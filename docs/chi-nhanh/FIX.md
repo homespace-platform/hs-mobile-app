@@ -45,3 +45,11 @@ Nếu bị dừng: đọc file này, mục chưa đánh dấu là việc còn l�
 - Test mới `tests/branch-attention-badge.test.cjs` chạy shell, tab, hook, API và parser thật trên runtime hook tối giản: 3 ca đỏ trước khi sửa, đạt sau khi sửa. Sửa một assert so mã trong `branch-attention.test.cjs` (`onCountChange(data)`).
 - Kiểm: `npm run typecheck` đạt; `node --test --test-isolation=none tests/*.cjs tests/*.mjs` 597/597; `test:theme` 5/5. Chưa chạy trên máy/giả lập.
 - Giới hạn (đọc mã core): `/attention` lấy `realNow` sau câu truy vấn kiểm quyền (câu mở ảnh chụp), summary lấy trước; hai lượt chụp cách nhau vài ms vẫn có thể bị xếp sai.
+
+## R-D phía mobile: acknowledgedDetach và 409/4093
+
+- Mọi lần lưu sơ đồ gửi `acknowledgedDetach { listingIds, contractIds }`: id tin và HĐ trên các phòng bỏ/đổi thành ô trống mà chủ đã xác nhận từ lượt đọc assignments mới; rỗng khi không bỏ phòng nào (không đọc thêm). Code: `saveWithLinks` trong `lib/branch-layout-save.ts`, `BranchMapEditor` chỉ truyền hộp thoại và nguồn đọc.
+- 4093: giữ nháp, đọc lại assignments, hỏi lại với liên kết mới, chỉ gửi lại khi xác nhận; từ chối thì dừng, nháp còn. Xác nhận trùng lần trước mà server vẫn 4093 thì báo lỗi, không lặp. 4074 và 409 khác giữ nguyên xử lý cũ.
+- Không gửi đôi: vẫn qua `savingRef`. Nháp: effect `keep` chạy khi còn dirty, chỉ xoá khi lưu thành công, nên Back Android/nền app không đổi; không thêm mã.
+- Khi không đọc được liên kết, người dùng xác nhận "có thể bị gỡ" nhưng gửi danh sách rỗng, nên nếu thực có liên kết server trả 4093 và hỏi lại (an toàn, có thể phải thử lại).
+- Test: 6 ca mới trong `tests/branch-editing.test.cjs` (5 hành vi, 1 so mã). Kiểm: typecheck đạt; 603/603; test:theme 5/5. Chưa thử trên máy/giả lập hay với server thật (server đang viết).

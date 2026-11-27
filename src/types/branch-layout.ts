@@ -25,6 +25,8 @@ export interface BranchLayout {
 
 export interface SaveBranchLayoutRequest {
   expectedRevision: number;
+  /** Links on removed rooms the owner agreed to detach; always sent, empty when no room is removed. */
+  acknowledgedDetach?: { listingIds: string[]; contractIds: string[] };
   floors: {
     id?: string;
     label: string;
