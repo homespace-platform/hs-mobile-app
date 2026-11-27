@@ -53,7 +53,7 @@ export default function FloorBoard({
     const match = filtering && matched.has(slot.key);
     const dim = filtering && !match;
     const box = match
-      ? `border-4 border-foreground ${toneBackground(look.tone)}`
+      ? `border-4 border-primary ${toneBackground(look.tone)}`
       : dim
         ? 'border border-dashed border-border-strong bg-surface'
         : `border-2 ${tone.box}`;

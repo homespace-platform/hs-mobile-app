@@ -235,7 +235,7 @@ export default function RoomLinksPanel({
         text={`Mã trên tin là "${declared}", khác mã ô ${code}. Sơ đồ là chuẩn: nên đổi mã ô hoặc sửa mã trên tin.`}>
         {codeTaken(rooms, roomId, declared) ? (
           <Text className="text-sm leading-5 text-warning">
-            Mã "{declared}" đã là của ô khác nên chưa đổi mã ô được.
+            Mã &quot;{declared}&quot; đã là của ô khác nên chưa đổi mã ô được.
           </Text>
         ) : onRecode ? (
           <Action

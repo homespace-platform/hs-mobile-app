@@ -189,6 +189,12 @@ export const roomLegendKey = (room: OverviewRoom, layer: OverviewLayer): string 
   return layer === 'contracts' ? (status === 'NO_LEASE' ? 'NO_LEASE' : 'HAS_LEASE') : status;
 };
 
+/** The look key of the "Có hợp đồng" chip: the most urgent lease among its rooms, like the cells (HAS_LEASE = neutral). */
+export const leaseChipStatus = (statuses: Iterable<string>): string => {
+  const all = new Set(statuses);
+  return all.has('WITHIN_30') ? 'WITHIN_30' : all.has('WITHIN_60') ? 'WITHIN_60' : 'HAS_LEASE';
+};
+
 /* ---------- links, months, time ---------- */
 
 /** Only paths inside the dashboard are followed; anything else is shown without a link. */

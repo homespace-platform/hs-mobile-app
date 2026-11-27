@@ -173,11 +173,13 @@ export function SearchBox({
 /** The legend is also the count: how many rooms are in each state, on every floor. */
 export function Legend({
   layer,
+  leaseStatus,
   items,
   highlight,
   onToggle,
 }: {
   layer: OverviewLayer;
+  leaseStatus: string;
   items: { status: string; label: string; count: number }[];
   highlight: string | null;
   onToggle: (status: string) => void;
@@ -191,7 +193,7 @@ export function Legend({
       className="-mx-4 grow-0"
       contentContainerClassName="items-stretch gap-2 px-4">
       {items.map(({ status, label, count }) => {
-        const look = layerLook(layer, status);
+        const look = layerLook(layer, status === 'HAS_LEASE' ? leaseStatus : status);
         const tone = BRANCH_TONES[look.tone];
         const selected = status === highlight;
         return (
@@ -201,7 +203,7 @@ export function Legend({
             accessibilityRole="button"
             accessibilityLabel={`${label}: ${count} phòng. ${selected ? 'Đang làm nổi, bấm để bỏ' : 'Bấm để làm nổi'}`}
             accessibilityState={{ selected }}
-            className={`min-h-[44px] flex-row items-center gap-1.5 rounded-xl px-2.5 py-1.5 active:opacity-70 ${selected ? `border-4 border-foreground ${toneBackground(look.tone)}` : `border-2 ${tone.box}`}`}>
+            className={`min-h-[44px] flex-row items-center gap-1.5 rounded-xl px-2.5 py-1.5 active:opacity-70 ${selected ? `border-4 border-primary ${toneBackground(look.tone)}` : `border-2 ${tone.box}`}`}>
             <Icon name={look.icon} size={16} className={tone.text} />
             <Text className={`text-sm font-semibold ${tone.text}`}>{label}</Text>
             <Text className={`text-base font-extrabold ${tone.text}`}>{count}</Text>

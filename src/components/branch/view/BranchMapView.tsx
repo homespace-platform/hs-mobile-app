@@ -106,7 +106,7 @@ export default function BranchMapView({
   const ready = !data || layerReady(data, layer);
   const highlight = data && ready && picked?.layer === layer ? picked.status : null;
   const rooms = useMemo(() => new Map(data?.rooms.map((room) => [room.roomId, room])), [data]);
-  const { filtering, counts, matched, perFloor } = mapSummary(
+  const { filtering, counts, matched, perFloor, leaseStatus } = mapSummary(
     floors,
     rooms,
     layer,
@@ -216,6 +216,7 @@ export default function BranchMapView({
         ) : data && ready ? (
           <Legend
             layer={layer}
+            leaseStatus={leaseStatus}
             items={legendItems(layer, counts, highlight)}
             highlight={highlight}
             onToggle={(status) => setPicked(status === highlight ? null : { layer, status })}

@@ -345,6 +345,18 @@ test('contracts layer: empty list is over 60 days when occupied, otherwise no le
   assert.deepEqual([...summary.matched], ['2', '3']);
 });
 
+test('lease chip tone follows the most urgent lease in the group', () => {
+  const { leaseChipStatus } = load('src/lib/branch-overview.ts');
+  assert.equal(leaseChipStatus(['LONG', 'WITHIN_60', 'WITHIN_30']), 'WITHIN_30');
+  assert.equal(leaseChipStatus(['LONG', 'WITHIN_60']), 'WITHIN_60');
+  assert.equal(leaseChipStatus(['LONG']), 'HAS_LEASE');
+  assert.equal(leaseChipStatus([]), 'HAS_LEASE');
+  const soon = room('s', { contracts: [{ contractId: 'c', status: 'WITHIN_60', endDateExclusive: '2026-12-10', daysRemaining: 45 }] });
+  const map = new Map([['1', room('o', { status: 'OCCUPIED' })], ['2', soon]]);
+  const fl = [{ key: 'f', label: 'T', rows: [{ key: 'a', label: 'D', slots: [slot('1', '1'), slot('2', '2')] }] }];
+  assert.equal(view.mapSummary(fl, map, 'contracts', '', null).leaseStatus, 'WITHIN_60');
+});
+
 test('columns share a 320px screen up to two rows, then scroll with a fixed width', () => {
   const narrow = 320 - 58;
   assert.equal(view.columnWidth(1, 2, narrow), null);

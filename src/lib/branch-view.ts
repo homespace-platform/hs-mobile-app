@@ -13,6 +13,7 @@ import {
   paymentKindLabel,
   roomLayerStatus,
   roomLegendKey,
+  leaseChipStatus,
   roomMatches,
   sortExpiries,
   statusLabel,
@@ -205,6 +206,7 @@ export function mapSummary(
   /** Slot keys. */
   const matched = new Set<string>();
   const perFloor = new Map<string, number>();
+  const leaseStatuses: string[] = [];
   for (const floor of floors) {
     let onFloor = 0;
     for (const row of floor.rows)
@@ -213,6 +215,8 @@ export function mapSummary(
         const room = rooms.get(slot.id ?? '');
         const status = room ? roomLegendKey(room, layer) : null;
         if (status) counts.set(status, (counts.get(status) ?? 0) + 1);
+        if (room && layer === 'contracts' && status === 'HAS_LEASE')
+          leaseStatuses.push(roomLayerStatus(room, layer));
         if (
           filtering &&
           (!query.trim() || roomMatches(slot.roomCode, room, query)) &&
@@ -224,7 +228,7 @@ export function mapSummary(
       }
     perFloor.set(floor.key, onFloor);
   }
-  return { filtering, counts, matched, perFloor };
+  return { filtering, counts, matched, perFloor, leaseStatus: leaseChipStatus(leaseStatuses) };
 }
 
 /** Legend order (most urgent first): statuses that have rooms, plus the highlighted one. */
