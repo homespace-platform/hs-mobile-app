@@ -8,6 +8,7 @@ import Icon from '@/components/Icon';
 import { ScreenHeader } from '@/components/Screen';
 import { useAlive, useToast } from '@/components/rental/billing/common';
 import { receiptMoney, receiptQuery, receiptSubtitle } from '@/components/rental/billing/logic';
+import MembershipReceiptsTab from '@/components/rental/billing/MembershipReceiptsTab';
 import PaymentReceiptActions from '@/components/rental/billing/PaymentReceiptActions';
 import ActionButton from '@/components/rental/shared/ActionButton';
 import Badge from '@/components/rental/shared/Badge';
@@ -30,11 +31,36 @@ export type PaymentHistoryScreenProps = RentalScreenNavProps & {
 };
 
 export default function PaymentHistoryScreen(props: PaymentHistoryScreenProps) {
+  const [tab, setTab] = useState<'rent' | 'membership'>('rent');
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <ScreenHeader title="Lịch sử thanh toán" onBack={props.onBack} />
-      {/* Web key: another role or contract starts from page 1 with nothing carried over. */}
-      <Receipts key={`${props.role}:${props.contractId ?? ''}`} {...props} />
+      <View accessibilityRole="tablist" className="flex-row gap-2 px-4 pt-3">
+        {(
+          [
+            ['rent', 'Thuê nhà'],
+            ['membership', 'Gói hội viên'],
+          ] as const
+        ).map(([key, label]) => (
+          <Pressable
+            key={key}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === key }}
+            onPress={() => setTab(key)}
+            className={`min-h-11 justify-center rounded-xl border px-4 ${tab === key ? 'border-brand bg-brand' : 'border-border bg-surface'}`}>
+            <Text
+              className={`text-sm font-semibold ${tab === key ? 'text-on-brand' : 'text-foreground'}`}>
+              {label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      {tab === 'membership' ? (
+        <MembershipReceiptsTab />
+      ) : (
+        /* Web key: another role or contract starts from page 1 with nothing carried over. */
+        <Receipts key={`${props.role}:${props.contractId ?? ''}`} {...props} />
+      )}
     </SafeAreaView>
   );
 }
