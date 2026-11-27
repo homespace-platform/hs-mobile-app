@@ -18,8 +18,9 @@ export interface MembershipReceipt {
   issuedAt: string;
   pdfStatus: 'PENDING' | 'READY' | 'FAILED';
   /** OVERPAYMENT: duplicate payment, not applied, refunded to the payer. Absent = normal receipt. */
-  type?: 'PAYMENT' | 'OVERPAYMENT' | null;
-  refundStatus?: 'PENDING' | 'REFUNDED' | null;
+  type?: 'PURCHASE' | 'OVERPAYMENT' | null;
+  refundStatus?: 'REFUND_PENDING' | 'REFUNDED' | null;
+  note?: string | null;
 }
 
 const base = '/api/v1/membership/receipts';
