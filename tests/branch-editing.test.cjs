@@ -413,3 +413,9 @@ test('the editor saves through one guarded path (no double submit, draft kept by
   assert.ok(/if \(savingRef\.current \|\| !dirty/.test(src));
   assert.equal(src.includes('acceptsLostRooms'), false);
 });
+
+test('the fee warning follows the server missingCharges, not NOT_APPLICABLE choices', () => {
+  const screen = read('src/screens/BranchManagementScreen.tsx');
+  assert.match(screen, /const missingFees = selected\?\.missingCharges \?\? \[\];/);
+  assert.equal(/missingFees = \[\s*form\.category/.test(screen), false);
+});

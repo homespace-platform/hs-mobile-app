@@ -180,11 +180,7 @@ export function buildBranchInput(form: BranchFormState): BranchInput {
     (form.charges.CAR_PARKING.method !== 'NOT_APPLICABLE' && carCapacity < 1)
   )
     throw new Error('Sức chứa ô tô phải lớn hơn 0, hoặc chọn không nhận xe.');
-  const defaultCharges: BranchCharge[] = CHARGE_FIELDS.filter(
-    ({ key }) =>
-      !(['MANAGEMENT', 'INTERNET', 'SERVICE_OR_GARBAGE'] as string[]).includes(key) ||
-      form.charges[key].method !== 'NOT_APPLICABLE'
-  ).map(({ key }) => {
+  const defaultCharges: BranchCharge[] = CHARGE_FIELDS.map(({ key }) => {
     const { method, amount } = form.charges[key];
     const index = CHARGE_FIELDS.findIndex((field) => field.key === key);
     if (paidMethods.has(method) && !(Number(amount) > 0))

@@ -157,13 +157,8 @@ export default function BranchManagementScreen({
   const [searching, setSearching] = useState(false);
   const [coverFile, setCoverFile] = useState<LocalFile | null>(null);
   const [coverUri, setCoverUri] = useState<string | null>(null);
-  const missingFees = [
-    form.category === 'APARTMENT' &&
-      form.charges.MANAGEMENT.method === 'NOT_APPLICABLE' &&
-      'phí quản lý',
-    form.charges.INTERNET.method === 'NOT_APPLICABLE' && 'Internet / WiFi',
-    form.charges.SERVICE_OR_GARBAGE.method === 'NOT_APPLICABLE' && 'phí rác & vệ sinh',
-  ].filter(Boolean);
+  // Completeness is decided by the server (a row per required type; not applicable counts as decided).
+  const missingFees = selected?.missingCharges ?? [];
   const filteredBranches = branches.filter((branch) => {
     if (branchCompleteness === 'complete' && branch.isComplete === false) return false;
     if (branchCompleteness === 'incomplete' && branch.isComplete !== false) return false;

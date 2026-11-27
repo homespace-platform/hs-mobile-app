@@ -220,11 +220,11 @@ test('branch form preserves existing data and builds complete valid charges', ()
     payload.defaultCharges.find((charge) => charge.chargeType === 'OTHER').customName,
     'Vệ sinh riêng'
   );
-  assert.equal(payload.defaultCharges.length, 6);
-  assert.equal(
-    payload.defaultCharges.some((charge) => charge.chargeType === 'INTERNET'),
-    false
-  );
+  // The server needs an explicit row per required type, even when the owner chose "not applicable".
+  assert.equal(payload.defaultCharges.length, 8);
+  const internet = payload.defaultCharges.find((charge) => charge.chargeType === 'INTERNET');
+  assert.equal(internet.billingMethod, 'NOT_APPLICABLE');
+  assert.equal(internet.amount, undefined);
   assert.equal(payload.buildingAmenityCodes[0], 'CAMERA');
   form.charges.MOTORBIKE_PARKING.method = 'PER_VEHICLE_MONTH';
   form.motorbikeCapacity = '0';
