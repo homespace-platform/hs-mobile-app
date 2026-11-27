@@ -34,6 +34,12 @@ import {
   type PropertyCategoryKey,
 } from '@/lib/listing-form';
 import { createLatest } from '@/lib/listing-latest';
+import {
+  listRooms,
+  readRoomLink,
+  ROOM_DROPPED_MESSAGE,
+  type ListingRoom,
+} from '@/lib/listing-room-link';
 import { markUploaded } from '@/lib/listing-media';
 import { CATALOG_LOAD_FAILED, CATALOG_LOADING, catalogMessage } from '@/lib/listing-policy';
 import { isOutOfQuota } from '@/lib/listing-quota';
@@ -48,6 +54,7 @@ import {
   type ListingCatalog,
   type ListingSubmissionAction,
 } from '@/services/listingCreateApi';
+import { branchLayoutApi } from '@/services/branchMonitorApi';
 import { getAccessibleListing } from '@/services/listingApi';
 import { fetchListingDescription } from '@/services/listingDescriptionApi';
 import { loadListingEditor, submitListing } from '@/services/listingEditorApi';
@@ -64,12 +71,17 @@ type Loaded = Pick<
 export function useListingEditor({
   listingId,
   duplicateFromId,
+  branchId,
+  roomId,
   onBack,
   onSaved,
   onOpenMembership,
 }: {
   listingId?: string;
   duplicateFromId?: string;
+  /** With roomId, create only: the room of the branch map this listing is started from. */
+  branchId?: string;
+  roomId?: string;
   onBack: () => void;
   onSaved: () => void;
   /** Leaves the editor; `addon` opens the extra-use purchase. */
@@ -98,6 +110,13 @@ export function useListingEditor({
   const [quotaOpen, setQuotaOpen] = useState(false);
   /** Membership shown over the editor, which keeps the unsaved form. */
   const [buying, setBuying] = useState<QuotaPurchase | null>(null);
+  /** Once removed it never comes back. */
+  const [roomLink, setRoomLink] = useState(() =>
+    readRoomLink({ listingId, duplicateFromId, branchId, roomId })
+  );
+  /** null = still loading. */
+  const [rooms, setRooms] = useState<ListingRoom[] | 'error' | null>(null);
+  const roomRequests = useRef(createLatest());
 
   const scrollRef = useRef<ScrollView>(null);
   const contentRef = useRef<View>(null);
@@ -107,8 +126,8 @@ export function useListingEditor({
   const dirty = useRef(false);
   const catalogRequests = useRef(createLatest());
   // Async handlers read the form as it is now, not as it was when they were created.
-  const latest = useRef({ data, state, catalog, catalogError, step });
-  latest.current = { data, state, catalog, catalogError, step };
+  const latest = useRef({ data, state, catalog, catalogError, step, roomLink });
+  latest.current = { data, state, catalog, catalogError, step, roomLink };
   const job = useRef<ReturnType<typeof createDescriptionJob> | null>(null);
 
   useEffect(() => {
@@ -121,7 +140,8 @@ export function useListingEditor({
 
   useEffect(() => {
     let active = true;
-    loadListingEditor({ listingId, duplicateFromId })
+    const link = readRoomLink({ listingId, duplicateFromId, branchId, roomId });
+    loadListingEditor({ listingId, duplicateFromId, branchId: link?.branchId })
       .then((result) => {
         if (!active) return;
         const { session, branches, savedAddress } = result;
@@ -135,7 +155,22 @@ export function useListingEditor({
     return () => {
       active = false;
     };
-  }, [listingId, duplicateFromId]);
+  }, [listingId, duplicateFromId, branchId, roomId]);
+
+  const linkedBranchId = roomLink?.branchId;
+  const loadRooms = useCallback(async () => {
+    if (!linkedBranchId) return;
+    const request = roomRequests.current.next();
+    const result = await branchLayoutApi
+      .getLayout(linkedBranchId)
+      .then(listRooms, () => 'error' as const);
+    if (request.isLatest()) setRooms(result);
+  }, [linkedBranchId]);
+  useEffect(() => {
+    const requests = roomRequests.current;
+    void loadRooms();
+    return () => requests.abort();
+  }, [loadRooms]);
 
   const category = state?.basicInfo.category;
   useEffect(() => {
@@ -264,6 +299,7 @@ export function useListingEditor({
         savedAddress: now.data.savedAddress,
         action,
         singlePage: singlePage(),
+        roomLink: now.roomLink,
       },
       {
         onStart: (text) => {
@@ -301,6 +337,8 @@ export function useListingEditor({
     setSaving(null);
     setSavingText('');
     if (result.status === 'cancelled') return;
+    // A refused room keeps the link; reading the map again lets the banner show whether it is gone.
+    if (result.status !== 'invalid') void loadRooms();
     // Sending this edit itself needs a use, so nothing can be saved before buying.
     const buyOver =
       result.status === 'quota' && quotaSaveAction(now.data.session) === 'SUBMIT_FOR_REVIEW'
@@ -325,7 +363,11 @@ export function useListingEditor({
         `${result.message}\n${MAYBE_SAVED_MESSAGE}`,
         [
           { text: 'Ở lại biểu mẫu', style: 'cancel' },
-          { text: 'Kiểm tra danh sách tin', onPress: onSaved },
+          {
+            // From a room, leaving goes back to the map, which shows the listing on that room.
+            text: now.roomLink ? 'Về chi nhánh kiểm tra' : 'Kiểm tra danh sách tin',
+            onPress: onSaved,
+          },
         ],
         'warning'
       );
@@ -476,6 +518,13 @@ export function useListingEditor({
     const { notice } = apply(form);
     update((s) => apply(s).state);
     setErrors(({ streetLine: _, ...rest }) => rest);
+    const link = latest.current.roomLink;
+    if (link && branchId !== link.branchId) {
+      setRoomLink(null);
+      const text = [ROOM_DROPPED_MESSAGE, notice?.message].filter(Boolean).join('\n');
+      setFlash({ tone: 'warning', text });
+      return;
+    }
     setFlash(notice ? { tone: notice.type, text: notice.message } : null);
   }
 
@@ -544,6 +593,16 @@ export function useListingEditor({
     generateDescription,
     requestCategory,
     chooseBranch,
+    roomLink,
+    /** False while the form has another branch than the room's: submitting is refused. */
+    roomBranchApplied: !roomLink || state?.basicInfo.branchId === roomLink.branchId,
+    rooms,
+    pickRoom: (id: string) => setRoomLink((link) => link && { ...link, roomId: id }),
+    removeRoomLink: () => setRoomLink(null),
+    retryRooms: () => {
+      setRooms(null);
+      void loadRooms();
+    },
     exit: () => leave(onBack),
     /** Any other way out, behind the same question. */
     leaveTo: leave,

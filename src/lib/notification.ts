@@ -368,6 +368,9 @@ export function notificationTarget(actionPath: unknown): NotificationTarget {
   }
   if (root === 'news') return { kind: 'news' };
   if (root !== 'dashboard') return NONE;
+  // The branch module's daily digest.
+  if (second === 'branches' && segments.length === 2)
+    return { kind: 'management', section: 'landlord-branches' };
   if (second === 'properties' && third === 'view' && segments.length === 3) {
     const id = param('id');
     return UUID.test(id) ? { kind: 'listing', id, own: true } : NONE;

@@ -17,7 +17,9 @@ import {
   type SaveListingInput,
   type SaveListingResult,
 } from '@/lib/listing-editor';
+import { listRooms } from '@/lib/listing-room-link';
 import { getBranches } from '@/services/branchApi';
+import { branchLayoutApi } from '@/services/branchMonitorApi';
 import { getAccessibleListing } from '@/services/listingApi';
 import { upsertListing } from '@/services/listingCreateApi';
 import { fileSessionGuard, withFileLease } from '@/services/rental/cache';
@@ -90,6 +92,8 @@ export async function submitListing(
             });
             return stored.id;
           },
+          hasRoom: async ({ branchId, roomId }) =>
+            listRooms(await branchLayoutApi.getLayout(branchId)).some((room) => room.id === roomId),
           upsert: async (payload) => {
             checkSession();
             return upsertListing(payload);

@@ -79,6 +79,7 @@ test('text and button token pairs retain readable contrast in both themes', asyn
     ['on-danger-solid', 'danger-solid'],
     ['success', 'success-soft'],
     ['warning', 'warning-soft'],
+    ['pending', 'pending-soft'],
   ];
   for (const scheme of ['light', 'dark']) {
     for (const [text, background] of pairs) {

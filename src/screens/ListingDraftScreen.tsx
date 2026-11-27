@@ -24,6 +24,7 @@ import LocationSection from '@/components/listing-editor/LocationSection';
 import PoliciesSection from '@/components/listing-editor/PoliciesSection';
 import PricingSection from '@/components/listing-editor/PricingSection';
 import QuotaModal from '@/components/listing-editor/QuotaModal';
+import RoomLinkBanner from '@/components/listing-editor/RoomLinkBanner';
 import { Notice } from '@/components/listing-editor/ui';
 import { useListingEditor } from '@/components/listing-editor/useListingEditor';
 import ViewingScheduleSection from '@/components/listing-editor/ViewingScheduleSection';
@@ -120,6 +121,8 @@ function useKeyboardOpen() {
 export default function ListingDraftScreen({
   listingId,
   duplicateFromId,
+  branchId,
+  roomId,
   onBack,
   onSaved,
   onViewListing,
@@ -130,6 +133,9 @@ export default function ListingDraftScreen({
   listingId?: string;
   /** Create a new listing prefilled from this one. */
   duplicateFromId?: string;
+  /** With roomId, create only: preselect this branch and link the new listing to the room. */
+  branchId?: string;
+  roomId?: string;
   onBack: () => void;
   onSaved: () => void;
   /** Actions of the locked-listing screen; the buttons are hidden without them. */
@@ -143,6 +149,8 @@ export default function ListingDraftScreen({
   const editor = useListingEditor({
     listingId,
     duplicateFromId,
+    branchId,
+    roomId,
     onBack,
     onSaved,
     onOpenMembership,
@@ -344,6 +352,16 @@ export default function ListingDraftScreen({
               )}
               {step === 1 || edit ? (
                 <Text className="text-sm leading-5 text-muted-foreground">{copy.subtitle}</Text>
+              ) : null}
+              {editor.roomLink ? (
+                <RoomLinkBanner
+                  roomId={editor.roomLink.roomId}
+                  rooms={editor.rooms}
+                  branchApplied={editor.roomBranchApplied}
+                  onPickRoom={editor.pickRoom}
+                  onRetry={editor.retryRooms}
+                  onRemove={editor.removeRoomLink}
+                />
               ) : null}
               {edit && session.pendingEdit ? (
                 <Notice

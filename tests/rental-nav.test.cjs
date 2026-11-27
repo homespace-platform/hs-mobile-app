@@ -143,7 +143,7 @@ test('every /dashboard actionPath the notification service can build is covered'
     '../../hs-notification-service/src/modules/notification-events/notification-event.ts'
   );
   const literals = fs.readFileSync(file, 'utf8').match(/(['`])\/dashboard\/(?:(?!\1).)*\1/g);
-  const notRental = /^\/dashboard\/(viewing-schedules|membership|properties)/;
+  const notRental = /^\/dashboard\/(viewing-schedules|membership|properties|branches)/;
   const paths = literals
     .map((literal) => literal.slice(1, -1).replace(/\$\{(?:[^{}]|\{[^{}]*\})*\}/g, UUID))
     .filter((actionPath) => !notRental.test(actionPath));

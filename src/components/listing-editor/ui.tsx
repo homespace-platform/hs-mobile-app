@@ -112,7 +112,10 @@ export function SelectField({
   error,
   hint,
   placeholder = 'Chọn…',
+  tall,
 }: {
+  /** A full 48dp box (the default is the rental form height). */
+  tall?: boolean;
   label?: string;
   ariaLabel?: string;
   value: string;
@@ -132,7 +135,7 @@ export function SelectField({
         accessibilityRole="button"
         accessibilityLabel={`${name}: ${selected?.label ?? placeholder}`}
         accessibilityState={{ expanded: open }}
-        className={`${inputBoxClass(Boolean(error))} gap-2 py-2`}>
+        className={`${inputBoxClass(Boolean(error))} gap-2 py-2 ${tall ? 'min-h-[48px]' : ''}`}>
         <Text className={`flex-1 text-base ${selected ? 'text-foreground' : 'text-subtle'}`}>
           {selected?.label ?? placeholder}
         </Text>

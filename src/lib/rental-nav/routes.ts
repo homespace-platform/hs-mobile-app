@@ -17,8 +17,11 @@ export type RentalRoute =
   | { screen: 'payment-history'; side: DashboardRole; contractId?: string }
   /** /dashboard/complaints?requestId=&complaintId= */
   | { screen: 'complaint'; requestId: string; complaintId: string }
-  /** /dashboard/payments?paymentId= : only compared with the caller's own /mine list, then paymentLink(). */
-  | { screen: 'payment-lookup'; paymentId: string }
+  /**
+   * /dashboard/payments?paymentId= : only compared with the caller's own /mine list, then paymentLink().
+   * `actHere` (branch links): a refund or settlement transfer is handled on this screen instead.
+   */
+  | { screen: 'payment-lookup'; paymentId: string; actHere?: boolean }
   /** A rental link the web answers with a message instead of a page. */
   | { screen: 'link-error'; message: string; contractListSide?: DashboardRole };
 

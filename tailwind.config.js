@@ -38,6 +38,8 @@ module.exports = {
         'success-soft',
         'warning',
         'warning-soft',
+        'pending',
+        'pending-soft',
         'news-legal',
         'preview-light',
         'preview-light-card',

@@ -9,6 +9,11 @@ import type { PaymentRequest } from '@/types/rental/payment-request.type';
 
 const RENTAL_REQUEST_TYPES = new Set(['INITIAL', 'RESERVATION_DEPOSIT', 'INITIAL_PAYMENT_REFUND']);
 
+/** Refunds and settlements: the transfers SettlementPaymentPanel handles. */
+export const isSettlementTransfer = (p: Pick<PaymentRequest, 'type' | 'invoiceId'>) =>
+  ['INITIAL_PAYMENT_REFUND', 'DEPOSIT_REFUND', 'DEPOSIT_ADJUSTMENT'].includes(p.type) ||
+  (p.type === 'OTHER_CHARGE' && !p.invoiceId);
+
 export type PaymentLinkRoute =
   ContractRoute | { screen: 'rental-requests'; mode: 'RECEIVED' | 'SENT'; requestId: string };
 

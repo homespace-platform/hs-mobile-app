@@ -39,7 +39,7 @@ export default function ManagementScreen({
         }}
       />
     );
-  if (section === 'landlord-branches') return <BranchManagementScreen onBack={onExit} />;
+  if (section === 'landlord-branches') return <BranchManagementScreen onBack={onExit} onSelectTab={onSelectTab} />;
   if (section === 'tenant-appointments' || section === 'landlord-appointments') {
     const owner = section === 'landlord-appointments';
     return (

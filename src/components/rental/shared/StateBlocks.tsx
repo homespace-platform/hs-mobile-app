@@ -110,6 +110,8 @@ export function ErrorBlock({
           icon="refresh"
           busy={busy}
           onClick={onRetry}
+          // The base min-h-12 is only 42dp with this rem.
+          className="min-h-[44px]"
         />
       ) : null}
     </View>

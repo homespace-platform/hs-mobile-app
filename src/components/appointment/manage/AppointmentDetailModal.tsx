@@ -92,7 +92,7 @@ export default function AppointmentDetailModal({
             accessibilityRole="button"
             accessibilityHint={lockOf(item.permission)}
             accessibilityState={{ disabled: locked }}
-            className={`min-h-11 flex-row items-center justify-center gap-1.5 rounded-xl px-4 py-2 ${placement === 'banner' ? 'flex-1' : ''} ${tone.box} ${locked ? 'opacity-40' : ''}`}>
+            className={`min-h-[44px] flex-row items-center justify-center gap-1.5 rounded-xl px-4 py-2 ${placement === 'banner' ? 'flex-1' : ''} ${tone.box} ${locked ? 'opacity-40' : ''}`}>
             {icon ? <Icon name={icon} size={15} className={tone.text} /> : null}
             <Text className={`text-center text-xs font-bold ${tone.text}`}>{item.label}</Text>
           </Pressable>
@@ -126,7 +126,7 @@ export default function AppointmentDetailModal({
             onPress={onClose}
             accessibilityRole="button"
             accessibilityLabel="Đóng chi tiết lịch hẹn"
-            className="h-11 w-11 items-center justify-center rounded-full">
+            className="h-[44px] w-[44px] items-center justify-center rounded-full">
             <Icon name="close" size={20} className="text-muted-foreground" />
           </Pressable>
         </View>
@@ -157,7 +157,7 @@ export default function AppointmentDetailModal({
             <Pressable
               onPress={() => onOpenListing(appointment.listingId)}
               accessibilityRole="button"
-              className="min-h-11 flex-row items-center gap-1.5 self-end rounded-xl border border-border bg-surface px-3">
+              className="min-h-[44px] flex-row items-center gap-1.5 self-end rounded-xl border border-border bg-surface px-3">
               <Text className="text-xs font-semibold text-foreground">Xem tin đăng</Text>
               <Icon name="open-outline" size={14} className="text-foreground" />
             </Pressable>
@@ -307,7 +307,7 @@ export default function AppointmentDetailModal({
             <Pressable
               onPress={onClose}
               accessibilityRole="button"
-              className="min-h-11 justify-center rounded-xl border border-border px-4">
+              className="min-h-[44px] justify-center rounded-xl border border-border px-4">
               <Text className="text-xs font-semibold text-muted-foreground">Đóng</Text>
             </Pressable>
             {renderActions('footer')}

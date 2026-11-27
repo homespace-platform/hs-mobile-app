@@ -35,6 +35,9 @@
     --color-success-soft: 236 253 245;
     --color-warning: 146 64 14;
     --color-warning-soft: 255 251 235;
+    /* Waiting for confirmation (branch map): purple, concept section 5. */
+    --color-pending: 126 34 206;
+    --color-pending-soft: 250 245 255;
     --color-news-legal: 126 34 206;
     /* Fixed mini-screens in Giao diện settings; identical in both modes on purpose. */
     --color-preview-light: 241 245 249;
@@ -74,6 +77,8 @@
     --color-success-soft: 6 46 37;
     --color-warning: 252 211 77;
     --color-warning-soft: 69 26 3;
+    --color-pending: 216 180 254;
+    --color-pending-soft: 59 7 100;
     --color-news-legal: 126 34 206;
     --color-preview-light: 241 245 249;
     --color-preview-light-card: 255 255 255;

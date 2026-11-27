@@ -63,7 +63,8 @@ const webDescription = web('lib/listing-description-request.ts');
 const webSuggestions = web('lib/listing-policy-suggestions.ts');
 
 const json = (value) => JSON.parse(JSON.stringify(value));
-const TODAY = '2026-11-26';
+// The save flow validates against the device clock (as the web does), so a fixed day goes stale.
+const TODAY = form.getTodayDateString();
 const CATEGORIES = ['apartment', 'house', 'room'];
 
 /** A function of the web editor component, run with the given closure variables. */
@@ -486,6 +487,8 @@ test('branch selection matches the web editor: prefill on create only, fees stay
         basicInfo: webState.basicInfo,
         isEditMode: mode === 'edit',
         isDuplicateMode: mode === 'duplicate',
+        // No room link here: its drop on a branch change is in branch-editing.test.cjs.
+        roomLink: null,
         PRICE_UNITS_BY_CATEGORY: webConstants.PRICE_UNITS_BY_CATEGORY,
         swapPolicySuggestions: webSuggestions.swapPolicySuggestions,
         toast: { info: noop, error: noop, warning: noop },

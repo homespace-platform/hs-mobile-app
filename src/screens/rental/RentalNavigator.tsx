@@ -104,7 +104,7 @@ function renderRoute(
         />
       );
     case 'payment-lookup':
-      return <PaymentLinkScreen {...nav} paymentId={route.paymentId} />;
+      return <PaymentLinkScreen {...nav} paymentId={route.paymentId} actHere={route.actHere} />;
     case 'link-error': {
       const side = route.contractListSide;
       return (

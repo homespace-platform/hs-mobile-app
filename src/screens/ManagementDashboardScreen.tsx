@@ -44,6 +44,7 @@ export default function ManagementDashboardScreen({
       | 'landlord-appointments'
       | 'landlord-properties'
       | 'landlord-membership'
+      | 'landlord-branches'
   ) => void;
   onOpenRental: (route: RentalRoute) => void;
 }) {
@@ -67,13 +68,14 @@ export default function ManagementDashboardScreen({
     };
   }, []);
 
-  // Listings, membership, appointments and the rental flow have screens; the rest stay title-only.
+  // Listings, membership, branches, appointments and the rental flow have screens; the rest stay title-only.
   function openDestination(next: ManagementDestination) {
     const rentalRoute = rentalRouteForDestination(next);
     if (rentalRoute) onOpenRental(rentalRoute);
     else if (
       next === 'tenant-appointments' ||
       next === 'landlord-appointments' ||
+      next === 'landlord-branches' ||
       next === 'landlord-properties' ||
       next === 'landlord-membership'
     )

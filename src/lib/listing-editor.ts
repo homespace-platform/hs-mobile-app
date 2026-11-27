@@ -20,6 +20,12 @@ import {
 } from '@/lib/listing-payload';
 import { policyInputs, withDefaultSuggestions, withSystemRules } from '@/lib/listing-policy';
 import { isListingQuotaExhaustedError, QUOTA_EXHAUSTED_MESSAGE } from '@/lib/listing-quota';
+import {
+  ROOM_BRANCH_MESSAGE,
+  ROOM_GONE_MESSAGE,
+  withRoomId,
+  type RoomLink,
+} from '@/lib/listing-room-link';
 import { validateListing, type ValidationResult } from '@/lib/listing-validation';
 import type { Branch } from '@/services/branchApi';
 import type { ListingDetail } from '@/services/listingApi';
@@ -311,6 +317,8 @@ export type SaveListingInput = {
   action: ListingSubmissionAction;
   /** Wizard step 6 or edit: scroll to every invalid field, not only the first step's. */
   singlePage?: boolean;
+  /** New listing only: the room of the branch map it was started from. */
+  roomLink?: RoomLink | null;
 };
 
 export type SaveListingCallbacks = {
@@ -340,6 +348,8 @@ export async function saveListing(
     upload: (file: LocalFile, kind: ListingMediaKind) => Promise<string>;
     upsert: (payload: ListingPayload) => Promise<{ id: string; pendingEditId?: string | null }>;
     unconfirmed?: ReturnType<typeof maybeSavedFlag>;
+    /** Reads the map again; required with a roomLink. */
+    hasRoom?: (link: RoomLink) => Promise<boolean>;
   }
 ): Promise<SaveListingResult> {
   const { state, session, catalog, savedAddress, action, profile } = input;
@@ -363,11 +373,17 @@ export async function saveListing(
     }
   );
   if (!validation.ok) return { status: 'invalid', validation, message: validation.message! };
+  const roomLink = session.mode === 'create' ? input.roomLink : null;
+  if (roomLink && state.basicInfo.branchId !== roomLink.branchId)
+    return { status: 'error', message: ROOM_BRANCH_MESSAGE };
   if ((await deps.unconfirmed?.pending()) && !(await deps.confirmResend?.()))
     return { status: 'cancelled', message: '' };
   deps.onStart?.(savingMessage(session.mode, action));
   let sent = false;
   try {
+    // The map may have changed since the editor opened: check before uploading or creating anything.
+    // A listing without its room must never be created instead.
+    if (roomLink && !(await deps.hasRoom?.(roomLink))) throw new Error(ROOM_GONE_MESSAGE);
     const media = await uploadListingMedia(state.basicInfo, deps.upload, deps.onMediaUploaded);
     const payload = buildCreateListingPayload(
       buildPayloadParams(state, session, catalog, savedAddress, action, media)
@@ -375,7 +391,7 @@ export async function saveListing(
     // Marked before the request, so an app closed while it runs still asks next time.
     await deps.unconfirmed?.mark();
     sent = true;
-    const saved = await deps.upsert(payload);
+    const saved = await deps.upsert(withRoomId(payload, roomLink?.roomId));
     if (!saved?.id) throw new Error('Máy chủ không trả về mã tin đăng.');
     await deps.unconfirmed?.clear();
     return {

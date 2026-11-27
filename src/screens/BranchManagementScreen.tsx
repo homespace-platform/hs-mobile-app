@@ -17,7 +17,16 @@ import DatePeriodFilter from '@/components/DatePeriodFilter';
 import { useDialog } from '@/components/AppDialog';
 import { PolicyNotice } from '@/components/PolicyDialog';
 import { Button, ErrorNotice, Field, ScreenHeader } from '@/components/Screen';
+import type { MainTab } from '@/components/BottomTabBar';
+import BranchCard from '@/components/branch/attention/BranchCard';
+import BranchDestinationHost from '@/components/branch/attention/BranchDestinationHost';
+import { useBranchAttentionSummary } from '@/components/branch/attention/useBranchAttentionSummary';
+import BranchMapEditor from '@/components/branch/editing/BranchMapEditor';
 import { apiError } from '@/lib/api-error';
+import { branchError } from '@/lib/branch-error';
+import type { BranchNav, HostedDestination } from '@/lib/branch-nav';
+import { orderByAttention, targetHref } from '@/lib/branch-overview';
+import { branchDestination } from '@/lib/branch-target';
 import { getDatePeriodRange, toLocalDateKey, type DatePeriod } from '@/lib/date-period';
 import {
   BRANCH_CATEGORIES,
@@ -27,6 +36,12 @@ import {
   type BranchFormState,
   type ChargeKey,
 } from '@/lib/branch-form';
+import { PERMISSIONS } from '@/lib/permissions';
+import { useFeatureGate } from '@/lib/use-feature-gate';
+import BranchDetailScreen, {
+  initialBranchDetail,
+  type BranchDetailState,
+} from '@/screens/branch/BranchDetailScreen';
 import {
   deleteBranch,
   getBranch,
@@ -84,7 +99,7 @@ function Options({
             onPress={() => onChange(key)}
             accessibilityRole="button"
             accessibilityState={{ selected: value === key }}
-            className={`min-h-11 justify-center rounded-xl border px-3 py-2 ${value === key ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
+            className={`min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border px-3 py-2 ${value === key ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
             <Text
               className={`text-sm font-semibold ${value === key ? 'text-primary' : 'text-secondary'}`}>
               {title}
@@ -96,10 +111,31 @@ function Options({
   );
 }
 
-export default function BranchManagementScreen({ onBack }: { onBack: () => void }) {
+export default function BranchManagementScreen({
+  onBack,
+  onSelectTab,
+}: {
+  onBack: () => void;
+  onSelectTab: (tab: MainTab) => void;
+}) {
   const showDialog = useDialog();
+  const mapGate = useFeatureGate(PERMISSIONS.LISTING_POST);
   const scrollRef = useRef<ScrollView>(null);
-  const [mode, setMode] = useState<'list' | 'detail' | 'form'>('list');
+  // detail = map + attention; info = address, fees, rules, edit and delete.
+  const [mode, setMode] = useState<'list' | 'detail' | 'info' | 'editor' | 'form'>('list');
+  const [detail, setDetail] = useState<BranchDetailState>(() => initialBranchDetail());
+  /** The map editor is the optional step after creating a branch. */
+  const [setup, setSetup] = useState(false);
+  /** An existing screen opened over the branch; this component stays mounted, so Back returns here. */
+  const [destination, setDestination] = useState<HostedDestination | null>(null);
+  const [attentionTotal, setAttentionTotal] = useState<{
+    id: string;
+    count: number;
+    at: number;
+  } | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const summary = useBranchAttentionSummary();
+  const reloadSummary = summary.reload;
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchQuery, setBranchQuery] = useState('');
   const [datePeriod, setDatePeriod] = useState<DatePeriod>('ALL');
@@ -161,6 +197,15 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => {
+    if (!destination && (mode === 'list' || mode === 'detail')) void reloadSummary();
+  }, [mode, destination, reloadSummary]);
+  const onAttentionCount = useCallback(
+    (count: number) => {
+      if (selected) setAttentionTotal({ id: selected.id, count, at: Date.now() });
+    },
+    [selected]
+  );
 
   useEffect(() => {
     if (mode !== 'form' || addressQuery.trim().length < 3 || addressQuery === form.display) {
@@ -221,7 +266,7 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
   function leaveForm() {
     if (busy) return;
     const close = () => {
-      setMode(selected ? 'detail' : 'list');
+      setMode(selected ? 'info' : 'list');
       setError(null);
     };
     if (!dirty) return close();
@@ -238,17 +283,22 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
         return;
       }
       leaveForm();
+    } else if (mode === 'info') {
+      setError(null);
+      setMode('detail');
     } else if (mode === 'detail') {
       setMode('list');
       setSelected(null);
       setError(null);
     } else onBack();
   }
-  async function openBranch(branch: Branch) {
+  async function openBranch(branch: Branch, tab: BranchDetailState['tab'] = 'map') {
     setBusy(true);
     setError(null);
     try {
       setSelected(await getBranch(branch.id));
+      setDetail(initialBranchDetail(tab));
+      setAttentionTotal(null);
       setMode('detail');
       scrollRef.current?.scrollTo({ y: 0, animated: false });
     } catch (cause) {
@@ -312,16 +362,26 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
           setCoverFile(null);
         }
         const saved = await saveBranch(input, selected?.id);
+        const created = !selected;
+        // As on the web, a new branch goes to the optional map step; a whole house gets its one-cell
+        // map by itself when the map tab opens.
+        const mapStep = created && saved.category !== 'HOUSE';
         setSelected(saved);
         setDirty(false);
-        setMode('detail');
+        if (created) {
+          setDetail(initialBranchDetail());
+          setAttentionTotal(null);
+        }
+        setSetup(mapStep);
+        setMode(mapStep ? 'editor' : created ? 'detail' : 'info');
         await load();
-        showDialog(
-          'Đã lưu chi nhánh',
-          'Thông tin chi nhánh đã được cập nhật.',
-          undefined,
-          'success'
-        );
+        if (!mapStep)
+          showDialog(
+            'Đã lưu chi nhánh',
+            'Thông tin chi nhánh đã được cập nhật.',
+            undefined,
+            'success'
+          );
       } catch (cause) {
         setError(apiError(cause));
         scrollRef.current?.scrollTo({ y: 0, animated: true });
@@ -342,13 +402,6 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
   }
   function removeBranch() {
     if (!selected || busy) return;
-    if ((selected.totalUnits ?? 0) > 0) {
-      showDialog(
-        'Chưa thể xóa',
-        `Chi nhánh đang có ${selected.totalUnits} phòng/căn hộ. Hãy chuyển hoặc xóa các tin thuộc chi nhánh trước.`
-      );
-      return;
-    }
     const target = selected;
     showDialog('Xóa chi nhánh?', `Bạn có chắc muốn xóa “${target.name}”?`, [
       { text: 'Quay lại', style: 'cancel' },
@@ -366,12 +419,75 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
             .then(() =>
               showDialog('Đã xóa chi nhánh', 'Chi nhánh đã được xóa.', undefined, 'success')
             )
-            .catch((cause) => showDialog('Không thể xóa chi nhánh', apiError(cause)))
+            // The server decides whether the branch can be deleted; show its reason.
+            .catch((cause) =>
+              showDialog('Không thể xóa chi nhánh', branchError(cause, 'Không thể xóa chi nhánh.'))
+            )
             .finally(() => setBusy(false));
         },
       },
     ]);
   }
+
+  const nav: BranchNav = {
+    open: (next) => {
+      if (next.kind === 'tray') setDetail((c) => ({ ...c, tab: 'map', trayOpen: true }));
+      else setDestination(next);
+    },
+    openTarget: (target) => {
+      const href = targetHref(target);
+      const next = href ? branchDestination(href) : null;
+      if (next) nav.open(next);
+      else showDialog('Chưa mở được', 'Mục này chưa mở được trên điện thoại. Hãy xử lý trên web.');
+    },
+  };
+
+  if (destination)
+    return (
+      <BranchDestinationHost
+        destination={destination}
+        onClose={() => setDestination(null)}
+        onSelectTab={onSelectTab}
+      />
+    );
+  if (mode === 'editor' && selected)
+    return (
+      <BranchMapEditor
+        branchId={selected.id}
+        setup={setup}
+        canEdit={mapGate.allowed}
+        lockMessage={mapGate.title}
+        onClose={() => {
+          setSetup(false);
+          setMode('detail');
+        }}
+      />
+    );
+  if (mode === 'detail' && selected)
+    return (
+      <BranchDetailScreen
+        key={selected.id}
+        branch={selected}
+        state={detail}
+        onStateChange={setDetail}
+        nav={nav}
+        attentionCount={
+          attentionTotal?.id === selected.id && attentionTotal.at >= summary.at
+            ? attentionTotal.count
+            : summary.data?.find((entry) => entry.branchId === selected.id)?.count
+        }
+        onAttentionCount={onAttentionCount}
+        onBack={back}
+        onOpenInfo={() => {
+          setError(null);
+          setMode('info');
+        }}
+        onEditMap={() => {
+          setSetup(false);
+          setMode('editor');
+        }}
+      />
+    );
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
@@ -379,8 +495,8 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
         title={
           mode === 'list'
             ? 'Chi nhánh / Tòa nhà'
-            : mode === 'detail'
-              ? 'Chi tiết chi nhánh'
+            : mode === 'info'
+              ? 'Thông tin chi nhánh'
               : selected
                 ? 'Sửa chi nhánh'
                 : 'Thêm chi nhánh'
@@ -412,16 +528,18 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
         contentContainerClassName="px-5 pb-10 pt-5"
         refreshControl={
           mode === 'list' ? (
-            <RefreshControl refreshing={loading} onRefresh={() => void load()} />
+            <RefreshControl
+              refreshing={loading}
+              onRefresh={() => {
+                void load();
+                void summary.reload();
+              }}
+            />
           ) : undefined
         }>
         <ErrorNotice message={error} />
         {mode === 'list' ? (
           <>
-            <Text className="mb-4 text-sm leading-5 text-muted-foreground">
-              Quản lý địa chỉ, biểu phí dịch vụ và nội quy dùng chung cho các tin đăng trong chi
-              nhánh.
-            </Text>
             <Pressable
               onPress={() => beginForm()}
               accessibilityRole="button"
@@ -449,48 +567,80 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
                 </Pressable>
               ) : null}
             </View>
-            <DatePeriodFilter
-              period={datePeriod}
-              anchor={dateAnchor}
-              onPeriodChange={setDatePeriod}
-              onAnchorChange={setDateAnchor}
-            />
-            <View className="mb-4 flex-row gap-2" accessibilityRole="tablist">
-              {(
-                [
-                  ['all', 'Tất cả', branches.length],
-                  [
-                    'complete',
-                    'Đủ biểu phí',
-                    branches.filter((branch) => branch.isComplete !== false).length,
-                  ],
-                  [
-                    'incomplete',
-                    'Thiếu biểu phí',
-                    branches.filter((branch) => branch.isComplete === false).length,
-                  ],
-                ] as const
-              ).map(([value, label, count]) => {
-                const selected = branchCompleteness === value;
-                return (
-                  <Pressable
-                    key={value}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected }}
-                    onPress={() => setBranchCompleteness(value)}
-                    className={`min-h-11 flex-1 flex-row items-center justify-center gap-1 rounded-full border px-2 ${selected ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
-                    <Text
-                      className={`text-xs font-semibold ${selected ? 'text-primary' : 'text-secondary'}`}>
-                      {label}
-                    </Text>
-                    <Text
-                      className={`text-xs font-bold ${selected ? 'text-primary' : 'text-muted-foreground'}`}>
-                      {count}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            <Pressable
+              onPress={() => setFiltersOpen((open) => !open)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: filtersOpen }}
+              className="mb-3 min-h-[48px] flex-row items-center gap-2 self-start">
+              <Icon name="options-outline" size={19} className="text-primary" />
+              <Text className="text-sm font-bold text-primary">
+                {filtersOpen ? 'Ẩn bộ lọc' : 'Bộ lọc'}
+                {datePeriod !== 'ALL' || branchCompleteness !== 'all' ? ' (đang lọc)' : ''}
+              </Text>
+            </Pressable>
+            {filtersOpen ? (
+              <>
+                <DatePeriodFilter
+                  period={datePeriod}
+                  anchor={dateAnchor}
+                  onPeriodChange={setDatePeriod}
+                  onAnchorChange={setDateAnchor}
+                />
+                <View className="mb-4 flex-row flex-wrap gap-2" accessibilityRole="tablist">
+                  {(
+                    [
+                      ['all', 'Tất cả', branches.length],
+                      [
+                        'complete',
+                        'Đủ biểu phí',
+                        branches.filter((branch) => branch.isComplete !== false).length,
+                      ],
+                      [
+                        'incomplete',
+                        'Thiếu biểu phí',
+                        branches.filter((branch) => branch.isComplete === false).length,
+                      ],
+                    ] as const
+                  ).map(([value, label, count]) => {
+                    const selected = branchCompleteness === value;
+                    return (
+                      <Pressable
+                        key={value}
+                        accessibilityRole="tab"
+                        accessibilityState={{ selected }}
+                        onPress={() => setBranchCompleteness(value)}
+                        className={`min-h-[44px] max-w-full shrink grow flex-row flex-wrap items-center justify-center gap-1 rounded-full border px-3 py-1 ${selected ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
+                        <Text
+                          className={`shrink text-xs font-semibold ${selected ? 'text-primary' : 'text-secondary'}`}>
+                          {label}
+                        </Text>
+                        <Text
+                          className={`text-xs font-bold ${selected ? 'text-primary' : 'text-muted-foreground'}`}>
+                          {count}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            ) : null}
+            {summary.error ? (
+              <View className="mb-3 gap-2 rounded-xl bg-warning-soft p-3">
+                <Text accessibilityRole="alert" className="text-sm leading-5 text-warning">
+                  {summary.data
+                    ? 'Chưa tải lại được số việc cần chú ý, số đang hiện có thể đã cũ.'
+                    : 'Chưa tải được số việc cần chú ý. Danh sách chi nhánh vẫn dùng được.'}{' '}
+                  {summary.error}
+                </Text>
+                <Pressable
+                  onPress={() => void summary.reload()}
+                  disabled={summary.loading}
+                  accessibilityRole="button"
+                  className="min-h-[48px] justify-center self-start">
+                  <Text className="text-sm font-bold text-warning">Thử lại</Text>
+                </Pressable>
+              </View>
+            ) : null}
             {loading ? (
               <ActivityIndicator className="mt-8 text-primary" />
             ) : !error && branches.length === 0 ? (
@@ -506,53 +656,21 @@ export default function BranchManagementScreen({ onBack }: { onBack: () => void 
                 Không tìm thấy chi nhánh phù hợp.
               </Text>
             ) : (
-              filteredBranches.map((branch) => (
-                <Pressable
+              orderByAttention(filteredBranches, summary.data).map((branch) => (
+                <BranchCard
                   key={branch.id}
-                  onPress={() => void openBranch(branch)}
+                  branch={branch}
+                  count={summary.data?.find((entry) => entry.branchId === branch.id)?.count}
                   disabled={busy}
-                  accessibilityRole="button"
-                  className="mb-3 overflow-hidden rounded-2xl border border-border bg-surface">
-                  {branch.coverImageUrl ? (
-                    <Image
-                      source={{ uri: branch.coverImageUrl }}
-                      className="h-28 w-full bg-muted"
-                    />
-                  ) : null}
-                  <View className="p-4">
-                    <View className="flex-row items-start">
-                      <View className="mr-3 h-11 w-11 items-center justify-center rounded-xl bg-primary-soft">
-                        <Icon name="business-outline" size={22} className="text-primary" />
-                      </View>
-                      <View className="flex-1">
-                        <Text className="font-bold text-foreground">{branch.name}</Text>
-                        <Text className="mt-1 text-xs text-muted-foreground">
-                          {CATEGORY_NAMES[branch.category]}
-                          {branch.code ? ` · ${branch.code}` : ''}
-                        </Text>
-                      </View>
-                      <Icon name="chevron-forward" size={19} className="text-subtle" />
-                    </View>
-                    <Text className="mt-3 text-sm text-secondary">
-                      {branch.display || 'Chưa có địa chỉ'}
-                    </Text>
-                    <View className="mt-3 flex-row gap-2">
-                      <Text className="rounded-full bg-muted px-3 py-1 text-xs text-secondary">
-                        {branch.totalUnits ?? 0} phòng/căn
-                      </Text>
-                      <Text
-                        className={`rounded-full px-3 py-1 text-xs ${branch.isComplete === false ? 'bg-warning-soft text-warning' : 'bg-success-soft text-success'}`}>
-                        {branch.isComplete === false ? 'Thiếu biểu phí' : 'Biểu phí đầy đủ'}
-                      </Text>
-                    </View>
-                  </View>
-                </Pressable>
+                  onPress={() => void openBranch(branch)}
+                  onOpenAttention={() => void openBranch(branch, 'attention')}
+                />
               ))
             )}
           </>
         ) : null}
 
-        {mode === 'detail' && selected ? (
+        {mode === 'info' && selected ? (
           <>
             {selected.coverImageUrl ? (
               <Image

@@ -1,4 +1,4 @@
-import { useEffect, type ComponentProps } from 'react';
+import { useEffect, type ComponentProps, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
@@ -14,10 +14,13 @@ export function ScreenHeader({
   title,
   onBack,
   icon,
+  right,
 }: {
   title: string;
   onBack: () => void;
   icon?: ComponentProps<typeof Icon>['name'];
+  /** One short action at the end of the header. */
+  right?: ReactNode;
 }) {
   useEffect(() => {
     const handler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -32,6 +35,7 @@ export function ScreenHeader({
         onPress={onBack}
         accessibilityRole="button"
         accessibilityLabel="Quay lại"
+        hitSlop={4}
         className="mr-3 h-11 w-11 items-center justify-center">
         <Icon name="chevron-back" size={25} className="text-foreground" />
       </Pressable>
@@ -39,6 +43,7 @@ export function ScreenHeader({
       <Text accessibilityRole="header" className="flex-1 text-lg font-bold text-foreground">
         {title}
       </Text>
+      {right}
     </View>
   );
 }

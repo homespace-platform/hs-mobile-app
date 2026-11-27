@@ -51,6 +51,7 @@ export default function AppointmentsScreen({
   role,
   linkedAppointmentId,
   onLinkConsumed,
+  onLinkedClose,
   onBack,
   onSelectTab,
   onOpenListing,
@@ -59,6 +60,8 @@ export default function AppointmentsScreen({
   /** Appointment of a tapped notification (web `?appointmentId=`). */
   linkedAppointmentId?: string | null;
   onLinkConsumed?: () => void;
+  /** The caller showed only the linked appointment: dismissing its detail goes back there. */
+  onLinkedClose?: () => void;
   onBack: () => void;
   onSelectTab: (tab: MainTab) => void;
   onOpenListing: (listingId: string) => void;
@@ -192,9 +195,14 @@ export default function AppointmentsScreen({
     };
   }, [linkedAppointmentId, role, showDialog, openDetail]);
 
-  const closeDetail = () => {
+  const dropDetail = () => {
     setDetail(null);
     onLinkConsumed?.();
+  };
+  /** X or Android back on the detail. An action keeps this screen, so it only drops the detail. */
+  const closeDetail = () => {
+    if (onLinkedClose && detail && detail.id === linkedAppointmentId) onLinkedClose();
+    else dropDetail();
   };
 
   function openDialog(action: OwnerDialogType, appointment: AppointmentResponse) {
@@ -250,7 +258,7 @@ export default function AppointmentsScreen({
   }
 
   function handleDetailAction(action: AppointmentAction, appointment: AppointmentResponse) {
-    closeDetail();
+    dropDetail();
     if (action === 'request-reschedule') setRescheduleTarget(appointment);
     else if (action === 'complete' || action === 'approve-reschedule')
       void runNow(action, appointment);

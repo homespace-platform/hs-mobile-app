@@ -122,7 +122,7 @@ Use semantic NativeWind classes for all current and future screens:
 | Filled brand button / text      | `bg-brand`, `text-on-brand`                                                 |
 | Neutral selected button / text  | `bg-inverse`, `text-on-inverse`                                             |
 | Disabled button / text          | `bg-disabled`, `text-on-disabled`                                           |
-| Status                          | `text-danger`, `bg-danger-soft` (also `success`, `warning`)                 |
+| Status                          | `text-danger`, `bg-danger-soft` (also `success`, `warning`, `pending`)      |
 | Count badge on an icon          | `bg-danger-solid`, `text-on-danger-solid`                                   |
 | Theme preview thumbnails only   | `bg-preview-*` (same in both modes; used by `ThemeSelector`)                |
 

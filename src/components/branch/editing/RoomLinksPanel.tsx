@@ -1,0 +1,336 @@
+// OWNER: agent E. What is linked to one saved room and its actions (web RoomPanel + CandidatePicker).
+// It is drawn inside agent V's room sheet (a ModalShell): no own Modal outside its children, no
+// ScrollView. It loads the assignments itself. The props are final.
+import { useCallback, useState, type ReactNode } from 'react';
+import { Text, View } from 'react-native';
+
+import { ErrorBlock, LoadingBlock } from '@/components/rental/shared/StateBlocks';
+import { useActionDialog, type ConfirmOptions } from '@/components/rental/shared/ActionDialog';
+import {
+  MANUAL_STATUS_LABEL,
+  contractStatusLabel,
+  emptyRoom,
+  formatDay,
+  itemDestination,
+  listingStatusLabel,
+  newRoomListingDestination,
+  permissionBlock,
+  rentalRequestDestination,
+  sortContracts,
+} from '@/lib/branch-assignment';
+import { branchError } from '@/lib/branch-error';
+import type { BranchNav } from '@/lib/branch-nav';
+import { useBranchRead } from '@/lib/use-branch-read';
+import { branchAssignmentApi } from '@/services/branchMonitorApi';
+import type {
+  AssignmentKind,
+  RoomContractLink,
+  RoomManualStatus,
+  RoomOption,
+} from '@/types/branch-assignment';
+
+import CandidatePicker from './CandidatePicker';
+import { Action, Empty, Heading, Note, RoomChoices, Row } from './ui';
+import { reloadTray, useLinkAction } from './useLinkAction';
+
+export interface RoomLinksPanelProps {
+  branchId: string;
+  roomId: string;
+  code: string;
+  /** Every room of the saved map, for "Chuyển phòng". */
+  rooms: RoomOption[];
+  canEdit: boolean;
+  lockMessage?: string | null;
+  nav: BranchNav;
+  /** Call after every write, also a failed one: the status on screen may have changed. */
+  onChanged: () => void;
+}
+
+const STATUSES = Object.keys(MANUAL_STATUS_LABEL) as RoomManualStatus[];
+const TRAY = '';
+
+const describe = (error: unknown) => branchError(error, 'Chưa tải được phần gắn tin và hợp đồng.');
+
+/** A list that takes the panel's place until it is closed. */
+type ListView = null | { pick: AssignmentKind } | { move: RoomContractLink };
+
+function LinkCard({
+  title,
+  lines,
+  children,
+}: {
+  title: string;
+  lines: string[];
+  children: ReactNode;
+}) {
+  return (
+    <View className="gap-2 rounded-2xl border border-border bg-surface p-3">
+      <View className="gap-0.5">
+        <Text className="text-sm font-bold text-foreground">{title}</Text>
+        {lines.map((line) => (
+          <Text key={line} className="text-sm leading-5 text-muted-foreground">
+            {line}
+          </Text>
+        ))}
+      </View>
+      <View className="flex-row flex-wrap gap-2">{children}</View>
+    </View>
+  );
+}
+
+export default function RoomLinksPanel({
+  branchId,
+  roomId,
+  code,
+  rooms,
+  canEdit,
+  lockMessage,
+  nav,
+  onChanged,
+}: RoomLinksPanelProps) {
+  const { confirm } = useActionDialog();
+  const load = useCallback(() => branchAssignmentApi.getAssignments(branchId), [branchId]);
+  const { data, error: loadError, loading, reload } = useBranchRead(load, describe);
+  const { busy, error, success, run, clear } = useLinkAction(async () => {
+    void reloadTray();
+    onChanged();
+    await reload();
+  });
+  const [view, setView] = useState<ListView>(null);
+  /** The marks sit at the bottom: their answer is shown beside them, not off screen at the top. */
+  const [marking, setMarking] = useState(false);
+
+  if (!data)
+    return loadError ? (
+      <ErrorBlock message={loadError} busy={loading} onRetry={() => void reload()} />
+    ) : (
+      <LoadingBlock label="Đang tải liên kết tin và hợp đồng..." />
+    );
+
+  const room = data.rooms.find((item) => item.roomId === roomId) ?? emptyRoom(roomId);
+  const lock = permissionBlock(canEdit, lockMessage);
+  const disabled = busy || lock !== null;
+  const empty = !room.contracts.length && !room.holds.length && !room.listings.length;
+  const show = (next: ListView) => {
+    clear();
+    setMarking(false);
+    setView(next);
+  };
+  const notes = (
+    <>
+      <Note tone="warning" text={lock} />
+      <Note
+        tone="warning"
+        text={loadError ? `Chưa tải lại được, thông tin có thể đã cũ. ${loadError}` : null}>
+        <Action label="Thử lại" busy={loading} onClick={() => void reload()} />
+      </Note>
+    </>
+  );
+  const result = (
+    <>
+      <Note tone="error" text={error} />
+      <Note tone="success" text={success} />
+    </>
+  );
+  /** Asked first: on a phone these buttons are easy to hit by accident. */
+  const remove = async (options: ConfirmOptions, action: () => Promise<void>, done: string) => {
+    if (!(await confirm({ tone: 'warning', ...options }))) return;
+    setMarking(false);
+    await run(action, done);
+  };
+
+  if (view)
+    return (
+      <View className="gap-3">
+        <Heading>
+          {'move' in view
+            ? 'Chuyển hợp đồng đến'
+            : `Chọn ${view.pick === 'CONTRACT' ? 'hợp đồng' : 'tin đăng'} cho phòng ${code}`}
+        </Heading>
+        <Action label="Đóng danh sách" icon="close" onClick={() => show(null)} />
+        {notes}
+        {result}
+        {'move' in view ? (
+          <RoomChoices
+            disabled={disabled}
+            choices={[
+              { value: TRAY, label: 'Khay Chưa xếp phòng' },
+              ...rooms
+                .filter((item) => item.id !== roomId)
+                .map((item) => ({ value: item.id, label: item.label })),
+            ]}
+            onPick={(target) =>
+              void run(
+                () => branchAssignmentApi.putContract(branchId, view.move.id, target || null),
+                'Đã chuyển hợp đồng.'
+              ).then((ok) => {
+                if (ok) setView(null);
+              })
+            }
+          />
+        ) : (
+          <CandidatePicker
+            key={view.pick}
+            branchId={branchId}
+            kind={view.pick}
+            roomId={roomId}
+            rooms={rooms}
+            disabled={disabled}
+            onPick={async (candidate) => {
+              const contract = view.pick === 'CONTRACT';
+              const ok = await run(
+                () =>
+                  contract
+                    ? branchAssignmentApi.putContract(branchId, candidate.id, roomId)
+                    : branchAssignmentApi.linkListing(branchId, roomId, candidate.id),
+                contract ? `Đã gắn hợp đồng vào phòng ${code}.` : `Đã gắn tin vào phòng ${code}.`
+              );
+              if (ok) setView(null);
+              return ok;
+            }}
+          />
+        )}
+      </View>
+    );
+
+  return (
+    <View className="gap-3">
+      <Heading>Người thuê và tin đăng</Heading>
+      {notes}
+      {marking ? null : result}
+      {empty ? <Empty text="Phòng này chưa gắn hợp đồng hay tin đăng." /> : null}
+
+      {sortContracts(room.contracts).map((contract) => {
+        const tenant = contract.tenantName || 'chưa có tên người thuê';
+        const start = formatDay(contract.startDate);
+        const end = formatDay(contract.endDateExclusive);
+        return (
+          <LinkCard
+            key={contract.id}
+            title={`Hợp đồng · ${tenant}`}
+            lines={[
+              [
+                contractStatusLabel(contract.status),
+                start && `từ ${start}`,
+                end && `đến trước ${end}`,
+              ]
+                .filter(Boolean)
+                .join(' · '),
+            ]}>
+            <Action
+              label="Mở hợp đồng"
+              link
+              icon="open-outline"
+              className="w-full"
+              onClick={() => nav.open(itemDestination('CONTRACT', contract.id))}
+            />
+            <Action
+              label="Chuyển phòng"
+              className="grow"
+              disabled={disabled}
+              onClick={() => show({ move: contract })}
+            />
+            <Action
+              label="Gỡ khỏi chi nhánh"
+              className="grow"
+              disabled={disabled}
+              onClick={() =>
+                void remove(
+                  {
+                    title: 'Gỡ hợp đồng khỏi chi nhánh?',
+                    description: `Hợp đồng của ${tenant} chỉ được gỡ khỏi chi nhánh. Điều khoản hợp đồng không thay đổi.`,
+                    confirmLabel: 'Gỡ khỏi chi nhánh',
+                  },
+                  () => branchAssignmentApi.removeContract(branchId, contract.id),
+                  'Đã gỡ hợp đồng khỏi chi nhánh.'
+                )
+              }
+            />
+          </LinkCard>
+        );
+      })}
+
+      {room.holds.map((hold) => (
+        <LinkCard
+          key={hold.rentalRequestId}
+          title={`Giữ chỗ · ${hold.tenantName || 'chưa có tên người thuê'}`}
+          lines={formatDay(hold.moveInDate) ? [`Ngày vào ${formatDay(hold.moveInDate)}`] : []}>
+          <Action
+            label="Mở hồ sơ thuê"
+            link
+            icon="open-outline"
+            className="w-full"
+            onClick={() => nav.open(rentalRequestDestination(hold.rentalRequestId))}
+          />
+        </LinkCard>
+      ))}
+
+      {room.listings.map((listing) => (
+        <LinkCard
+          key={listing.id}
+          title={`Tin đăng · ${listing.title}`}
+          lines={[listingStatusLabel(listing.operationalStatus)]}>
+          <Action
+            label="Mở tin"
+            link
+            icon="open-outline"
+            className="grow"
+            onClick={() => nav.open(itemDestination('LISTING', listing.id))}
+          />
+          <Action
+            label="Gỡ khỏi phòng"
+            className="grow"
+            disabled={disabled}
+            onClick={() =>
+              void remove(
+                {
+                  title: 'Gỡ tin khỏi phòng?',
+                  description: `Tin "${listing.title}" chỉ được gỡ khỏi phòng ${code}, tin đăng vẫn giữ nguyên.`,
+                  confirmLabel: 'Gỡ khỏi phòng',
+                },
+                () => branchAssignmentApi.unlinkListing(branchId, roomId, listing.id),
+                'Đã gỡ tin khỏi phòng.'
+              )
+            }
+          />
+        </LinkCard>
+      ))}
+
+      {/* The one main action only while the room is free; otherwise the open buttons lead. */}
+      <Action
+        label="Đăng tin cho phòng này"
+        variant={empty ? 'primary' : 'secondary'}
+        icon="add-circle-outline"
+        disabled={disabled}
+        onClick={() => nav.open(newRoomListingDestination(branchId, roomId))}
+      />
+      <Row
+        title="Gắn hợp đồng có sẵn"
+        disabled={disabled}
+        onPress={() => show({ pick: 'CONTRACT' })}
+      />
+      <Row title="Gắn tin có sẵn" disabled={disabled} onPress={() => show({ pick: 'LISTING' })} />
+
+      <View accessibilityRole="radiogroup" className="gap-2">
+        <Text className="text-sm font-bold text-foreground">Đánh dấu phòng</Text>
+        {STATUSES.map((status) => (
+          <Row
+            key={status}
+            title={MANUAL_STATUS_LABEL[status]}
+            selected={room.manualStatus === status}
+            disabled={disabled}
+            onPress={() => {
+              if (room.manualStatus === status) return;
+              setMarking(true);
+              void run(
+                () => branchAssignmentApi.setManualStatus(branchId, roomId, status),
+                'Đã cập nhật đánh dấu phòng.'
+              );
+            }}
+          />
+        ))}
+        {marking ? result : null}
+      </View>
+    </View>
+  );
+}
