@@ -14,7 +14,7 @@ const NOTHING: Record<OverviewLayer, string> = {
   rooms: 'Không có trang nào cần mở cho tình trạng này.',
   payments: 'Không có khoản thu nào cần xem.',
   meters: 'Không có kỳ ghi chỉ số cần xem.',
-  contracts: 'Không có hợp đồng sắp hết hạn.',
+  contracts: 'Không có hợp đồng nào đang chiếm phòng.',
 };
 
 type Props = {

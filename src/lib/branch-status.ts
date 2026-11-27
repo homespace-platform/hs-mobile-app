@@ -78,7 +78,7 @@ const METER_LOOK: Record<OverviewMeter['status'] | 'NONE', BranchLook> = {
   RECORDED: look('checkmark-circle-outline', 'success'),
   NONE,
 };
-const EXPIRY_LOOK: Record<OverviewExpiry['status'] | 'LONG' | 'NO_LEASE', BranchLook> = {
+const EXPIRY_LOOK: Record<OverviewExpiry['status'] | 'NO_LEASE', BranchLook> = {
   WITHIN_30: look('alarm-outline', 'danger'),
   WITHIN_60: look('calendar-outline', 'warning'),
   LONG: NONE,

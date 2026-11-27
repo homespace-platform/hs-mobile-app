@@ -8,14 +8,15 @@ import { listingStatus } from '@/lib/listing-manage';
 import {
   LAYER_STATUS_LABEL,
   confirmationCountdown,
+  expiryText,
   formatInstant,
   paymentKindLabel,
   roomLayerStatus,
   roomMatches,
+  sortExpiries,
   statusLabel,
   targetHref,
   type BranchOverview,
-  type OverviewExpiry,
   type OverviewLayer,
   type OverviewMeter,
   type OverviewPayment,
@@ -64,11 +65,6 @@ const meterLines = (meter: OverviewMeter) =>
     `Ngày ghi ${formatDay(meter.meterDate)}`,
     meter.status === 'RECORDED' ? null : `Hạn ghi ${formatInstant(meter.deadlineAt)}`,
   ]);
-/** The end is exclusive: the lease runs until the start of that day. */
-const expiryLines = (expiry: OverviewExpiry) => [
-  `Còn ${expiry.daysRemaining} ngày`,
-  `Mốc kết thúc: 00:00 ngày ${formatDay(expiry.endDateExclusive)}`,
-];
 
 const paymentEntry = (payment: OverviewPayment, times: Times, elapsedMs: number): ViewEntry => ({
   key: payment.id,
@@ -86,8 +82,14 @@ export const roomLabel = (room: OverviewRoom) =>
     : statusLabel('rooms', room.status);
 
 /** The label of a map cell on the current layer. */
-export const cellLabel = (room: OverviewRoom, layer: OverviewLayer) =>
-  layer === 'rooms' ? roomLabel(room) : statusLabel(layer, roomLayerStatus(room, layer));
+export function cellLabel(room: OverviewRoom, layer: OverviewLayer) {
+  if (layer === 'rooms') return roomLabel(room);
+  const status = roomLayerStatus(room, layer);
+  if (layer !== 'contracts') return statusLabel(layer, status);
+  const [first] = sortExpiries(room.contracts ?? []);
+  // No lease row: an older server, so an occupied room is only known to be past 60 days.
+  return first ? expiryText(first) : status === 'LONG' ? 'Còn hạn trên 60 ngày' : statusLabel(layer, status);
+}
 
 /** The current stay (or listing) and the next one. A ROOM target is the cell menu, not a page. */
 function stayEntries(room: OverviewRoom): ViewEntry[] {
@@ -135,17 +137,17 @@ export function layerEntries(
       lines: meterLines(meter),
       target: openable(meter.target),
     }));
-  return (room.contracts ?? []).map((expiry) => ({
+  return sortExpiries(room.contracts ?? []).map((expiry) => ({
     key: expiry.contractId,
     layer,
     status: expiry.status,
-    title: statusLabel(layer, expiry.status),
-    lines: expiryLines(expiry),
+    title: expiryText(expiry),
+    lines: [statusLabel(layer, expiry.status)],
     target: openable(expiry.target),
   }));
 }
 
-/** The few lines inside a cell, about its first (most urgent) item; the sheet has all of them. */
+/** The few lines inside a cell, about its first (most urgent) item (contracts: the label already says it, the lines count the others); the sheet has all of them. */
 export function cellLines(
   room: OverviewRoom,
   layer: OverviewLayer,
@@ -169,11 +171,14 @@ export function cellLines(
         ])
       : [];
   }
-  const meters = layer === 'meters' ? (room.meters ?? []) : null;
-  const items = meters ?? room.contracts ?? [];
-  if (!items.length) return [];
-  const lines = meters ? meterLines(meters[0]) : expiryLines(room.contracts![0]);
-  return items.length > 1 ? [...lines, `${items.length} mục`] : lines;
+  if (layer === 'contracts') {
+    const count = room.contracts?.length ?? 0;
+    return count > 1 ? [`+${count - 1} hợp đồng khác`] : [];
+  }
+  const meters = room.meters ?? [];
+  if (!meters.length) return [];
+  const lines = meterLines(meters[0]);
+  return meters.length > 1 ? [...lines, `${meters.length} mục`] : lines;
 }
 
 export const unplacedEntries = (overview: BranchOverview, elapsedMs: number) =>

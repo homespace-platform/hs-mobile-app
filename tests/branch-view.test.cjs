@@ -229,11 +229,40 @@ test('meter and contract layers word every item and count the extra ones in the 
     ['c:0', 'c:1']
   );
   assert.deepEqual(meters[1].lines, ['Ngày ghi 27/11/2026']);
-  assert.deepEqual(view.cellLines(cell, 'contracts', times, 0), [
-    'Còn 13 ngày',
-    'Mốc kết thúc: 00:00 ngày 10/12/2026',
-  ]);
+  assert.equal(view.cellLabel(cell, 'contracts'), 'Còn 13 ngày · hết 09/12/2026');
+  assert.deepEqual(view.cellLines(cell, 'contracts', times, 0), []);
+  const entries = view.layerEntries(cell, 'contracts', times, 0);
+  assert.equal(entries[0].title, 'Còn 13 ngày · hết 09/12/2026');
+  assert.deepEqual(entries[0].lines, ['≤ 30 ngày']);
   assert.deepEqual(view.cellLines(room('none'), 'contracts', times, 0), []);
+});
+
+test('lease wording: last day is the day before the exclusive end, most urgent first, with a count', () => {
+  const overview = load('src/lib/branch-overview.ts');
+  const e = (endDateExclusive, daysRemaining) => ({ endDateExclusive, daysRemaining });
+  assert.equal(overview.expiryText(e('2027-01-01', 5)), 'Còn 5 ngày · hết 31/12/2026');
+  assert.equal(overview.expiryText(e('2028-03-01', 90)), 'Còn 90 ngày · hết 29/02/2028');
+  assert.equal(overview.expiryText(e('2026-11-27', 0)), 'Hết hạn 26/11/2026 · chưa bàn giao');
+  assert.equal(overview.expiryText(e('2026-11-20', -7)), 'Hết hạn 19/11/2026 · chưa bàn giao');
+  const lease = (contractId, status, endDateExclusive, daysRemaining) => ({
+    contractId, status, endDateExclusive, daysRemaining, target: target('CONTRACT'),
+  });
+  const cell = room('m', {
+    status: 'OCCUPIED',
+    contracts: [lease('x', 'LONG', '2027-06-01', 200), lease('y', 'WITHIN_30', '2026-11-25', -2)],
+  });
+  assert.equal(overview.roomLayerStatus(cell, 'contracts'), 'WITHIN_30');
+  assert.equal(view.cellLabel(cell, 'contracts'), 'Hết hạn 24/11/2026 · chưa bàn giao');
+  assert.deepEqual(view.cellLines(cell, 'contracts', times, 0), ['+1 hợp đồng khác']);
+  assert.deepEqual(
+    view.layerEntries(cell, 'contracts', times, 0).map((x) => x.key),
+    ['y', 'x']
+  );
+  assert.equal(overview.layerReady({ rooms: [cell] }, 'contracts'), true);
+  const bad = (patch) => overview.layerReady({ rooms: [room('b', { contracts: [{ ...lease('c', 'LONG', '2027-06-01', 9), ...patch }] })] }, 'contracts');
+  assert.equal(bad({}), true);
+  assert.equal(bad({ status: 'SOON' }), false);
+  assert.equal(bad({ endDateExclusive: 'later' }), false);
 });
 
 const slot = (key, roomCode) => ({ key, id: key, roomCode });
@@ -289,22 +318,21 @@ test('contracts layer: empty list is over 60 days when occupied, otherwise no le
   assert.equal(overview.roomLayerStatus(occupied, 'contracts'), 'LONG');
   assert.equal(overview.roomLayerStatus(vacant, 'contracts'), 'NO_LEASE');
   assert.equal(view.cellLabel(occupied, 'contracts'), 'Còn hạn trên 60 ngày');
+  assert.equal(overview.statusLabel('contracts', 'LONG'), 'Trên 60 ngày');
   assert.equal(view.cellLabel(vacant, 'contracts'), 'Không có hợp đồng');
   assert.equal(status.layerLook('contracts', 'LONG').tone, 'neutral');
   assert.equal(status.layerLook('contracts', 'NO_LEASE').tone, 'neutral');
-  assert.deepEqual(Object.keys(overview.LAYER_STATUS_LABEL.contracts), [
-    'WITHIN_30', 'WITHIN_60', 'LONG', 'NO_LEASE',
+  assert.deepEqual(Object.values(overview.LAYER_STATUS_LABEL.contracts), [
+    '≤ 30 ngày', '31–60 ngày', 'Trên 60 ngày', 'Không có hợp đồng',
   ]);
   const map = new Map([['1', occupied], ['2', vacant], ['3', room('w', { status: 'REPAIR' })]]);
   const fl = [{ key: 'f', label: 'T', rows: [{ key: 'a', label: 'D', slots: [slot('1', '1'), slot('2', '2'), slot('3', '3')] }] }];
   const summary = view.mapSummary(fl, map, 'contracts', '', 'NO_LEASE');
   assert.deepEqual(view.legendItems('contracts', summary.counts, null), [
-    { status: 'LONG', label: 'Còn hạn trên 60 ngày', count: 1 },
+    { status: 'LONG', label: 'Trên 60 ngày', count: 1 },
     { status: 'NO_LEASE', label: 'Không có hợp đồng', count: 2 },
   ]);
   assert.deepEqual([...summary.matched], ['2', '3']);
-  const bad = { contractId: 'c', status: 'LONG', endDateExclusive: 'x', daysRemaining: 1, target: target('CONTRACT') };
-  assert.equal(overview.layerReady({ rooms: [room('b', { contracts: [bad] })] }, 'contracts'), false);
 });
 
 test('columns share a 320px screen up to two rows, then scroll with a fixed width', () => {
