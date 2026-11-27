@@ -165,6 +165,9 @@ export function isMembershipPendingOrderError(error: unknown) {
   return errorCode(error) === 4018 || errorText(error).includes('CHECKOUT IS ALREADY PENDING');
 }
 
+/** Code 4084: the same item was paid moments ago; the user must confirm a repeat purchase. */
+export const isMembershipRecentlyPaidError = (error: unknown) => errorCode(error) === 4084;
+
 const ERROR_MESSAGES: Record<number, string> = {
   4013: 'Bạn đã hết lượt đăng tin. Vui lòng mua thêm lượt, mua hoặc nâng cấp gói hội viên.',
   4014: 'Không tìm thấy thông tin giữ chỗ lượt đăng tin cho bài đăng này.',
@@ -406,8 +409,7 @@ export function getCancelOutcomeNotice(
   if (isOrderReviewStatus(order.status))
     return {
       tone: 'warning',
-      message:
-        'Đơn hàng đang được xử lý nên chưa thể hủy.',
+      message: 'Đơn hàng đang được xử lý nên chưa thể hủy.',
     };
   if (isOrderFailedStatus(order.status))
     return {

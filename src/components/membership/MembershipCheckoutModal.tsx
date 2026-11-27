@@ -117,22 +117,33 @@ export default function MembershipCheckoutModal({
     void loadQuote();
   }, [loadQuote]);
 
-  async function confirm() {
+  async function confirm(repeat?: boolean) {
     if (!quote || lock.current || !gate.guard()) return;
     lock.current = true;
     setSubmitting(true);
     setError(null);
     setPendingOrderId(null);
     const result = await placeMembershipOrder({
-      create: () => createMembershipCheckout(tier, provider),
+      create: (confirmRepeat) => createMembershipCheckout(tier, provider, confirmRepeat),
       cancel: cancelMembershipOrder,
       memory,
       provider,
+      confirmRepeat: repeat === true,
       expectedAmount: quote.amountVnd,
     });
     lock.current = false;
     if (result.kind === 'ok') return onPlaced(result);
     setSubmitting(false);
+    if (result.kind === 'repeat-paid')
+      return showDialog(
+        'Xác nhận mua thêm',
+        result.message,
+        [
+          { text: 'Hủy', style: 'cancel' },
+          { text: 'Vẫn mua thêm', onPress: () => void confirm(true) },
+        ],
+        'warning'
+      );
     if (result.kind === 'price-changed') {
       // The server re-quoted under its lock: show the new quote before asking again.
       await loadQuote();

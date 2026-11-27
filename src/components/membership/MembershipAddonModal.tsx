@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
+import { useDialog } from '@/components/AppDialog';
 import ActionButton from '@/components/rental/shared/ActionButton';
 import ModalShell from '@/components/rental/shared/ModalShell';
 import { ErrorBlock, LoadingBlock } from '@/components/rental/shared/StateBlocks';
@@ -39,6 +40,7 @@ export default function MembershipAddonModal({
   onPlaced: (order: Extract<PlaceOrderResult, { kind: 'ok' }>) => void;
   onOpenOrder: (orderId: string) => void;
 }) {
+  const showDialog = useDialog();
   const gate = useFeatureGate(PERMISSIONS.MEMBERSHIP_PURCHASE);
   const [offer, setOffer] = useState<MembershipAddonOffer | null>(null);
   const [offerError, setOfferError] = useState<string | null>(null);
@@ -68,22 +70,33 @@ export default function MembershipAddonModal({
   const total = offer ? offer.unitPriceVnd * quantity : 0;
   const gateway = provider === 'ETH' ? 'MetaMask' : 'SePay';
 
-  async function confirm() {
+  async function confirm(repeat?: boolean) {
     if (!offer || lock.current || !gate.guard()) return;
     lock.current = true;
     setSubmitting(true);
     setError(null);
     setPendingOrderId(null);
     const result = await placeMembershipOrder({
-      create: () => createMembershipAddonCheckout(quantity, provider),
+      create: (confirmRepeat) => createMembershipAddonCheckout(quantity, provider, confirmRepeat),
       cancel: cancelMembershipOrder,
       memory,
       provider,
+      confirmRepeat: repeat === true,
       expectedAmount: total,
     });
     lock.current = false;
     if (result.kind === 'ok') return onPlaced(result);
     setSubmitting(false);
+    if (result.kind === 'repeat-paid')
+      return showDialog(
+        'Xác nhận mua thêm',
+        result.message,
+        [
+          { text: 'Hủy', style: 'cancel' },
+          { text: 'Vẫn mua thêm', onPress: () => void confirm(true) },
+        ],
+        'warning'
+      );
     if (result.kind === 'price-changed') {
       // No payment button on the old price while the new one loads.
       setOffer(null);

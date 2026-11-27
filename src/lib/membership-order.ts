@@ -4,6 +4,7 @@ import {
   formatExactVnd,
   getMembershipErrorMessage,
   isMembershipPendingOrderError,
+  isMembershipRecentlyPaidError,
   isOrderCancelledStatus,
   isOrderFailedStatus,
   isOrderPaidStatus,
@@ -123,7 +124,7 @@ export function createOrderFeed(read: () => Promise<MembershipOrder>) {
 export type PlaceOrderResult =
   | { kind: 'ok'; orderId: string; hosted: ReturnType<typeof buildSepayCheckout> | null }
   | {
-      kind: 'price-changed' | 'error';
+      kind: 'price-changed' | 'error' | 'repeat-paid';
       message: string;
       /** An order that still blocks a new checkout. */
       pendingOrderId: string | null;
@@ -140,19 +141,27 @@ export async function placeMembershipOrder({
   memory,
   provider,
   expectedAmount,
+  confirmRepeat = false,
 }: {
-  create: () => Promise<MembershipCheckout>;
+  create: (confirmRepeat: boolean) => Promise<MembershipCheckout>;
   cancel: (orderId: string) => Promise<Pick<MembershipOrder, 'status'>>;
   memory: OrderMemory;
   provider: MembershipPaymentMethod;
   expectedAmount: number;
+  confirmRepeat?: boolean;
 }): Promise<PlaceOrderResult> {
   if (provider === 'ETH' && !MOBILE_ETH_PAYMENT_ENABLED)
     return { kind: 'error', message: MOBILE_ETH_DISABLED_MESSAGE, pendingOrderId: null };
   let checkout: MembershipCheckout;
   try {
-    checkout = await create();
+    checkout = await create(confirmRepeat);
   } catch (error) {
+    if (isMembershipRecentlyPaidError(error))
+      return {
+        kind: 'repeat-paid',
+        message: getMembershipErrorMessage(error),
+        pendingOrderId: null,
+      };
     const blocked = isMembershipPendingOrderError(error);
     const pendingOrderId = blocked ? await memory.pending().catch(() => null) : null;
     return {
