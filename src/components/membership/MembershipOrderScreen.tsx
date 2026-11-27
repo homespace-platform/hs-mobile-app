@@ -257,7 +257,7 @@ export default function MembershipOrderScreen({
         setEthError(
           getMembershipErrorMessage(
             cause,
-            'Giao dịch đã gửi. Hệ thống đang chờ đủ xác nhận; thử đối soát lại sau.'
+            'Giao dịch đã gửi. Hệ thống đang chờ đủ xác nhận; thử kiểm tra lại sau.'
           )
         );
       } finally {
@@ -339,8 +339,8 @@ export default function MembershipOrderScreen({
           : `Bạn có thể tạo giao dịch mới ngay khi gặp lỗi thanh toán qua ${name}.`
       }\n\nLưu ý quan trọng: Thao tác này không thể hủy hoặc hoàn trả giao dịch thu tiền phía ${name} nếu bạn đã thanh toán. ${
         eth
-          ? 'Nếu đã gửi giao dịch qua MetaMask, hãy tiếp tục đối soát thay vì hủy đơn.'
-          : `Nếu ${name} xác nhận trừ tiền thành công muộn sau khi hủy, đơn hàng sẽ chuyển sang trạng thái REVIEW để đối soát thủ công.`
+          ? 'Nếu đã gửi giao dịch qua MetaMask, hãy tiếp tục kiểm tra giao dịch thay vì hủy đơn.'
+          : `Nếu ${name} xác nhận trừ tiền thành công muộn sau khi hủy, hệ thống vẫn tự áp dụng khoản thanh toán đó cho tài khoản của bạn.`
       }`,
       [
         { text: 'Giữ lại & Tiếp tục chờ', style: 'cancel' },
@@ -469,7 +469,7 @@ export default function MembershipOrderScreen({
                     ? 'Mua thêm lượt đăng thành công!'
                     : 'Kích hoạt gói hội viên thành công!'
                   : review
-                    ? 'Đơn hàng đang chờ bộ phận vận hành đối soát'
+                    ? 'Đơn hàng đang được xử lý'
                     : isOrderCancelledStatus(order.status)
                       ? 'Đơn hàng hội viên đã được hủy'
                       : failed
@@ -488,7 +488,7 @@ export default function MembershipOrderScreen({
 
             {eth && review ? (
               <Text className="rounded-2xl border border-warning bg-warning-soft p-3 text-sm text-warning">
-                Đơn cần đối soát thủ công. Không gửi thêm ETH.
+                Đơn đang được xử lý. Không gửi thêm ETH.
               </Text>
             ) : null}
             {submission && !paid ? (
@@ -507,7 +507,7 @@ export default function MembershipOrderScreen({
                     {!review ? (
                       <>
                         <Text className="text-sm leading-5 text-muted-foreground">
-                          Hệ thống cần ít nhất 3 block xác nhận. Ứng dụng sẽ tự thử đối soát lại;
+                          Hệ thống cần ít nhất 3 block xác nhận. Ứng dụng sẽ tự kiểm tra lại;
                           đừng chuyển ETH lần nữa.
                         </Text>
                         <ActionButton label="Đối soát lại" onClick={() => void settle()} />
@@ -519,7 +519,7 @@ export default function MembershipOrderScreen({
                     <Text className="text-sm leading-5 text-muted-foreground">
                       {busy
                         ? 'Đang chờ MetaMask trả mã giao dịch. Đừng chuyển ETH lần nữa.'
-                        : 'Chưa nhận được mã giao dịch từ MetaMask. Kiểm tra lịch sử ví: nếu đã gửi, dán mã giao dịch vào đây để đối soát; đừng chuyển ETH lần nữa. Nếu chưa gửi, có thể hủy đơn sau khi báo giá hết hạn.'}
+                        : 'Chưa nhận được mã giao dịch từ MetaMask. Kiểm tra lịch sử ví: nếu đã gửi, dán mã giao dịch vào đây để kiểm tra; đừng chuyển ETH lần nữa. Nếu chưa gửi, có thể hủy đơn sau khi báo giá hết hạn.'}
                     </Text>
                     <Field
                       label="Mã giao dịch Sepolia (0x…)"
@@ -683,7 +683,7 @@ export default function MembershipOrderScreen({
           tone="info"
           title="Xác thực trạng thái đơn hàng từ máy chủ HomeSpace"
           summary="Xác thực trạng thái đơn hàng từ máy chủ HomeSpace"
-          text={`Hệ thống không bao giờ xác nhận thanh toán chỉ dựa vào đường dẫn trả về. Trạng thái trên đây được truy vấn trực tiếp từ máy chủ đơn hàng của HomeSpace sau khi đối soát kết quả thanh toán với ${getPaymentProviderDisplayName(order?.provider)}.`}
+          text={`Hệ thống không bao giờ xác nhận thanh toán chỉ dựa vào đường dẫn trả về. Trạng thái trên đây được truy vấn trực tiếp từ máy chủ đơn hàng của HomeSpace sau khi kiểm tra kết quả thanh toán với ${getPaymentProviderDisplayName(order?.provider)}.`}
         />
       </ScrollView>
     </SafeAreaView>

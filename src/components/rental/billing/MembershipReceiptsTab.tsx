@@ -126,6 +126,11 @@ export default function MembershipReceiptsTab() {
               <Text className="text-xs text-muted-foreground">
                 {provider(row.provider)} · {vnDate(row.issuedAt)}
               </Text>
+              {row.type === 'OVERPAYMENT' ? (
+                <Text className="text-xs font-semibold text-warning">
+                  {row.refundStatus === 'REFUNDED' ? 'Đã hoàn tiền' : 'Trả thừa – sẽ được hoàn lại'}
+                </Text>
+              ) : null}
               {row.pdfStatus === 'READY' ? (
                 <ActionButton
                   label="Tải PDF"

@@ -315,29 +315,12 @@ test('a late PENDING answer cannot replace a finished order', async () => {
   assert.equal(screen.match(/getMembershipOrder\(/g).length, 1);
 });
 
-test('a SePay order under review can still be opened after a restart and a new order', async () => {
-  const store = deviceStore();
-  const memory = memoryOf(store);
+test('a REVIEW order is dropped from device memory like any finished order', async () => {
+  const memory = memoryOf(deviceStore());
   await memory.remember(ID);
   await flow.syncOrderMemory(memory, { id: ID, status: 'REVIEW', provider: 'SEPAY' });
-  // It no longer counts as the pending order that blocks a checkout.
   assert.equal(await memory.pending(), null);
-  await place(sepayCheckout(49000, NEXT_ID), { store });
-  const restarted = memoryOf(store);
-  assert.equal(await restarted.pending(), NEXT_ID);
-  assert.equal(await restarted.review(), ID);
-
-  // Another order finishing leaves it; being resolved clears it.
-  await flow.syncOrderMemory(restarted, { id: NEXT_ID, status: 'PAID', provider: 'SEPAY' });
-  assert.equal(await restarted.review(), ID);
-  await flow.syncOrderMemory(restarted, { id: ID, status: 'PAID', provider: 'SEPAY' });
-  assert.equal(await restarted.review(), null);
-
-  const screen = fs.readFileSync(
-    path.join(__dirname, '../src/components/membership/MembershipScreen.tsx'),
-    'utf8'
-  );
-  assert.ok(screen.includes('onClick={() => setOrder({ orderId: reviewOrderId })}'));
+  assert.equal(memory.review, undefined);
 });
 
 test('a changed price or unusable checkout cancels the order like the web', async () => {

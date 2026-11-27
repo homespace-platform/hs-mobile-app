@@ -8,7 +8,6 @@ import {
   isOrderFailedStatus,
   isOrderPaidStatus,
   isOrderPendingStatus,
-  isOrderReviewStatus,
   MOBILE_ETH_DISABLED_MESSAGE,
   MOBILE_ETH_PAYMENT_ENABLED,
 } from '@/lib/membership';
@@ -40,7 +39,6 @@ export type OrderStore = {
  */
 export function createOrderMemory(store: OrderStore, accountKey: string) {
   const proofKey = (orderId: string) => `${accountKey}.${orderId}`;
-  const reviewKey = `${accountKey}.review`;
   const storedId = async (key: string) => {
     const id = await store.get(key);
     return isMembershipOrderId(id) ? id : null;
@@ -52,10 +50,6 @@ export function createOrderMemory(store: OrderStore, accountKey: string) {
     pending: () => storedId(accountKey),
     remember: (orderId: string) => store.set(accountKey, orderId),
     forget: (orderId: string) => removeIf(accountKey, orderId),
-    /** The last REVIEW order, kept apart: it blocks no checkout and a new order keeps it. */
-    review: () => storedId(reviewKey),
-    keepForReview: (orderId: string) => store.set(reviewKey, orderId),
-    clearReview: (orderId: string) => removeIf(reviewKey, orderId),
     proof: async (orderId: string) => readEthSubmission(await store.get(proofKey(orderId))),
     saveProof: (orderId: string, proof: EthSubmission) =>
       store.set(proofKey(orderId), JSON.stringify(proof)),
@@ -67,7 +61,7 @@ export type OrderMemory = ReturnType<typeof createOrderMemory>;
 
 /**
  * Applies a server order status to the stored state and returns the Sepolia submission still open.
- * A transaction hash is dropped only once the order is PAID; a REVIEW order keeps it too.
+ * A transaction hash is dropped only once the order is PAID;.
  */
 export async function syncOrderMemory(
   memory: OrderMemory,
@@ -75,15 +69,11 @@ export async function syncOrderMemory(
 ): Promise<EthSubmission | null> {
   if (isOrderPaidStatus(order.status)) {
     await memory.clearProof(order.id);
-    await memory.clearReview(order.id);
     await memory.forget(order.id);
     return null;
   }
   let proof = order.provider === 'ETH' ? await memory.proof(order.id) : null;
   if (isOrderPendingStatus(order.status)) return proof;
-  // The web drops a REVIEW order, but a phone has no history to find it again.
-  if (isOrderReviewStatus(order.status)) await memory.keepForReview(order.id);
-  else await memory.clearReview(order.id);
   // The server cancels or expires a Sepolia order only after the chain shows it unpaid.
   if (proof && !proof.txHash && isOrderFailedStatus(order.status)) {
     await memory.clearProof(order.id);

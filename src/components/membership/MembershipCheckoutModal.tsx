@@ -284,7 +284,7 @@ export default function MembershipCheckoutModal({
             <Text className="text-xs leading-5 text-muted-foreground">
               Số tiền thanh toán được xác định trực tiếp bởi máy chủ HomeSpace.{' '}
               {provider === 'ETH'
-                ? 'Bạn sẽ ký xác thực ví rồi xác nhận giao dịch Sepolia trong MetaMask. Gói chỉ kích hoạt sau khi máy chủ đối soát blockchain.'
+                ? 'Bạn sẽ ký xác thực ví rồi xác nhận giao dịch Sepolia trong MetaMask. Gói chỉ kích hoạt sau khi máy chủ xác nhận giao dịch blockchain.'
                 : 'Ứng dụng sẽ gửi biểu mẫu thanh toán an toàn (POST) sang cổng SePay và kết quả đơn hàng được xác thực từ máy chủ sau khi hoàn tất.'}
             </Text>
             {error ? (

@@ -17,7 +17,7 @@ const PROVIDERS = [
     label: 'MetaMask (Sepolia ETH)',
     badge: 'Thử nghiệm',
     description:
-      'Thanh toán bằng ETH thử nghiệm; hệ thống đối soát giao dịch trước khi kích hoạt đơn.',
+      'Thanh toán bằng ETH thử nghiệm; hệ thống xác nhận giao dịch trước khi kích hoạt đơn.',
   },
 ] as const;
 

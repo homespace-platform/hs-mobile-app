@@ -69,7 +69,6 @@ export default function MembershipScreen({
   const [profileError, setProfileError] = useState<string | null>(null);
   const [memory, setMemory] = useState<OrderMemory | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
-  const [reviewOrderId, setReviewOrderId] = useState<string | null>(null);
   const [offer, setOffer] = useState<MembershipAddonOffer | null>(null);
   const [checkoutPlan, setCheckoutPlan] = useState<MembershipPlanInfo | null>(null);
   const [addonOpen, setAddonOpen] = useState(initialAddon);
@@ -114,10 +113,6 @@ export default function MembershipScreen({
     void memory
       ?.pending()
       .then(setPendingOrderId)
-      .catch(() => undefined);
-    void memory
-      ?.review()
-      .then(setReviewOrderId)
       .catch(() => undefined);
   }, [memory]);
 
@@ -253,24 +248,12 @@ export default function MembershipScreen({
         {pendingOrderId ? (
           <View className="gap-2 rounded-2xl border border-warning bg-warning-soft p-4">
             <Text className="text-sm font-bold text-warning">
-              Bạn có đơn thanh toán hội viên chưa hoàn tất.
+              Bạn đang có đơn chờ thanh toán – tiếp tục thanh toán đơn này.
             </Text>
             <ActionButton
-              label={`Kiểm tra trạng thái đơn đang chờ (#${pendingOrderId.slice(0, 8)}...)`}
+              label={`Tiếp tục thanh toán đơn (#${pendingOrderId.slice(0, 8)}...)`}
               variant="secondary"
               onClick={() => setOrder({ orderId: pendingOrderId })}
-            />
-          </View>
-        ) : null}
-        {reviewOrderId ? (
-          <View className="gap-2 rounded-2xl border border-warning bg-warning-soft p-4">
-            <Text className="text-sm font-bold text-warning">
-              Bạn có đơn thanh toán hội viên đang chờ đối soát (REVIEW).
-            </Text>
-            <ActionButton
-              label={`Xem đơn đang đối soát (#${reviewOrderId.slice(0, 8)}...)`}
-              variant="secondary"
-              onClick={() => setOrder({ orderId: reviewOrderId })}
             />
           </View>
         ) : null}

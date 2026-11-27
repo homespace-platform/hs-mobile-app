@@ -359,9 +359,9 @@ export function getOrderStatusPresentation(
     };
   if (isOrderReviewStatus(value))
     return {
-      label: 'Đang chờ đối soát (REVIEW)',
+      label: 'Đang xử lý',
       tone: 'warning',
-      description: `${name} đã ghi nhận thanh toán nhưng thời hạn đơn hoặc điều kiện kích hoạt đã thay đổi tại thời điểm đối soát. Đơn hàng đã được chuyển sang trạng thái REVIEW để bộ phận vận hành đối soát và xử lý cho bạn.`,
+      description: `Đơn hàng đang được xử lý.`,
     };
   if (isOrderFailedStatus(value)) {
     const cancelled = isOrderCancelledStatus(value);
@@ -373,14 +373,14 @@ export function getOrderStatusPresentation(
           : 'Thanh toán không thành công',
       tone: 'danger',
       description: cancelled
-        ? `Đơn hàng trên HomeSpace đã được hủy và gói hội viên hiện tại không bị thay đổi. Bạn có thể khởi tạo giao dịch mới ngay. Nếu ${name} vẫn ghi nhận trừ tiền muộn, đơn hàng sẽ tự động chuyển sang trạng thái REVIEW để đối soát thủ công.`
+        ? `Đơn hàng trên HomeSpace đã được hủy và gói hội viên hiện tại không bị thay đổi. Bạn có thể khởi tạo giao dịch mới ngay.`
         : 'Giao dịch chưa hoàn tất hoặc đã hết thời gian thanh toán (15 phút). Gói hội viên hiện tại của bạn không bị thay đổi. Bạn có thể khởi tạo lại giao dịch mới bất cứ lúc nào.',
     };
   }
   return {
     label: 'Đang chờ xác nhận từ hệ thống',
     tone: 'warning',
-    description: `Hệ thống đang đối soát kết quả giao dịch trực tiếp với máy chủ ${name}. Trạng thái thanh toán chỉ được xác nhận từ máy chủ HomeSpace.`,
+    description: `Hệ thống đang kiểm tra kết quả giao dịch trực tiếp với máy chủ ${name}. Trạng thái thanh toán chỉ được xác nhận từ máy chủ HomeSpace.`,
   };
 }
 
@@ -392,7 +392,7 @@ export function getCancelOutcomeNotice(
   if (isOrderCancelledStatus(order.status))
     return {
       tone: 'info',
-      message: `Đơn hàng trên HomeSpace đã được hủy. Bạn có thể tạo đơn thanh toán mới ngay. Lưu ý: thao tác này không hủy giao dịch phía ${name}; nếu phát sinh thanh toán muộn từ ${name}, đơn hàng sẽ được chuyển sang trạng thái REVIEW để đối soát thủ công.`,
+      message: `Đơn hàng trên HomeSpace đã được hủy. Bạn có thể tạo đơn thanh toán mới ngay. Lưu ý: thao tác này không hủy giao dịch phía ${name}.`,
     };
   if (isOrderPaidStatus(order.status))
     return {
@@ -407,7 +407,7 @@ export function getCancelOutcomeNotice(
     return {
       tone: 'warning',
       message:
-        'Đơn hàng đã chuyển sang trạng thái chờ đối soát (REVIEW) trước khi yêu cầu hủy hoàn tất. Bộ phận vận hành sẽ kiểm tra giao dịch này.',
+        'Đơn hàng đang được xử lý nên chưa thể hủy.',
     };
   if (isOrderFailedStatus(order.status))
     return {

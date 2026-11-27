@@ -230,7 +230,7 @@ const PAYMENT_TAGS: Record<string, string> = {
   MEMBERSHIP_EXPIRED: 'Gói hết hạn',
   PAYMENT_DUE_SOON: 'Sắp đến hạn',
   MEMBERSHIP_ACTIVATED: 'Kích hoạt gói',
-  MEMBERSHIP_PAYMENT_REVIEW: 'Chờ đối soát',
+  MEMBERSHIP_PAYMENT_REVIEW: 'Đang xử lý',
   PAYMENT_REQUEST_CREATED: 'Yêu cầu chuyển khoản',
   PAYMENT_OBLIGATION_OVERDUE: 'Khoản chuyển khoản quá hạn',
   PAYMENT_TRANSFER_REPORTED: 'Đã báo chuyển khoản',
