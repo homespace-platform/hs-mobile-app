@@ -100,8 +100,6 @@ test('candidates: same code first, stable, codes spelled out, other cells block 
     ['3', '4', '1', '2', '5']
   );
   assert.equal(a.sortCandidates(items, null), items);
-  assert.equal(a.candidateCodeNote('101', 'B7'), 'Mã trên tin: B7, khác mã ô 101.');
-  assert.equal(a.candidateCodeNote('101', '101'), 'Mã trên tin: 101.');
   assert.equal(a.candidateCodeNote('101', null), '');
   const options = [
     { id: 's1', code: '101' },
@@ -171,7 +169,7 @@ test('attach result: contractId and contractNote are optional, an older server s
   assert.deepEqual(a.listingLinkOutcome(none, '101', null), { success: 'Đã gắn tin vào phòng 101.', note: null });
   assert.equal(
     a.listingLinkOutcome(none, '101', '102').success,
-    'Đã gắn tin vào phòng 101. Mã trên tin là 102, khác mã ô.'
+    'Đã gắn tin vào phòng 101. Mã trên tin (102) khác mã ô.'
   );
   assert.equal(
     a.listingLinkOutcome({ contractId: 'c', contractNote: null }, '101', null).success,
@@ -292,4 +290,63 @@ test('the touched branch screens keep 44dp targets and the app dialog', () => {
     const text = read(file);
     assert.equal(/min-h-11\b|min-h-12\b|Alert\.alert/.test(text), false, file);
   }
+});
+
+test('audit 27/11: a room with only an ended contract opens that contract (like web)', () => {
+  const ended = { id: 'old', status: 'CLOSED', startDate: null, endDateExclusive: null, tenantName: null };
+  const room = (over) => ({ roomId: 'r', manualStatus: 'NONE', contracts: [], holds: [], listings: [], ...over });
+  assert.deepEqual(a.primaryAction(room({ contracts: [ended] })), {
+    kind: 'contract',
+    id: 'old',
+    label: 'Mở hợp đồng',
+  });
+});
+
+test('audit 27/11: room-code wording is the web wording', () => {
+  assert.equal(
+    a.candidateCodeNote('101', 'B7'),
+    'Mã trên tin: B7\nKhác mã ô 101. Vẫn gắn được, sau đó có thể đổi mã ô cho khớp.'
+  );
+  assert.equal(a.candidateCodeNote('101', '101'), 'Mã trên tin: 101 · trùng mã ô');
+  assert.equal(a.candidateCodeNote('101', null), '');
+  assert.equal(
+    a.listingLinkOutcome({ contractId: null, contractNote: null }, '101', '102').success,
+    'Đã gắn tin vào phòng 101. Mã trên tin (102) khác mã ô.'
+  );
+  assert.equal(a.codeMismatchText('102', '101'), 'Mã trên tin (102) khác mã ô (101). Sơ đồ là chuẩn.');
+  assert.equal(a.codeTakenText('102'), 'Mã 102 đang dùng cho ô khác trên sơ đồ, nên chưa đổi mã ô được.');
+});
+
+test('audit 27/11: listing status labels are the listing management labels; unknown is Đang cập nhật', () => {
+  assert.equal(a.listingStatusLabel('PUBLISHED'), 'Đang hiển thị');
+  assert.equal(a.listingStatusLabel('DRAFT'), 'Tin nháp');
+  assert.equal(a.listingStatusLabel('RENTED'), 'Đã cho thuê qua HomeSpace');
+  assert.equal(a.listingStatusLabel('FUTURE'), 'Đang cập nhật');
+  assert.equal(a.listingStatusLabel('toString'), 'Đang cập nhật');
+});
+
+test('audit 27/11: giving up on 4093 says what web says, and the link card names the last day', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'src/lib/branch-layout-save.ts'), 'utf8');
+  assert.ok(
+    src.includes('Liên kết của phòng bị bỏ liên tục thay đổi nên chưa lưu được. Bản nháp vẫn còn, hãy thử lại sau.')
+  );
+  const panel = fs.readFileSync(path.join(ROOT, 'src/components/branch/editing/RoomLinksPanel.tsx'), 'utf8');
+  assert.equal(panel.includes('đến trước'), false);
+  assert.ok(panel.includes('đến hết'));
+  assert.ok(panel.includes("operationalStatus === 'PUBLISHED'"));
+});
+
+test('audit 27/11: Q12 limits block saving (10 rows per floor, 100 slots per row, 1500 in total)', () => {
+  const slots = (n, at) => Array.from({ length: n }, (_, i) => ({ key: `s${at}-${i}`, id: null, roomCode: `R${at}-${i}` }));
+  const row = (n, at = 0) => ({ key: `r${at}`, id: null, label: `Dãy ${at}`, slots: slots(n, at) });
+  const floor = (rows, at = 0) => ({ key: `f${at}`, id: null, label: `Tầng ${at}`, rows });
+  const v = layoutLib.validateDraft;
+  assert.deepEqual(v([floor(Array.from({ length: 10 }, (_, i) => row(1, i)))]), []);
+  assert.deepEqual(v([floor([row(100)])]), []);
+  assert.deepEqual(v([floor(Array.from({ length: 11 }, (_, i) => row(1, i)), 1)]), [
+    'Tầng 1 có quá 10 dãy. Mỗi tầng tối đa 10 dãy.',
+  ]);
+  assert.deepEqual(v([floor([row(101)], 1)]), ['Tầng 1, Dãy 0 có quá 100 ô. Mỗi dãy tối đa 100 ô.']);
+  const big = Array.from({ length: 16 }, (_, f) => floor([row(100, f)], f));
+  assert.deepEqual(v(big), ['Sơ đồ có quá 1500 ô. Tối đa 1500 ô cho toàn sơ đồ.']);
 });

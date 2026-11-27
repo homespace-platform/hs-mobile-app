@@ -33,6 +33,7 @@ import { layerLook } from '@/lib/branch-status';
 import {
   cellLabel,
   cellLines,
+  contractLines,
   layerEntries,
   legendItems,
   mapSummary,
@@ -65,7 +66,7 @@ const NOTE: Partial<Record<OverviewLayer, string>> = {
   payments: 'Gồm khoản có hạn trong tháng và nợ quá hạn của các tháng trước.',
   meters: 'Bấm vào phòng để mở hóa đơn của hợp đồng; việc ghi chỉ số làm ở đó.',
   contracts:
-    'Hợp đồng đã xếp phòng còn tối đa 60 ngày. Hợp đồng chưa xếp phòng xem ở mục Cần chú ý.',
+    'Hợp đồng đã xếp phòng, kèm ngày hết hạn. Hợp đồng chưa xếp phòng xem ở mục Cần chú ý.',
 };
 
 const describeError = (error: unknown) => branchError(error, 'Máy chủ chưa trả lời được.');
@@ -291,6 +292,7 @@ export default function BranchMapView({
           title={`Phòng ${open.code} · ${open.floor.label}, ${open.row.label}`}
           layer={layer}
           cell={cellContent(open.slot)}
+          facts={openRoom ? contractLines(openRoom) : []}
           entries={data && openRoom ? layerEntries(openRoom, layer, data, elapsed) : null}
           stale={stale || (!data ? error : '')}
           onOpen={openTarget}

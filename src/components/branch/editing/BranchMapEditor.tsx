@@ -454,7 +454,7 @@ export default function BranchMapEditor({
                       }
                     />
                     <Action
-                      label="Tuỳ chọn tầng"
+                      label="Tùy chọn tầng"
                       icon="ellipsis-horizontal"
                       className="grow"
                       onClick={() => setTarget({ type: 'floor', key: floor.key })}

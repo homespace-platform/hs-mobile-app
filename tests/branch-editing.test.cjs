@@ -419,3 +419,11 @@ test('the fee warning follows the server missingCharges, not NOT_APPLICABLE choi
   assert.match(screen, /const missingFees = selected\?\.missingCharges \?\? \[\];/);
   assert.equal(/missingFees = \[\s*form\.category/.test(screen), false);
 });
+
+test('audit 27/11: add, edit and delete branch follow the LISTING_POST gate; editor spelling', () => {
+  const screen = read('src/screens/BranchManagementScreen.tsx');
+  assert.ok(/disabled=\{!mapGate\.allowed\}/.test(screen));
+  assert.ok(/disabled=\{busy \|\| !mapGate\.allowed\}/.test(screen));
+  for (const file of ['editing/LayoutBoard', 'editing/LayoutSheets', 'editing/BranchMapEditor', 'view/MapControls'])
+    assert.equal(/xoá|Xoá|tuỳ|Tuỳ/.test(read(`src/components/branch/${file}.tsx`)), false, file);
+});

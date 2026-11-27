@@ -24,7 +24,7 @@ export function ModeSwitch({ onEdit }: { onEdit: () => void }) {
       <Pressable
         onPress={onEdit}
         accessibilityRole="radio"
-        accessibilityLabel="Sửa sơ đồ: đổi mã, chuyển, xoá ô, thêm dãy và tầng"
+        accessibilityLabel="Sửa sơ đồ: đổi mã, chuyển, xóa ô, thêm dãy và tầng"
         accessibilityState={{ checked: false, selected: false }}
         className="min-h-[44px] flex-1 items-center justify-center rounded-lg px-2 active:bg-surface">
         <Text className="text-center text-sm font-bold text-muted-foreground">Sửa sơ đồ</Text>
@@ -161,7 +161,7 @@ export function SearchBox({
         <Pressable
           onPress={() => onChange('')}
           accessibilityRole="button"
-          accessibilityLabel="Xoá nội dung tìm"
+          accessibilityLabel="Xóa nội dung tìm"
           className="h-[44px] w-[44px] items-center justify-center active:opacity-60">
           <Icon name="close-circle" size={20} className="text-muted-foreground" />
         </Pressable>

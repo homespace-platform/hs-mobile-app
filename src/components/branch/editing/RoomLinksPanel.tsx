@@ -9,6 +9,8 @@ import { useActionDialog, type ConfirmOptions } from '@/components/rental/shared
 import {
   MANUAL_STATUS_LABEL,
   codeMismatch,
+  codeMismatchText,
+  codeTakenText,
   codeTaken,
   contractStatusLabel,
   editListingDestination,
@@ -24,6 +26,7 @@ import {
   sortContracts,
 } from '@/lib/branch-assignment';
 import { branchError } from '@/lib/branch-error';
+import { lastDay } from '@/lib/branch-overview';
 import type { BranchNav } from '@/lib/branch-nav';
 import { useBranchRead } from '@/lib/use-branch-read';
 import { branchAssignmentApi } from '@/services/branchMonitorApi';
@@ -232,10 +235,10 @@ export default function RoomLinksPanel({
     return (
       <Note
         tone="warning"
-        text={`Mã trên tin là "${declared}", khác mã ô ${code}. Sơ đồ là chuẩn: nên đổi mã ô hoặc sửa mã trên tin.`}>
+        text={codeMismatchText(declared, code)}>
         {codeTaken(rooms, roomId, declared) ? (
           <Text className="text-sm leading-5 text-warning">
-            Mã &quot;{declared}&quot; đã là của ô khác nên chưa đổi mã ô được.
+            {codeTakenText(declared)}
           </Text>
         ) : onRecode ? (
           <Action
@@ -254,7 +257,9 @@ export default function RoomLinksPanel({
             void confirm({
               title: 'Sửa mã trên tin?',
               description:
-                'Mở trang sửa tin. Tin đang hiển thị sẽ phải được duyệt lại sau khi lưu thay đổi.',
+                listing.operationalStatus === 'PUBLISHED'
+                  ? 'Mở trang sửa tin. Tin đang đăng sẽ phải duyệt lại sau khi sửa.'
+                  : 'Mở trang sửa tin.',
               confirmLabel: 'Mở trang sửa tin',
               cancelLabel: 'Để sau',
               tone: 'warning',
@@ -287,7 +292,7 @@ export default function RoomLinksPanel({
         {sortContracts(room.contracts).map((contract) => {
           const tenant = contract.tenantName || 'chưa có tên người thuê';
           const start = formatDay(contract.startDate);
-          const end = formatDay(contract.endDateExclusive);
+          const end = contract.endDateExclusive ? lastDay(contract.endDateExclusive) : '';
           return (
             <LinkCard
               key={contract.id}
@@ -296,7 +301,7 @@ export default function RoomLinksPanel({
                 [
                   contractStatusLabel(contract.status),
                   start && `từ ${start}`,
-                  end && `đến trước ${end}`,
+                  end && `đến hết ${end}`,
                 ]
                   .filter(Boolean)
                   .join(' · '),

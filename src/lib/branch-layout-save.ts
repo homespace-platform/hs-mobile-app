@@ -119,7 +119,7 @@ export async function saveWithLinks(
     }
     const key = JSON.stringify(ack);
     if (round > 0 && key === sent)
-      return { kind: 'failed', message: 'Liên kết của phòng vẫn đang thay đổi. Hãy thử lưu lại.' };
+      return { kind: 'failed', message: 'Liên kết của phòng bị bỏ liên tục thay đổi nên chưa lưu được. Bản nháp vẫn còn, hãy thử lại sau.' };
     sent = key;
     const outcome = await saveLayoutDraft(api, branchId, next, base, expectedRevision, ack);
     if (outcome.kind === 'links-changed') continue;

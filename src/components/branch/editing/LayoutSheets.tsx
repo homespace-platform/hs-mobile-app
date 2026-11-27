@@ -149,10 +149,10 @@ function CellBody({
         onClick={() => apply(toggleEmptyCell(draft, slotKey), 'Đã đổi loại ô.')}
       />
       <Action
-        label="Xoá ô này"
+        label="Xóa ô này"
         variant="danger"
         icon="trash-outline"
-        onClick={() => apply(removeSlot(draft, slotKey), 'Đã xoá ô. Bấm Hoàn tác nếu xoá nhầm.')}
+        onClick={() => apply(removeSlot(draft, slotKey), 'Đã xóa ô. Bấm Hoàn tác nếu xóa nhầm.')}
       />
     </>
   );
@@ -293,11 +293,11 @@ export default function LayoutSheets({
               onClick={() => apply(addEmptyCell(draft, row!.key), 'Đã thêm ô trống.')}
             />
             <Action
-              label="Xoá dãy này"
+              label="Xóa dãy này"
               variant="danger"
               icon="trash-outline"
               onClick={() =>
-                apply(removeRow(draft, row!.key), 'Đã xoá dãy. Bấm Hoàn tác nếu xoá nhầm.')
+                apply(removeRow(draft, row!.key), 'Đã xóa dãy. Bấm Hoàn tác nếu xóa nhầm.')
               }
             />
           </>
@@ -314,11 +314,11 @@ export default function LayoutSheets({
               onClick={() => onTarget({ type: 'recode', key: floor!.key })}
             />
             <Action
-              label="Xoá tầng này"
+              label="Xóa tầng này"
               variant="danger"
               icon="trash-outline"
               onClick={() =>
-                apply(removeFloor(draft, floor!.key), 'Đã xoá tầng. Bấm Hoàn tác nếu xoá nhầm.')
+                apply(removeFloor(draft, floor!.key), 'Đã xóa tầng. Bấm Hoàn tác nếu xóa nhầm.')
               }
             />
           </>

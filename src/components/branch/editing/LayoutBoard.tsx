@@ -34,7 +34,7 @@ export default function LayoutBoard({
         <Pressable
           onPress={() => onOpenRow(row.key)}
           accessibilityRole="button"
-          accessibilityLabel={`Tuỳ chọn ${row.label}, ${floor.label}`}
+          accessibilityLabel={`Tùy chọn ${row.label}, ${floor.label}`}
           className="min-h-[48px] flex-row items-center justify-center gap-1 rounded-xl px-1 py-1 active:bg-muted">
           <Text className="shrink text-center text-sm font-bold text-secondary">{row.label}</Text>
           <Icon name="ellipsis-horizontal" size={18} className="text-primary" />
@@ -51,7 +51,7 @@ export default function LayoutBoard({
             disabled={!editable}
             accessibilityRole="button"
             accessibilityState={{ disabled: !editable }}
-            accessibilityLabel={`${empty ? 'Ô trống' : `Phòng ${slot.roomCode}`}, ${row.label}, ${floor.label}${editable ? '. Mở tuỳ chọn' : ''}`}
+            accessibilityLabel={`${empty ? 'Ô trống' : `Phòng ${slot.roomCode}`}, ${row.label}, ${floor.label}${editable ? '. Mở tùy chọn' : ''}`}
             className={`min-h-[60px] items-center justify-center rounded-xl border-2 px-2 py-2 active:bg-muted ${empty ? 'border-dashed border-border-strong bg-muted' : 'border-primary-border bg-surface'}`}>
             <Text
               className={`text-center ${empty ? 'text-xs text-secondary' : 'text-base font-bold text-foreground'}`}>

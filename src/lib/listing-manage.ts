@@ -18,6 +18,10 @@ const STATUSES: Record<string, { label: string; tone: Tone }> = {
 
 export const listingStatus = (status: string) => STATUSES[status] ?? STATUSES.DRAFT;
 
+/** Label for the branch screens: an unknown status is "Đang cập nhật", never a draft. */
+export const listingStatusLabel = (status: string) =>
+  Object.prototype.hasOwnProperty.call(STATUSES, status) ? STATUSES[status].label : 'Đang cập nhật';
+
 export const STATUS_TABS: { value: string; label: string }[] = [
   { value: 'ALL', label: 'Tất cả' },
   { value: 'PUBLISHED', label: 'Đang hiển thị' },

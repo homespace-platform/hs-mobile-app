@@ -21,6 +21,8 @@ type Props = {
   title: string;
   layer: OverviewLayer;
   cell: CellContent;
+  /** Extra status lines, e.g. "Hợp đồng: Còn 13 ngày · hết …". */
+  facts: string[];
   /** null = no status for this room (loading, failed, or the layer has no data). */
   entries: ViewEntry[] | null;
   /** Set when the status on screen may be old. */
@@ -34,6 +36,7 @@ export default function RoomSheet({
   title,
   layer,
   cell,
+  facts,
   entries,
   stale,
   onOpen,
@@ -48,6 +51,11 @@ export default function RoomSheet({
             Lớp {LAYER_LABEL[layer]}
           </Text>
           <StatusTag look={cell.look} label={cell.label} />
+          {facts.map((fact) => (
+            <Text key={fact} className="text-sm leading-5 text-muted-foreground">
+              {fact}
+            </Text>
+          ))}
           {stale ? (
             <Text accessibilityRole="alert" className="text-sm leading-5 text-warning">
               {stale}

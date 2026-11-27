@@ -137,7 +137,7 @@ const EXPIRY_STATUS_LABEL: Record<OverviewExpiry['status'] | 'NO_LEASE', string>
 };
 
 /** The last day of a lease is the day before its exclusive end; pure calendar math, so no time zone can move it. */
-const lastDay = (endDateExclusive: string) => {
+export const lastDay = (endDateExclusive: string) => {
   const [y, m, d] = endDateExclusive.split('-').map(Number);
   return formatDay(new Date(Date.UTC(y, m - 1, d - 1)).toISOString());
 };

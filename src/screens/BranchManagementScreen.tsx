@@ -527,10 +527,14 @@ export default function BranchManagementScreen({
         <ErrorNotice message={error} />
         {mode === 'list' ? (
           <>
+            {mapGate.allowed ? null : (
+              <Text className="mb-2 text-sm leading-6 text-warning">{mapGate.title}</Text>
+            )}
             <Pressable
               onPress={() => beginForm()}
+              disabled={!mapGate.allowed}
               accessibilityRole="button"
-              className="mb-5 min-h-14 flex-row items-center justify-center rounded-2xl bg-brand px-4">
+              className={`mb-5 min-h-14 flex-row items-center justify-center rounded-2xl px-4 ${mapGate.allowed ? 'bg-brand' : 'bg-disabled'}`}>
               <Icon name="add-circle-outline" size={22} className="text-on-brand" />
               <Text className="ml-2 font-bold text-on-brand">Thêm chi nhánh</Text>
             </Pressable>
@@ -730,14 +734,17 @@ export default function BranchManagementScreen({
                 />
               </>
             ) : null}
+            {mapGate.allowed ? null : (
+              <Text className="mt-4 text-sm leading-6 text-warning">{mapGate.title}</Text>
+            )}
             <Button
               label="Chỉnh sửa chi nhánh"
               onPress={() => beginForm(selected)}
-              disabled={busy}
+              disabled={busy || !mapGate.allowed}
             />
             <Pressable
               onPress={removeBranch}
-              disabled={busy}
+              disabled={busy || !mapGate.allowed}
               accessibilityRole="button"
               className="mt-4 min-h-12 items-center justify-center rounded-xl border border-danger bg-danger-soft">
               <Text className="font-bold text-danger">Xóa chi nhánh</Text>

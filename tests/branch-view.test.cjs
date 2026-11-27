@@ -413,3 +413,24 @@ test('UNLINKED and VACANT with a listing status: parse, wording, look, legend an
     { status: 'UNLINKED', label: 'Chưa gắn tin', count: 2 },
   ]);
 });
+
+test('audit 27/11: contracts note, room-sheet lease lines and unknown listing status', () => {
+  const map = fs.readFileSync(path.join(ROOT, 'src/components/branch/view/BranchMapView.tsx'), 'utf8');
+  assert.ok(map.includes('Hợp đồng đã xếp phòng, kèm ngày hết hạn. Hợp đồng chưa xếp phòng xem ở mục Cần chú ý.'));
+  assert.equal(map.includes('tối đa 60 ngày'), false);
+  const r = room('r', {
+    contracts: [
+      { contractId: 'b', status: 'LONG', endDateExclusive: '2027-02-01', daysRemaining: 70 },
+      { contractId: 'a', status: 'WITHIN_30', endDateExclusive: '2026-12-10', daysRemaining: 13 },
+    ],
+  });
+  assert.deepEqual(view.contractLines(r), [
+    'Hợp đồng: Còn 13 ngày · hết 09/12/2026',
+    'Hợp đồng: Còn 70 ngày · hết 31/01/2027',
+  ]);
+  assert.deepEqual(view.contractLines(room('n')), []);
+  const listing = target('LISTING', '/dashboard/properties/view?id=7');
+  assert.equal(view.roomLabel(room('v', { target: listing, listingStatus: 'FUTURE' })), 'Trống · Đang cập nhật');
+  assert.equal(view.roomLabel(room('v', { target: listing, listingStatus: 'DRAFT' })), 'Trống · Tin nháp');
+  assert.ok(fs.readFileSync(path.join(ROOT, 'src/components/branch/view/RoomSheet.tsx'), 'utf8').includes('facts'));
+});

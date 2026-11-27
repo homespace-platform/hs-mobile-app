@@ -4,7 +4,7 @@
  * cell and deadlines are the server's; nothing here decides them again.
  */
 import { formatDay } from '@/lib/branch-assignment';
-import { listingStatus } from '@/lib/listing-manage';
+import { listingStatusLabel } from '@/lib/listing-manage';
 import {
   LAYER_STATUS_LABEL,
   confirmationCountdown,
@@ -80,7 +80,7 @@ const paymentEntry = (payment: OverviewPayment, times: Times, elapsedMs: number)
 /** "Trống · <listing status>" for a vacant room with a listing; everything else is the plain word. */
 export const roomLabel = (room: OverviewRoom) =>
   room.status === 'VACANT' && room.listingStatus
-    ? `${statusLabel('rooms', room.status)} · ${listingStatus(room.listingStatus).label}`
+    ? `${statusLabel('rooms', room.status)} · ${listingStatusLabel(room.listingStatus)}`
     : statusLabel('rooms', room.status);
 
 /** The label of a map cell on the current layer. */
@@ -96,6 +96,10 @@ export function cellLabel(room: OverviewRoom, layer: OverviewLayer) {
       ? 'Còn hạn trên 60 ngày'
       : statusLabel(layer, status);
 }
+
+/** "Hợp đồng: <expiry>" lines of the room sheet, most urgent first. */
+export const contractLines = (room: OverviewRoom) =>
+  sortExpiries(room.contracts ?? []).map((expiry) => `Hợp đồng: ${expiryText(expiry)}`);
 
 /** The current stay (or listing) and the next one. A ROOM target is the cell menu, not a page. */
 function stayEntries(room: OverviewRoom): ViewEntry[] {

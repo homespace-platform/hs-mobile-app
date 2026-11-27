@@ -25,20 +25,7 @@ export const MANUAL_STATUS_LABEL: Record<RoomManualStatus, string> = {
   REPAIR: 'Đang sửa chữa',
 };
 
-const LISTING_STATUS: Record<string, string> = {
-  DRAFT: 'Bản nháp',
-  PENDING_REVIEW: 'Chờ duyệt',
-  PUBLISHED: 'Đang đăng',
-  RESERVED: 'Đang giữ chỗ',
-  RENTED: 'Đã cho thuê',
-  RENTED_EXTERNALLY: 'Đã thuê ngoài',
-  EXPIRED: 'Hết hạn',
-  REJECTED: 'Bị từ chối',
-  HIDDEN: 'Đã ẩn',
-  VIOLATION: 'Vi phạm',
-};
-
-export const listingStatusLabel = (status: string) => LISTING_STATUS[status] ?? 'Đang cập nhật';
+export { listingStatusLabel } from '@/lib/listing-manage';
 export const contractStatusLabel = (status: string) => contractStatus(status).label;
 
 /** "2026-11-26..." -> "26/11/2026", without time zone conversion; anything else -> "". */
@@ -248,6 +235,11 @@ export function mismatchedRoomIds(rooms: RoomAssignment[], options: RoomOption[]
   );
 }
 
+export const codeMismatchText = (declared: string, cellCode: string) =>
+  `Mã trên tin (${declared}) khác mã ô (${cellCode}). Sơ đồ là chuẩn.`;
+export const codeTakenText = (declared: string) =>
+  `Mã ${declared} đang dùng cho ô khác trên sơ đồ, nên chưa đổi mã ô được.`;
+
 /** Another cell of the map already uses `code`, so the cell cannot be renamed to it. */
 export const codeTaken = (options: RoomOption[], roomId: string, code: string) =>
   options.some((room) => room.id !== roomId && sameRoomCode(room.code, code));
@@ -260,8 +252,9 @@ export function candidateCodeNote(
   const declared = code?.trim();
   if (!declared) return '';
   return codeMismatch(cellCode, declared)
-    ? `Mã trên tin: ${declared}, khác mã ô ${cellCode}.`
-    : `Mã trên tin: ${declared}.`;
+    ? `Mã trên tin: ${declared}
+Khác mã ô ${cellCode}. Vẫn gắn được, sau đó có thể đổi mã ô cho khớp.`
+    : `Mã trên tin: ${declared}${sameRoomCode(declared, cellCode ?? '') ? ' · trùng mã ô' : ''}`;
 }
 
 /** Listings with the cell's own code first; otherwise the server's order. */
@@ -310,7 +303,11 @@ export function primaryAction(room: RoomAssignment): PrimaryAction {
   if (room.holds[0])
     return { kind: 'hold', id: room.holds[0].rentalRequestId, label: 'Mở hồ sơ thuê' };
   if (room.listings[0]) return { kind: 'listing', id: room.listings[0].id, label: 'Mở tin' };
-  return { kind: 'attach', label: 'Gắn tin' };
+  // Only history left: open the (ended) contract, as web does.
+  const [first] = sortContracts(room.contracts);
+  return first
+    ? { kind: 'contract', id: first.id, label: 'Mở hợp đồng' }
+    : { kind: 'attach', label: 'Gắn tin' };
 }
 
 export const editListingDestination = (listingId: string): BranchDestination => ({
@@ -336,7 +333,7 @@ export function listingLinkOutcome(result: ListingLinkResult, code: string, othe
   return {
     success: result.contractId
       ? `Đã gắn tin và hợp đồng đang hiệu lực vào phòng ${code}.`
-      : `Đã gắn tin vào phòng ${code}.${other ? ` Mã trên tin là ${other}, khác mã ô.` : ''}`,
+      : `Đã gắn tin vào phòng ${code}.${other ? ` Mã trên tin (${other}) khác mã ô.` : ''}`,
     note: result.contractNote,
   };
 }
