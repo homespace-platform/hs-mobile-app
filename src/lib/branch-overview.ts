@@ -8,7 +8,14 @@
 const has = (value: object, key: string) => Object.prototype.hasOwnProperty.call(value, key);
 
 export type RoomStatus =
-  'VACANT' | 'ADVERTISED' | 'RESERVED' | 'OCCUPIED' | 'MOVING_IN' | 'EXTERNAL_RENT' | 'REPAIR';
+  | 'VACANT'
+  | 'ADVERTISED'
+  | 'RESERVED'
+  | 'OCCUPIED'
+  | 'MOVING_IN'
+  | 'EXTERNAL_RENT'
+  | 'REPAIR'
+  | 'UNLINKED';
 export type PaymentStatus =
   'OVERDUE' | 'PENDING_CONFIRMATION' | 'DUE_SOON' | 'NOT_DUE' | 'UNISSUED' | 'PAID' | 'NONE';
 
@@ -56,6 +63,8 @@ export interface OverviewExpiry {
 export interface OverviewRoom {
   roomId: string;
   status: RoomStatus;
+  /** VACANT only: operational status of the target listing. Absent from an older server. */
+  listingStatus?: string | null;
   tenantName: string | null;
   target: OverviewTarget | null;
   nextStay: OverviewStay | null;
@@ -95,6 +104,7 @@ export const ROOM_STATUS_LABEL: Record<RoomStatus, string> = {
   MOVING_IN: 'Sắp vào',
   EXTERNAL_RENT: 'Thuê ngoài',
   REPAIR: 'Sửa chữa',
+  UNLINKED: 'Chưa gắn tin',
 };
 
 /** In legend order: most urgent first. */
@@ -256,6 +266,7 @@ const isRoom = (r: unknown) =>
   isObject(r) &&
   isText(r.roomId) &&
   isKey(ROOM_STATUS_LABEL, r.status) &&
+  (r.listingStatus === undefined || orNull(r.listingStatus, isString)) &&
   orNull(r.tenantName, isString) &&
   orNull(r.target, isTarget) &&
   orNull(r.nextStay, isStay) &&

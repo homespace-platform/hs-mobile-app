@@ -290,3 +290,50 @@ test('columns share a 320px screen up to two rows, then scroll with a fixed widt
   assert.equal(view.columnWidth(2, 3, narrow), 218);
   assert.equal(view.columnWidth(2, 1.3, 700), null);
 });
+
+test('UNLINKED and VACANT with a listing status: parse, wording, look, legend and target', () => {
+  const overview = load('src/lib/branch-overview.ts');
+  const status = load('src/lib/branch-status.ts');
+  const wire = (extra) => ({
+    branchId: 'b',
+    month: '2026-11',
+    billingNow: times.billingNow,
+    realNow: times.realNow,
+    unplacedPayments: [],
+    rooms: [room('r', extra)],
+  });
+  const listing = target('LISTING', '/dashboard/properties/view?id=7');
+  for (const extra of [
+    { status: 'UNLINKED' },
+    { status: 'VACANT', target: listing, listingStatus: 'HIDDEN' },
+    { status: 'VACANT', target: listing, listingStatus: null },
+    { status: 'VACANT' }, // an older server sends no listingStatus
+  ])
+    assert.equal(overview.parseOverview(wire(extra)).rooms[0].status, extra.status);
+  assert.throws(() => overview.parseOverview(wire({ listingStatus: 5 })));
+
+  const vacant = room('v', { status: 'VACANT', target: listing, listingStatus: 'HIDDEN' });
+  assert.equal(view.roomLabel(vacant), 'Trống · Đã ẩn');
+  assert.equal(view.roomLabel(room('v', { listingStatus: null })), 'Trống');
+  assert.equal(view.roomLabel(room('u', { status: 'UNLINKED' })), 'Chưa gắn tin');
+  assert.equal(view.roomLabel(room('o', { status: 'OCCUPIED', listingStatus: 'HIDDEN' })), 'Đang thuê');
+  assert.equal(view.cellLabel(vacant, 'rooms'), 'Trống · Đã ẩn');
+  assert.equal(view.cellLabel(vacant, 'payments'), 'Không có khoản');
+
+  // The sheet opens the room's target listing through the same entry as any other current page.
+  const [entry] = view.layerEntries(vacant, 'rooms', times, 0);
+  assert.deepEqual([entry.title, entry.target], ['Trống · Đã ẩn', listing]);
+  assert.equal(view.openLabel(entry.target), 'Mở tin đăng');
+  assert.deepEqual(view.layerEntries(room('u', { status: 'UNLINKED' }), 'rooms', times, 0), []);
+
+  const look = status.layerLook('rooms', 'UNLINKED');
+  assert.equal(look.tone, 'muted');
+  assert.notDeepEqual(look, status.layerLook('rooms', 'VACANT'));
+  assert.ok(status.BRANCH_TONES.muted.box && status.BRANCH_TONES.muted.text);
+
+  const counts = new Map([['VACANT', 1], ['UNLINKED', 2]]);
+  assert.deepEqual(view.legendItems('rooms', counts, null), [
+    { status: 'VACANT', label: 'Trống', count: 1 },
+    { status: 'UNLINKED', label: 'Chưa gắn tin', count: 2 },
+  ]);
+});

@@ -12,7 +12,7 @@ import type {
   WorkPriority,
 } from '@/lib/branch-overview';
 
-export type BranchTone = 'success' | 'pending' | 'info' | 'warning' | 'danger' | 'neutral' | 'off';
+export type BranchTone = 'success' | 'pending' | 'info' | 'warning' | 'danger' | 'neutral' | 'muted' | 'off';
 
 /** RN does not inherit text colour, so box and text classes are separate. */
 export const BRANCH_TONES: Record<BranchTone, { box: string; text: string }> = {
@@ -22,6 +22,7 @@ export const BRANCH_TONES: Record<BranchTone, { box: string; text: string }> = {
   warning: { box: 'border-warning bg-warning-soft', text: 'text-warning' },
   danger: { box: 'border-danger bg-danger-soft', text: 'text-danger' },
   neutral: { box: 'border-border-strong bg-surface', text: 'text-foreground' },
+  muted: { box: 'border-border bg-background', text: 'text-muted-foreground' },
   off: { box: 'border-dashed border-border-strong bg-muted', text: 'text-secondary' },
 };
 
@@ -43,7 +44,8 @@ export interface BranchLook {
     | 'log-in-outline'
     | 'megaphone-outline'
     | 'remove-outline'
-    | 'time-outline';
+    | 'time-outline'
+    | 'unlink-outline';
   tone: BranchTone;
 }
 
@@ -58,6 +60,7 @@ const ROOM_LOOK: Record<RoomStatus, BranchLook> = {
   MOVING_IN: look('log-in-outline', 'pending'),
   EXTERNAL_RENT: look('ban-outline', 'off'),
   REPAIR: look('construct-outline', 'warning'),
+  UNLINKED: look('unlink-outline', 'muted'),
 };
 /** Colours fixed by concept section 5. */
 const PAYMENT_LOOK: Record<PaymentStatus, BranchLook> = {

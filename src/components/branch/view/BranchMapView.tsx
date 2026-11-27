@@ -24,12 +24,12 @@ import {
   layerReady,
   monthLabel,
   roomLayerStatus,
-  statusLabel,
   type OverviewLayer,
   type OverviewTarget,
 } from '@/lib/branch-overview';
 import { layerLook } from '@/lib/branch-status';
 import {
+  cellLabel,
   cellLines,
   layerEntries,
   legendItems,
@@ -124,7 +124,7 @@ export default function BranchMapView({
     const status = roomLayerStatus(room, layer);
     return {
       look: layerLook(layer, status),
-      label: statusLabel(layer, status),
+      label: cellLabel(room, layer),
       lines: cellLines(room, layer, data, elapsed),
     };
   };
