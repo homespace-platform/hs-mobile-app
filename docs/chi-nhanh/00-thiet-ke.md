@@ -215,7 +215,7 @@ Việc gấp ở trên. Bấm để mở đúng nơi xử lý; xử lý xong th�
 - Cả thẻ bấm được → `nav.openTarget(work.target)`. `branchDestination` trả `null` → không chevron, ghi "Chưa mở được trên điện thoại.".
 - `useBranchRead` + `getAttention(branchId, page)`; kéo để làm mới; phân trang 20; trang vượt cuối thì lùi về trang cuối. Rỗng: "Không có việc nào cần chú ý.". Lỗi: như web ("Chưa tải được danh sách việc. Các phần khác của chi nhánh vẫn dùng được.").
 - Mỗi lần đọc được gọi `onCountChange(data.totalElements)`.
-- `useBranchAttentionSummary`: `useBranchRead(branchOverviewApi.getAttentionSummary, …)`; hàm `load` và `describe` phải ổn định, `reload` ổn định. Badge của tab lấy số đến sau cùng giữa summary (`at`) và trang Cần chú ý.
+- `useBranchAttentionSummary`: `useBranchRead(branchOverviewApi.getAttentionSummary, …)`; hàm `load` và `describe` phải ổn định, `reload` ổn định. Số trên badge của tab và trên thẻ chi nhánh lấy từ ảnh chụp máy chủ mới hơn (`realNow`) giữa summary và lượt đọc trang Cần chú ý (`newestCount`), không theo giờ máy nhận.
 
 ## 9. Mã dùng chung (đã viết, đã typecheck)
 

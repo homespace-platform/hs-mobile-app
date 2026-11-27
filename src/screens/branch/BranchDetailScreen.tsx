@@ -17,6 +17,7 @@ import { branchError } from '@/lib/branch-error';
 import { fromLayout } from '@/lib/branch-layout';
 import { loadBranchLayout } from '@/lib/branch-layout-save';
 import type { BranchNav, BranchViewState } from '@/lib/branch-nav';
+import type { BranchAttention } from '@/lib/branch-overview';
 import { PERMISSIONS } from '@/lib/permissions';
 import { useBranchRead } from '@/lib/use-branch-read';
 import { useFeatureGate } from '@/lib/use-feature-gate';
@@ -158,7 +159,7 @@ export default function BranchDetailScreen({
   ...props
 }: Props & {
   attentionCount?: number;
-  onAttentionCount: (count: number) => void;
+  onAttentionCount: (read: BranchAttention) => void;
   onBack: () => void;
   /** Address, fees, rules, edit and delete. */
   onOpenInfo: () => void;

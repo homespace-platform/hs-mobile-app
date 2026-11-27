@@ -273,7 +273,7 @@ test('the list keeps server order, pages, and reads again on return', () => {
   assert.doesNotMatch(tab, /\.sort\(|\.filter\(/);
   assert.match(tab, /page >= pages\) setPage\(pages - 1\)/);
   assert.match(tab, /<RefreshControl/);
-  assert.match(tab, /onCountChange\(data\.totalElements\)/);
+  assert.match(tab, /onCountChange\(data\)/);
   const hook = read('components/branch/attention/useBranchAttentionSummary.ts');
   assert.match(hook, /useBranchRead\(\s*branchOverviewApi\.getAttentionSummary/);
 });

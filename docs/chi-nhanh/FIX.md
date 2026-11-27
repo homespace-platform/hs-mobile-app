@@ -35,3 +35,13 @@ Nếu bị dừng: đọc file này, mục chưa đánh dấu là việc còn l�
 - Chưa chạy trên máy/giả lập: 320px chữ 200%, vùng bấm thực tế, Back Android, dark mode.
 - Vài test của Codex chỉ so mã nguồn (mục 1, 2, 4-7): đạt test chưa thay cho thử trên máy.
 - Core: hợp đồng bị ẩn khỏi phòng vì trùng lịch chỉ hiện ở khay trong `/assignments`, nên cảnh báo trước khi lưu không tính nó vào phòng sắp bỏ (đọc mã, chưa chạy).
+
+## RECHECK mục 6: badge "Cần chú ý" khi hai lượt đọc về ngược thứ tự
+
+- Đúng như báo cáo: mục 4 ở trên đóng dấu độ mới bằng giờ máy nhận, nên summary chụp trước (0 việc) trả sau đè số 1 của trang Cần chú ý.
+- Sửa: `newestCount` (`lib/branch-overview.ts`) lấy số từ ảnh chụp máy chủ mới hơn theo `realNow` (bằng nhau thì lấy trang Cần chú ý), dùng cho cả badge và thẻ chi nhánh. `parseAttentionSummary` trả `{ realNow, branches }` và từ chối phản hồi thiếu `realNow`. Shell giữ lượt đọc trang cuối của từng chi nhánh, mở chi nhánh khác không xoá. `useBranchRead` không đổi.
+- Đọc lỗi: hook giữ summary cũ, shell giữ lượt đọc trang cũ, nên số đã biết không thành 0.
+- Đổi tài khoản: số đếm chỉ nằm trong state của shell, đăng xuất thì `App` gỡ cả cây đã đăng nhập; không thêm cache cấp module (đọc mã, không có test).
+- Test mới `tests/branch-attention-badge.test.cjs` chạy shell, tab, hook, API và parser thật trên runtime hook tối giản: 3 ca đỏ trước khi sửa, đạt sau khi sửa. Sửa một assert so mã trong `branch-attention.test.cjs` (`onCountChange(data)`).
+- Kiểm: `npm run typecheck` đạt; `node --test --test-isolation=none tests/*.cjs tests/*.mjs` 597/597; `test:theme` 5/5. Chưa chạy trên máy/giả lập.
+- Giới hạn (đọc mã core): `/attention` lấy `realNow` sau câu truy vấn kiểm quyền (câu mở ảnh chụp), summary lấy trước; hai lượt chụp cách nhau vài ms vẫn có thể bị xếp sai.

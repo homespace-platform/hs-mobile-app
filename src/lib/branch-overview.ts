@@ -342,6 +342,12 @@ export interface BranchAttentionCount {
   count: number;
 }
 
+export interface AttentionSummary {
+  /** Server time of this snapshot, comparable with `BranchAttention.realNow`. */
+  realNow: string;
+  branches: BranchAttentionCount[];
+}
+
 export const PRIORITY_LABEL: Record<WorkPriority, string> = {
   URGENT: 'Gấp',
   SOON: 'Sắp tới',
@@ -446,15 +452,28 @@ export function parseAttention(value: unknown): BranchAttention {
   return value as unknown as BranchAttention;
 }
 
-export function parseAttentionSummary(value: unknown): BranchAttentionCount[] {
+export function parseAttentionSummary(value: unknown): AttentionSummary {
   if (
     !isObject(value) ||
+    !isInstant(value.realNow) ||
     !Array.isArray(value.branches) ||
     !value.branches.every((b: unknown) => isObject(b) && isText(b.branchId) && isCount(b.count))
   ) {
     throw badShape();
   }
-  return value.branches as BranchAttentionCount[];
+  return value as unknown as AttentionSummary;
+}
+
+/** A branch's work count from the newer server snapshot, however late the other answer arrived. */
+export function newestCount(
+  branchId: string,
+  summary: AttentionSummary | null,
+  page: Pick<BranchAttention, 'realNow' | 'totalElements'> | undefined
+): number | undefined {
+  const listed = summary?.branches.find((entry) => entry.branchId === branchId)?.count;
+  if (!page) return listed;
+  if (!summary || listed === undefined) return page.totalElements;
+  return Date.parse(page.realNow) >= Date.parse(summary.realNow) ? page.totalElements : listed;
 }
 
 /** Cards in the server's order (most urgent first); branches the summary does not name keep their place at the end. */

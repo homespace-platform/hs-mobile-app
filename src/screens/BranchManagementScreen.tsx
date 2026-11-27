@@ -25,7 +25,12 @@ import BranchMapEditor from '@/components/branch/editing/BranchMapEditor';
 import { apiError } from '@/lib/api-error';
 import { branchError } from '@/lib/branch-error';
 import type { BranchNav, HostedDestination } from '@/lib/branch-nav';
-import { orderByAttention, targetHref } from '@/lib/branch-overview';
+import {
+  newestCount,
+  orderByAttention,
+  targetHref,
+  type BranchAttention,
+} from '@/lib/branch-overview';
 import { branchDestination } from '@/lib/branch-target';
 import { getDatePeriodRange, toLocalDateKey, type DatePeriod } from '@/lib/date-period';
 import {
@@ -128,11 +133,8 @@ export default function BranchManagementScreen({
   const [setup, setSetup] = useState(false);
   /** An existing screen opened over the branch; this component stays mounted, so Back returns here. */
   const [destination, setDestination] = useState<HostedDestination | null>(null);
-  const [attentionTotal, setAttentionTotal] = useState<{
-    id: string;
-    count: number;
-    at: number;
-  } | null>(null);
+  /** Last attention page read of each branch; newer than the summary, it sets the count. */
+  const [attentionReads, setAttentionReads] = useState<Record<string, BranchAttention>>({});
   const [filtersOpen, setFiltersOpen] = useState(false);
   const summary = useBranchAttentionSummary();
   const reloadSummary = summary.reload;
@@ -200,12 +202,10 @@ export default function BranchManagementScreen({
   useEffect(() => {
     if (!destination && (mode === 'list' || mode === 'detail')) void reloadSummary();
   }, [mode, destination, reloadSummary]);
-  const onAttentionCount = useCallback(
-    (count: number) => {
-      if (selected) setAttentionTotal({ id: selected.id, count, at: Date.now() });
-    },
-    [selected]
-  );
+  const onAttentionRead = useCallback((read: BranchAttention) => {
+    setAttentionReads((current) => ({ ...current, [read.branchId]: read }));
+  }, []);
+  const attentionCount = (id: string) => newestCount(id, summary.data, attentionReads[id]);
 
   useEffect(() => {
     if (mode !== 'form' || addressQuery.trim().length < 3 || addressQuery === form.display) {
@@ -298,7 +298,6 @@ export default function BranchManagementScreen({
     try {
       setSelected(await getBranch(branch.id));
       setDetail(initialBranchDetail(tab));
-      setAttentionTotal(null);
       setMode('detail');
       scrollRef.current?.scrollTo({ y: 0, animated: false });
     } catch (cause) {
@@ -368,10 +367,7 @@ export default function BranchManagementScreen({
         const mapStep = created && saved.category !== 'HOUSE';
         setSelected(saved);
         setDirty(false);
-        if (created) {
-          setDetail(initialBranchDetail());
-          setAttentionTotal(null);
-        }
+        if (created) setDetail(initialBranchDetail());
         setSetup(mapStep);
         setMode(mapStep ? 'editor' : created ? 'detail' : 'info');
         await load();
@@ -471,12 +467,8 @@ export default function BranchManagementScreen({
         state={detail}
         onStateChange={setDetail}
         nav={nav}
-        attentionCount={
-          attentionTotal?.id === selected.id && attentionTotal.at >= summary.at
-            ? attentionTotal.count
-            : summary.data?.find((entry) => entry.branchId === selected.id)?.count
-        }
-        onAttentionCount={onAttentionCount}
+        attentionCount={attentionCount(selected.id)}
+        onAttentionCount={onAttentionRead}
         onBack={back}
         onOpenInfo={() => {
           setError(null);
@@ -656,11 +648,11 @@ export default function BranchManagementScreen({
                 Không tìm thấy chi nhánh phù hợp.
               </Text>
             ) : (
-              orderByAttention(filteredBranches, summary.data).map((branch) => (
+              orderByAttention(filteredBranches, summary.data?.branches ?? null).map((branch) => (
                 <BranchCard
                   key={branch.id}
                   branch={branch}
-                  count={summary.data?.find((entry) => entry.branchId === branch.id)?.count}
+                  count={attentionCount(branch.id)}
                   disabled={busy}
                   onPress={() => void openBranch(branch)}
                   onOpenAttention={() => void openBranch(branch, 'attention')}

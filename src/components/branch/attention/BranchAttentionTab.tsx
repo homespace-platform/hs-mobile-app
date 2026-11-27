@@ -10,6 +10,7 @@ import { ErrorBlock, LoadingBlock } from '@/components/rental/shared/StateBlocks
 import { pageCount } from '@/lib/branch-assignment';
 import { branchError } from '@/lib/branch-error';
 import type { BranchNav } from '@/lib/branch-nav';
+import type { BranchAttention } from '@/lib/branch-overview';
 import { useBranchRead, useNowMs } from '@/lib/use-branch-read';
 import { branchOverviewApi } from '@/services/branchMonitorApi';
 
@@ -18,8 +19,8 @@ import WorkCard from './WorkCard';
 export interface BranchAttentionTabProps {
   branchId: string;
   nav: BranchNav;
-  /** Report totalElements after each successful read: the tab shows it. Stable between renders. */
-  onCountChange: (count: number) => void;
+  /** Report each successful read: the shell takes the tab's count from it. Stable between renders. */
+  onCountChange: (read: BranchAttention) => void;
 }
 
 const describe = (error: unknown) => branchError(error, 'Máy chủ chưa trả lời được.');
@@ -39,7 +40,7 @@ export default function BranchAttentionTab({
   // Work done elsewhere can empty the last page: step back while rendering.
   if (data && page >= pages) setPage(pages - 1);
   useEffect(() => {
-    if (data) onCountChange(data.totalElements);
+    if (data) onCountChange(data);
   }, [data, onCountChange]);
 
   const goTo = (next: number) => {
