@@ -125,10 +125,12 @@ const METER_STATUS_LABEL: Record<OverviewMeter['status'] | 'NONE', string> = {
   NONE: 'Không có kỳ cần xem',
 };
 
-const EXPIRY_STATUS_LABEL: Record<OverviewExpiry['status'] | 'NONE', string> = {
+/** LONG and NO_LEASE are derived on the client: the server lists only expiries within 60 days. */
+const EXPIRY_STATUS_LABEL: Record<OverviewExpiry['status'] | 'LONG' | 'NO_LEASE', string> = {
   WITHIN_30: 'Hết hạn trong 30 ngày',
   WITHIN_60: 'Hết hạn sau 31–60 ngày',
-  NONE: 'Chưa sắp hết hạn',
+  LONG: 'Còn hạn trên 60 ngày',
+  NO_LEASE: 'Không có hợp đồng',
 };
 
 /** Keys are in legend order. */
@@ -151,13 +153,14 @@ export const paymentKindLabel = (kind: string) =>
   PAYMENT_KIND_LABEL[kind as OverviewPayment['kind']] ?? 'Khoản thu';
 export const statusLabel = (layer: OverviewLayer, status: string) =>
   LAYER_STATUS_LABEL[layer][status] ?? 'Đang cập nhật';
-/** The server sorts each list, so its first item is the cell's status. */
+/** The server sorts each list, so its first item is the cell's status. An empty contracts list says nothing about the lease, so the room status decides. */
 export const roomLayerStatus = (room: OverviewRoom, layer: OverviewLayer): string =>
   layer === 'rooms'
     ? room.status
     : layer === 'payments'
       ? room.payments.status
-      : (room[layer]?.[0]?.status ?? 'NONE');
+      : (room[layer]?.[0]?.status ??
+        (layer === 'meters' ? 'NONE' : room.status === 'OCCUPIED' ? 'LONG' : 'NO_LEASE'));
 
 /* ---------- links, months, time ---------- */
 
@@ -284,8 +287,7 @@ const isMeter = (m: unknown) =>
 const isExpiry = (e: unknown) =>
   isObject(e) &&
   isText(e.contractId) &&
-  e.status !== 'NONE' &&
-  isKey(EXPIRY_STATUS_LABEL, e.status) &&
+  (e.status === 'WITHIN_30' || e.status === 'WITHIN_60') &&
   isText(e.endDateExclusive) &&
   isCount(e.daysRemaining) &&
   isTarget(e.target);

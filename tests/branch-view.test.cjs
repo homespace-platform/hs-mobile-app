@@ -281,6 +281,32 @@ test('legend counts cells on every floor; highlight and search narrow the matche
   ]);
 });
 
+test('contracts layer: empty list is over 60 days when occupied, otherwise no lease', () => {
+  const overview = load('src/lib/branch-overview.ts');
+  const status = load('src/lib/branch-status.ts');
+  const occupied = room('o', { status: 'OCCUPIED' });
+  const vacant = room('v');
+  assert.equal(overview.roomLayerStatus(occupied, 'contracts'), 'LONG');
+  assert.equal(overview.roomLayerStatus(vacant, 'contracts'), 'NO_LEASE');
+  assert.equal(view.cellLabel(occupied, 'contracts'), 'Còn hạn trên 60 ngày');
+  assert.equal(view.cellLabel(vacant, 'contracts'), 'Không có hợp đồng');
+  assert.equal(status.layerLook('contracts', 'LONG').tone, 'neutral');
+  assert.equal(status.layerLook('contracts', 'NO_LEASE').tone, 'neutral');
+  assert.deepEqual(Object.keys(overview.LAYER_STATUS_LABEL.contracts), [
+    'WITHIN_30', 'WITHIN_60', 'LONG', 'NO_LEASE',
+  ]);
+  const map = new Map([['1', occupied], ['2', vacant], ['3', room('w', { status: 'REPAIR' })]]);
+  const fl = [{ key: 'f', label: 'T', rows: [{ key: 'a', label: 'D', slots: [slot('1', '1'), slot('2', '2'), slot('3', '3')] }] }];
+  const summary = view.mapSummary(fl, map, 'contracts', '', 'NO_LEASE');
+  assert.deepEqual(view.legendItems('contracts', summary.counts, null), [
+    { status: 'LONG', label: 'Còn hạn trên 60 ngày', count: 1 },
+    { status: 'NO_LEASE', label: 'Không có hợp đồng', count: 2 },
+  ]);
+  assert.deepEqual([...summary.matched], ['2', '3']);
+  const bad = { contractId: 'c', status: 'LONG', endDateExclusive: 'x', daysRemaining: 1, target: target('CONTRACT') };
+  assert.equal(overview.layerReady({ rooms: [room('b', { contracts: [bad] })] }, 'contracts'), false);
+});
+
 test('columns share a 320px screen up to two rows, then scroll with a fixed width', () => {
   const narrow = 320 - 58;
   assert.equal(view.columnWidth(1, 2, narrow), null);
