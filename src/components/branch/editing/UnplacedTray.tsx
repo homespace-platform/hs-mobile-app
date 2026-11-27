@@ -7,7 +7,12 @@ import Icon from '@/components/Icon';
 import { useActionDialog } from '@/components/rental/shared/ActionDialog';
 import ModalShell from '@/components/rental/shared/ModalShell';
 import { LoadingBlock } from '@/components/rental/shared/StateBlocks';
-import { itemDestination, pageCount, permissionBlock } from '@/lib/branch-assignment';
+import {
+  itemDestination,
+  listingLinkOutcome,
+  pageCount,
+  permissionBlock,
+} from '@/lib/branch-assignment';
 import { branchError } from '@/lib/branch-error';
 import type { BranchNav } from '@/lib/branch-nav';
 import { useBranchRead } from '@/lib/use-branch-read';
@@ -118,7 +123,7 @@ function TraySheet({
   onClose: () => void;
 }) {
   const { data, error: loadError, loading, reload } = read;
-  const { busy, error, success, run, clear } = useLinkAction(async () => {
+  const { busy, error, success, note, run, clear } = useLinkAction(async () => {
     onChanged();
     await reload();
   });
@@ -138,7 +143,10 @@ function TraySheet({
     setStep(next);
     scrollRef.current?.scrollTo({ y: 0, animated: false });
   };
-  const act = (action: () => Promise<void>, done: string) =>
+  const act = (
+    action: () => Promise<void | { success?: string; note?: string | null }>,
+    done: string
+  ) =>
     run(action, done).then((ok) => {
       if (ok) setStep(null);
       scrollRef.current?.scrollTo({ y: 0, animated: true });
@@ -169,6 +177,7 @@ function TraySheet({
             </Note>
             <Note tone="error" text={error} />
             <Note tone="success" text={success} />
+            <Note tone="warning" text={note} />
 
             {step && 'place' in step ? (
               <>
@@ -182,7 +191,15 @@ function TraySheet({
                       () =>
                         step.place.kind === 'CONTRACT'
                           ? branchAssignmentApi.putContract(branchId, step.place.id, roomId)
-                          : branchAssignmentApi.linkListing(branchId, roomId, step.place.id),
+                          : branchAssignmentApi
+                              .linkListing(branchId, roomId, step.place.id)
+                              .then((result) =>
+                                listingLinkOutcome(
+                                  result,
+                                  rooms.find((r) => r.id === roomId)?.code ?? '',
+                                  null
+                                )
+                              ),
                       'Đã xếp phòng.'
                     )
                   }

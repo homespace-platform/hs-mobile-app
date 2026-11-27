@@ -12,7 +12,8 @@ import type {
   WorkPriority,
 } from '@/lib/branch-overview';
 
-export type BranchTone = 'success' | 'pending' | 'info' | 'warning' | 'danger' | 'neutral' | 'muted' | 'off';
+export type BranchTone =
+  'success' | 'pending' | 'info' | 'warning' | 'danger' | 'neutral' | 'muted' | 'off';
 
 /** RN does not inherit text colour, so box and text classes are separate. */
 export const BRANCH_TONES: Record<BranchTone, { box: string; text: string }> = {
@@ -78,10 +79,11 @@ const METER_LOOK: Record<OverviewMeter['status'] | 'NONE', BranchLook> = {
   RECORDED: look('checkmark-circle-outline', 'success'),
   NONE,
 };
-const EXPIRY_LOOK: Record<OverviewExpiry['status'] | 'NO_LEASE', BranchLook> = {
+const EXPIRY_LOOK: Record<OverviewExpiry['status'] | 'HAS_LEASE' | 'NO_LEASE', BranchLook> = {
   WITHIN_30: look('alarm-outline', 'danger'),
   WITHIN_60: look('calendar-outline', 'warning'),
   LONG: NONE,
+  HAS_LEASE: NONE,
   NO_LEASE: NONE,
 };
 

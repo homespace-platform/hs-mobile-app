@@ -253,7 +253,10 @@ export const codeTaken = (options: RoomOption[], roomId: string, code: string) =
   options.some((room) => room.id !== roomId && sameRoomCode(room.code, code));
 
 /** What a candidate row says about its declared code; empty when it declares none. */
-export function candidateCodeNote(cellCode: string | null | undefined, code: string | null | undefined) {
+export function candidateCodeNote(
+  cellCode: string | null | undefined,
+  code: string | null | undefined
+) {
   const declared = code?.trim();
   if (!declared) return '';
   return codeMismatch(cellCode, declared)
@@ -267,7 +270,8 @@ export function sortCandidates<T extends { roomCode?: string | null }>(
   cellCode: string | null | undefined
 ): T[] {
   if (cellCode == null) return items;
-  const same = (item: T) => (item.roomCode?.trim() && !codeMismatch(cellCode, item.roomCode) ? 0 : 1);
+  const same = (item: T) =>
+    item.roomCode?.trim() && !codeMismatch(cellCode, item.roomCode) ? 0 : 1;
   return [...items].sort((a, b) => same(a) - same(b));
 }
 
@@ -297,19 +301,42 @@ export type PrimaryAction =
   | { kind: 'contract'; id: string; label: string }
   | { kind: 'hold'; id: string; label: string }
   | { kind: 'listing'; id: string; label: string }
-  | { kind: 'post'; label: string };
+  | { kind: 'attach'; label: string };
 
-/** Running contract, else a hold, else the listing, else start a listing for the free room. */
+/** Running contract, else a hold, else the listing, else attach a listing (its lease follows). */
 export function primaryAction(room: RoomAssignment): PrimaryAction {
   const contract = sortContracts(room.contracts).find((item) => !ENDED.has(item.status));
   if (contract) return { kind: 'contract', id: contract.id, label: 'Mở hợp đồng' };
   if (room.holds[0])
     return { kind: 'hold', id: room.holds[0].rentalRequestId, label: 'Mở hồ sơ thuê' };
   if (room.listings[0]) return { kind: 'listing', id: room.listings[0].id, label: 'Mở tin' };
-  return { kind: 'post', label: 'Đăng tin cho phòng này' };
+  return { kind: 'attach', label: 'Gắn tin' };
 }
 
 export const editListingDestination = (listingId: string): BranchDestination => ({
   kind: 'edit-listing',
   listingId,
 });
+
+/** What attaching a listing did to the lease; an older server sends neither field. */
+export interface ListingLinkResult {
+  contractId: string | null;
+  contractNote: string | null;
+}
+
+export function parseListingLink(body: unknown): ListingLinkResult {
+  const b = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
+  const text = (value: unknown) =>
+    typeof value === 'string' && value.trim() ? value.trim() : null;
+  return { contractId: text(b.contractId), contractNote: text(b.contractNote) };
+}
+
+/** `other` = the code the listing declares when it differs from the cell, else null. */
+export function listingLinkOutcome(result: ListingLinkResult, code: string, other: string | null) {
+  return {
+    success: result.contractId
+      ? `Đã gắn tin và hợp đồng đang hiệu lực vào phòng ${code}.`
+      : `Đã gắn tin vào phòng ${code}.${other ? ` Mã trên tin là ${other}, khác mã ô.` : ''}`,
+    note: result.contractNote,
+  };
+}

@@ -15,6 +15,7 @@ import {
   emptyRoom,
   formatDay,
   itemDestination,
+  listingLinkOutcome,
   listingStatusLabel,
   newRoomListingDestination,
   permissionBlock,
@@ -103,7 +104,7 @@ export default function RoomLinksPanel({
   const { confirm } = useActionDialog();
   const load = useCallback(() => branchAssignmentApi.getAssignments(branchId), [branchId]);
   const { data, error: loadError, loading, reload } = useBranchRead(load, describe);
-  const { busy, error, success, run, clear } = useLinkAction(async () => {
+  const { busy, error, success, note, run, clear } = useLinkAction(async () => {
     void reloadTray();
     onChanged();
     await reload();
@@ -143,6 +144,7 @@ export default function RoomLinksPanel({
     <>
       <Note tone="error" text={error} />
       <Note tone="success" text={success} />
+      <Note tone="warning" text={note} />
     </>
   );
   /** Asked first: on a phone these buttons are easy to hit by accident. */
@@ -197,10 +199,10 @@ export default function RoomLinksPanel({
                 () =>
                   contract
                     ? branchAssignmentApi.putContract(branchId, candidate.id, roomId)
-                    : branchAssignmentApi.linkListing(branchId, roomId, candidate.id),
-                contract
-                  ? `Đã gắn hợp đồng vào phòng ${code}.`
-                  : `Đã gắn tin vào phòng ${code}.${other ? ` Mã trên tin là ${other}, khác mã ô.` : ''}`
+                    : branchAssignmentApi
+                        .linkListing(branchId, roomId, candidate.id)
+                        .then((result) => listingLinkOutcome(result, code, other)),
+                `Đã gắn hợp đồng vào phòng ${code}.`
               );
               if (ok) setView(null);
               return ok;
@@ -211,16 +213,16 @@ export default function RoomLinksPanel({
     );
 
   const primary = primaryAction(room);
-  const openPrimary = () =>
+  const openPrimary = () => {
+    if (primary.kind === 'attach') return show({ pick: 'LISTING' });
     nav.open(
       primary.kind === 'contract'
         ? itemDestination('CONTRACT', primary.id)
         : primary.kind === 'hold'
           ? rentalRequestDestination(primary.id)
-          : primary.kind === 'listing'
-            ? itemDestination('LISTING', primary.id)
-            : newRoomListingDestination(branchId, roomId)
+          : itemDestination('LISTING', primary.id)
     );
+  };
   const markLabel = MANUAL_STATUS_LABEL[room.manualStatus];
 
   /** Mismatch under the listing: change the cell (map save) or fix the listing (editor). */
@@ -273,8 +275,8 @@ export default function RoomLinksPanel({
       <Action
         label={primary.label}
         variant="primary"
-        icon={primary.kind === 'post' ? 'add-circle-outline' : 'open-outline'}
-        disabled={primary.kind === 'post' && disabled}
+        icon={primary.kind === 'attach' ? 'link-outline' : 'open-outline'}
+        disabled={primary.kind === 'attach' && disabled}
         onClick={openPrimary}
       />
 
@@ -392,19 +394,22 @@ export default function RoomLinksPanel({
           );
         })}
 
+        {primary.kind === 'attach' ? null : (
+          <Row title="Gắn tin" disabled={disabled} onPress={() => show({ pick: 'LISTING' })} />
+        )}
+        <Row
+          title="Đăng tin cho phòng này"
+          disabled={disabled}
+          onPress={() => nav.open(newRoomListingDestination(branchId, roomId))}
+        />
         <Row
           title="Gắn hợp đồng có sẵn"
           disabled={disabled}
           onPress={() => show({ pick: 'CONTRACT' })}
         />
-        <Row title="Gắn tin có sẵn" disabled={disabled} onPress={() => show({ pick: 'LISTING' })} />
-        {primary.kind === 'post' ? null : (
-          <Row
-            title="Đăng tin cho phòng này"
-            disabled={disabled}
-            onPress={() => nav.open(newRoomListingDestination(branchId, roomId))}
-          />
-        )}
+        <Text className="text-xs leading-4 text-muted-foreground">
+          Chỉ dùng cho hợp đồng không gắn với tin nào trong chi nhánh này.
+        </Text>
       </View>
 
       <View accessibilityRole="radiogroup" className="gap-2">

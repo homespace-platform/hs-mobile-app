@@ -12,6 +12,7 @@ import {
   formatInstant,
   paymentKindLabel,
   roomLayerStatus,
+  roomLegendKey,
   roomMatches,
   sortExpiries,
   statusLabel,
@@ -88,7 +89,11 @@ export function cellLabel(room: OverviewRoom, layer: OverviewLayer) {
   if (layer !== 'contracts') return statusLabel(layer, status);
   const [first] = sortExpiries(room.contracts ?? []);
   // No lease row: an older server, so an occupied room is only known to be past 60 days.
-  return first ? expiryText(first) : status === 'LONG' ? 'Còn hạn trên 60 ngày' : statusLabel(layer, status);
+  return first
+    ? expiryText(first)
+    : status === 'LONG'
+      ? 'Còn hạn trên 60 ngày'
+      : statusLabel(layer, status);
 }
 
 /** The current stay (or listing) and the next one. A ROOM target is the cell menu, not a page. */
@@ -206,7 +211,7 @@ export function mapSummary(
       for (const slot of row.slots) {
         if (slot.roomCode === null) continue;
         const room = rooms.get(slot.id ?? '');
-        const status = room ? roomLayerStatus(room, layer) : null;
+        const status = room ? roomLegendKey(room, layer) : null;
         if (status) counts.set(status, (counts.get(status) ?? 0) + 1);
         if (
           filtering &&

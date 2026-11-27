@@ -2,7 +2,13 @@
 // services/branch-layout.service.ts, branch-assignment.service.ts and the requests of
 // branch-overview.service.ts. Parsing lives in the pure lib/branch-* modules.
 import axiosClient from '@/lib/axios-client';
-import { PAGE_SIZE, parseAssignments, parseCandidates } from '@/lib/branch-assignment';
+import {
+  PAGE_SIZE,
+  parseAssignments,
+  parseCandidates,
+  parseListingLink,
+  type ListingLinkResult,
+} from '@/lib/branch-assignment';
 import { parseAttention, parseAttentionSummary, parseOverview } from '@/lib/branch-overview';
 import type { ApiResponse } from '@/types/api';
 import type { AssignmentKind, RoomManualStatus } from '@/types/branch-assignment';
@@ -51,8 +57,15 @@ export const branchAssignmentApi = {
     return parseCandidates(response.data?.result);
   },
 
-  async linkListing(branchId: string, roomId: string, listingId: string): Promise<void> {
-    await axiosClient.put(listingLink(branchId, roomId, listingId));
+  async linkListing(
+    branchId: string,
+    roomId: string,
+    listingId: string
+  ): Promise<ListingLinkResult> {
+    const response = await axiosClient.put<ApiResponse<unknown>>(
+      listingLink(branchId, roomId, listingId)
+    );
+    return parseListingLink(response?.data?.result);
   },
 
   async unlinkListing(branchId: string, roomId: string, listingId: string): Promise<void> {

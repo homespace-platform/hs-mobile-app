@@ -322,14 +322,24 @@ test('contracts layer: empty list is over 60 days when occupied, otherwise no le
   assert.equal(view.cellLabel(vacant, 'contracts'), 'Không có hợp đồng');
   assert.equal(status.layerLook('contracts', 'LONG').tone, 'neutral');
   assert.equal(status.layerLook('contracts', 'NO_LEASE').tone, 'neutral');
-  assert.deepEqual(Object.values(overview.LAYER_STATUS_LABEL.contracts), [
-    '≤ 30 ngày', '31–60 ngày', 'Trên 60 ngày', 'Không có hợp đồng',
-  ]);
+  // Two filter groups; the urgency wording and colour stay on the cell and entries.
+  assert.deepEqual(overview.LAYER_STATUS_LABEL.contracts, {
+    HAS_LEASE: 'Có hợp đồng',
+    NO_LEASE: 'Không có hợp đồng',
+  });
+  assert.equal(overview.roomLegendKey(occupied, 'contracts'), 'HAS_LEASE');
+  assert.equal(overview.roomLegendKey(vacant, 'contracts'), 'NO_LEASE');
+  assert.equal(overview.roomLegendKey(occupied, 'rooms'), 'OCCUPIED');
+  const soon = room('s', {
+    contracts: [{ contractId: 'c', status: 'WITHIN_30', endDateExclusive: '2026-12-10', daysRemaining: 13 }],
+  });
+  assert.equal(overview.roomLegendKey(soon, 'contracts'), 'HAS_LEASE');
+  assert.equal(status.layerLook('contracts', 'WITHIN_30').tone, 'danger');
   const map = new Map([['1', occupied], ['2', vacant], ['3', room('w', { status: 'REPAIR' })]]);
   const fl = [{ key: 'f', label: 'T', rows: [{ key: 'a', label: 'D', slots: [slot('1', '1'), slot('2', '2'), slot('3', '3')] }] }];
   const summary = view.mapSummary(fl, map, 'contracts', '', 'NO_LEASE');
   assert.deepEqual(view.legendItems('contracts', summary.counts, null), [
-    { status: 'LONG', label: 'Trên 60 ngày', count: 1 },
+    { status: 'HAS_LEASE', label: 'Có hợp đồng', count: 1 },
     { status: 'NO_LEASE', label: 'Không có hợp đồng', count: 2 },
   ]);
   assert.deepEqual([...summary.matched], ['2', '3']);

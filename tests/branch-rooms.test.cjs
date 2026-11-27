@@ -159,7 +159,25 @@ test('the main action: running contract, hold, listing, else post', () => {
     a.primaryAction(room({ contracts: [c('old', 'TERMINATED')], listings: [listing] })).kind,
     'listing'
   );
-  assert.deepEqual(a.primaryAction(room({})), { kind: 'post', label: 'Đăng tin cho phòng này' });
+  assert.deepEqual(a.primaryAction(room({})), { kind: 'attach', label: 'Gắn tin' });
+});
+
+test('attach result: contractId and contractNote are optional, an older server sends neither', () => {
+  const none = { contractId: null, contractNote: null };
+  assert.deepEqual(a.parseListingLink(undefined), none);
+  assert.deepEqual(a.parseListingLink({ listingId: 'l', roomId: 'r' }), none);
+  assert.deepEqual(a.parseListingLink({ contractId: 'c1', contractNote: '  ' }), { contractId: 'c1', contractNote: null });
+  assert.deepEqual(a.parseListingLink({ contractId: 5, contractNote: 'Trùng lịch.' }), { contractId: null, contractNote: 'Trùng lịch.' });
+  assert.deepEqual(a.listingLinkOutcome(none, '101', null), { success: 'Đã gắn tin vào phòng 101.', note: null });
+  assert.equal(
+    a.listingLinkOutcome(none, '101', '102').success,
+    'Đã gắn tin vào phòng 101. Mã trên tin là 102, khác mã ô.'
+  );
+  assert.equal(
+    a.listingLinkOutcome({ contractId: 'c', contractNote: null }, '101', null).success,
+    'Đã gắn tin và hợp đồng đang hiệu lực vào phòng 101.'
+  );
+  assert.equal(a.listingLinkOutcome({ contractId: null, contractNote: 'Trùng lịch.' }, '101', null).note, 'Trùng lịch.');
 });
 
 function api(replies) {

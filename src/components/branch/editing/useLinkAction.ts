@@ -31,6 +31,7 @@ export function useLinkAction(onDone: () => Promise<unknown>) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [note, setNote] = useState('');
   const running = useRef(false);
   const mounted = useRef(true);
   useEffect(() => {
@@ -40,17 +41,23 @@ export function useLinkAction(onDone: () => Promise<unknown>) {
     };
   }, []);
 
-  const run = async (action: () => Promise<void>, done: string) => {
+  /** An action may return its own success text and a non-blocking note (shown after it). */
+  const run = async (
+    action: () => Promise<void | { success?: string; note?: string | null }>,
+    done: string
+  ) => {
     if (running.current) return false;
     running.current = true;
     setBusy(true);
     setError('');
     setSuccess('');
+    setNote('');
     let ok = false;
     try {
-      await action();
+      const outcome = await action();
       ok = true;
-      setSuccess(done);
+      setSuccess(outcome?.success ?? done);
+      setNote(outcome?.note ?? '');
     } catch (failure) {
       const reason = branchError(failure, 'Chưa thực hiện được.');
       if (mounted.current) setError(reason);
@@ -66,6 +73,7 @@ export function useLinkAction(onDone: () => Promise<unknown>) {
   const clear = () => {
     setError('');
     setSuccess('');
+    setNote('');
   };
-  return { busy, error, success, run, clear };
+  return { busy, error, success, note, run, clear };
 }

@@ -150,12 +150,12 @@ export const expiryText = (e: Pick<OverviewExpiry, 'endDateExclusive' | 'daysRem
 export const sortExpiries = <T extends Pick<OverviewExpiry, 'daysRemaining'>>(list: T[]) =>
   [...list].sort((a, b) => a.daysRemaining - b.daysRemaining);
 
-/** Keys are in legend order. */
+/** Keys are in legend order. Contracts are filtered in two groups; the urgency labels stay on the cell text and colour. */
 export const LAYER_STATUS_LABEL: Record<OverviewLayer, Record<string, string>> = {
   rooms: ROOM_STATUS_LABEL,
   payments: PAYMENT_STATUS_LABEL,
   meters: METER_STATUS_LABEL,
-  contracts: EXPIRY_STATUS_LABEL,
+  contracts: { HAS_LEASE: 'Có hợp đồng', NO_LEASE: EXPIRY_STATUS_LABEL.NO_LEASE },
 };
 
 const PAYMENT_KIND_LABEL: Record<OverviewPayment['kind'], string> = {
@@ -169,7 +169,9 @@ const PAYMENT_KIND_LABEL: Record<OverviewPayment['kind'], string> = {
 export const paymentKindLabel = (kind: string) =>
   PAYMENT_KIND_LABEL[kind as OverviewPayment['kind']] ?? 'Khoản thu';
 export const statusLabel = (layer: OverviewLayer, status: string) =>
-  LAYER_STATUS_LABEL[layer][status] ?? 'Đang cập nhật';
+  (layer === 'contracts' ? EXPIRY_STATUS_LABEL : LAYER_STATUS_LABEL[layer])[
+    status as keyof typeof EXPIRY_STATUS_LABEL
+  ] ?? 'Đang cập nhật';
 /** The server sorts the lists (contracts: the most urgent lease decides). An empty contracts list comes from an older server, so the room status decides. */
 export const roomLayerStatus = (room: OverviewRoom, layer: OverviewLayer): string =>
   layer === 'rooms'
@@ -180,6 +182,12 @@ export const roomLayerStatus = (room: OverviewRoom, layer: OverviewLayer): strin
         ? (room.meters?.[0]?.status ?? 'NONE')
         : (sortExpiries(room.contracts ?? [])[0]?.status ??
           (room.status === 'OCCUPIED' ? 'LONG' : 'NO_LEASE'));
+
+/** The legend/filter group of a room: contracts collapse to HAS_LEASE / NO_LEASE, other layers use their status. */
+export const roomLegendKey = (room: OverviewRoom, layer: OverviewLayer): string => {
+  const status = roomLayerStatus(room, layer);
+  return layer === 'contracts' ? (status === 'NO_LEASE' ? 'NO_LEASE' : 'HAS_LEASE') : status;
+};
 
 /* ---------- links, months, time ---------- */
 
