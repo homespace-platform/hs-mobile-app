@@ -79,7 +79,7 @@ const paymentEntry = (payment: OverviewPayment, times: Times, elapsedMs: number)
 
 /** "Trống · <listing status>" for a vacant room with a listing; everything else is the plain word. */
 export const roomLabel = (room: OverviewRoom) =>
-  room.status === 'VACANT' && room.listingStatus
+  room.status === 'VACANT' && typeof room.listingStatus === 'string'
     ? `${statusLabel('rooms', room.status)} · ${listingStatusLabel(room.listingStatus)}`
     : statusLabel('rooms', room.status);
 

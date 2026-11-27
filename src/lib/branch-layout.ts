@@ -450,15 +450,15 @@ export function validateDraft(draft: LayoutDraft): string[] {
   if (!draft.some((f) => f.rows.length > 0)) errors.push('Sơ đồ cần ít nhất một dãy.');
   if (countRooms(draft) === 0) errors.push('Sơ đồ cần ít nhất một phòng.');
   const seen = new Set<string>();
-  const total = draft.reduce((n, f) => n + f.rows.reduce((m, r) => m + r.slots.length, 0), 0);
-  if (total > MAX_SLOTS) errors.push(`Sơ đồ có quá ${MAX_SLOTS} ô. Tối đa ${MAX_SLOTS} ô cho toàn sơ đồ.`);
+  let total = 0;
   for (const f of draft) {
     if (!f.label.trim()) errors.push('Có tầng chưa có tên.');
     if (f.rows.length > MAX_ROWS) errors.push(`${f.label} có quá ${MAX_ROWS} dãy. Mỗi tầng tối đa ${MAX_ROWS} dãy.`);
     for (const r of f.rows) {
-      if (!r.label.trim()) errors.push(`${f.label} có dãy chưa có tên.`);
+      total += r.slots.length;
       if (r.slots.length > MAX_ROW_SLOTS)
         errors.push(`${f.label}, ${r.label} có quá ${MAX_ROW_SLOTS} ô. Mỗi dãy tối đa ${MAX_ROW_SLOTS} ô.`);
+      if (!r.label.trim()) errors.push(`${f.label} có dãy chưa có tên.`);
       for (const s of r.slots) {
         if (s.roomCode === null) continue;
         const code = normalizeRoomCode(s.roomCode);
@@ -468,6 +468,7 @@ export function validateDraft(draft: LayoutDraft): string[] {
       }
     }
   }
+  if (total > MAX_SLOTS) errors.push(`Sơ đồ có quá ${MAX_SLOTS} ô. Tối đa ${MAX_SLOTS} ô cho toàn sơ đồ.`);
   return errors;
 }
 

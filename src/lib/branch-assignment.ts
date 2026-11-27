@@ -3,6 +3,7 @@
  * responses and decide what the screen can offer. Web paths are replaced by BranchDestination builders.
  */
 import type { BranchDestination } from '@/lib/branch-nav';
+import { normalizeRoomCode } from '@/lib/branch-layout';
 import { contractDetailPath } from '@/lib/rental/contract-routes';
 import { contractStatus } from '@/lib/rental/rental-labels';
 import type {
@@ -208,8 +209,7 @@ export function candidateState(
 /* ---------- room codes: the map is the standard ---------- */
 
 /** Server rule: trimmed, case-insensitive. */
-export const sameRoomCode = (a: string, b: string) =>
-  a.trim().toLowerCase() === b.trim().toLowerCase();
+export const sameRoomCode = (a: string, b: string) => normalizeRoomCode(a) === normalizeRoomCode(b);
 
 /**
  * The code a listing declares when it differs from its cell's. Absent, empty or null (a whole house

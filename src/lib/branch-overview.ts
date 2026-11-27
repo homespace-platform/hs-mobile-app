@@ -101,13 +101,13 @@ export const isOverviewLayer = (value: string | null): value is OverviewLayer =>
 
 export const ROOM_STATUS_LABEL: Record<RoomStatus, string> = {
   VACANT: 'Trống',
+  UNLINKED: 'Chưa gắn tin',
   ADVERTISED: 'Đang đăng tin',
   RESERVED: 'Giữ chỗ',
   OCCUPIED: 'Đang thuê',
   MOVING_IN: 'Sắp vào',
   EXTERNAL_RENT: 'Thuê ngoài',
   REPAIR: 'Sửa chữa',
-  UNLINKED: 'Chưa gắn tin',
 };
 
 /** In legend order: most urgent first. */

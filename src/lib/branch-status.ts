@@ -83,7 +83,7 @@ const EXPIRY_LOOK: Record<OverviewExpiry['status'] | 'HAS_LEASE' | 'NO_LEASE', B
   WITHIN_30: look('alarm-outline', 'danger'),
   WITHIN_60: look('calendar-outline', 'warning'),
   LONG: NONE,
-  HAS_LEASE: NONE,
+  HAS_LEASE: look('document-text-outline', 'neutral'),
   NO_LEASE: NONE,
 };
 

@@ -105,21 +105,31 @@ const defaults: Record<ChargeKey, ChargeDraft> = {
 export function branchForm(branch?: Branch): BranchFormState {
   const charges = Object.fromEntries(
     CHARGE_FIELDS.map(({ key }) => {
-      const saved = branch?.defaultCharges?.find((charge) => charge.chargeType === key);
+      // Web also reads the legacy CLEANING row as the garbage fee.
+      const saved = branch?.defaultCharges?.find(
+        (charge) =>
+          charge.chargeType === key || (key === 'SERVICE_OR_GARBAGE' && charge.chargeType === 'CLEANING')
+      );
       return [
         key,
         saved
-          ? { method: saved.billingMethod, amount: String(saved.amount ?? '') }
+          ? {
+              method: saved.billingMethod || savedMethodFallback[key],
+              amount: String(saved.amount ?? ''),
+            }
           : { ...defaults[key] },
       ];
     })
   ) as Record<ChargeKey, ChargeDraft>;
-  if (
-    branch &&
-    !branch.defaultCharges?.some((charge) => charge.chargeType === 'MOTORBIKE_PARKING') &&
-    !branch.motorbikeParkingCapacity
-  )
-    charges.MOTORBIKE_PARKING.method = 'NOT_APPLICABLE';
+  // Same as the web edit form: with no saved row, the method follows the category and capacities.
+  if (branch) {
+    const has = (type: string) => branch.defaultCharges?.some((charge) => charge.chargeType === type);
+    if (!has('MANAGEMENT')) charges.MANAGEMENT.method = branch.category === 'APARTMENT' ? 'PER_MONTH' : 'NOT_APPLICABLE';
+    if (!has('MOTORBIKE_PARKING'))
+      charges.MOTORBIKE_PARKING.method = (branch.motorbikeParkingCapacity ?? 0) > 0 ? 'FREE' : 'NOT_APPLICABLE';
+    if (!has('CAR_PARKING'))
+      charges.CAR_PARKING.method = (branch.carParkingCapacity ?? 0) > 0 ? 'PER_VEHICLE_MONTH' : 'NOT_APPLICABLE';
+  }
   return {
     name: branch?.name ?? '',
     code: branch?.code ?? '',
@@ -130,13 +140,17 @@ export function branchForm(branch?: Branch): BranchFormState {
     description: branch?.description ?? '',
     buildingRules: branch?.buildingRules ?? '',
     coverImageId: branch?.coverImageId ?? null,
-    motorbikeCapacity: String(branch ? (branch.motorbikeParkingCapacity ?? 0) : 10),
-    carCapacity: String(branch?.carParkingCapacity ?? 0),
+    motorbikeCapacity: String(
+      charges.MOTORBIKE_PARKING.method === 'NOT_APPLICABLE' ? 0 : (branch?.motorbikeParkingCapacity ?? 10)
+    ),
+    carCapacity: String(
+      charges.CAR_PARKING.method === 'NOT_APPLICABLE' ? 0 : (branch?.carParkingCapacity ?? 2)
+    ),
     charges,
     customFees: (branch?.defaultCharges ?? [])
       .filter((charge) => charge.chargeType === 'OTHER')
       .map((charge) => ({
-        name: charge.customName ?? '',
+        name: charge.customName || 'Phí dịch vụ khác',
         amount: String(charge.amount ?? ''),
         unit: charge.unit ?? 'tháng',
       })),
@@ -152,14 +166,27 @@ const paidMethods = new Set([
   'PER_M2_MONTH',
   'PER_VEHICLE_MONTH',
 ]);
-const units: Record<string, string> = {
-  PER_KWH: 'kWh',
-  PER_M3: 'm³',
-  PER_PERSON_MONTH: 'người/tháng',
-  PER_MONTH: 'tháng',
-  PER_M2_MONTH: 'm²/tháng',
-  PER_VEHICLE_MONTH: 'xe/tháng',
+const savedMethodFallback: Record<ChargeKey, string> = {
+  ELECTRICITY: 'PER_KWH',
+  WATER: 'PER_PERSON_MONTH',
+  MANAGEMENT: 'PER_MONTH',
+  INTERNET: 'PER_MONTH',
+  SERVICE_OR_GARBAGE: 'INCLUDED',
+  MOTORBIKE_PARKING: 'FREE',
+  CAR_PARKING: 'PER_VEHICLE_MONTH',
 };
+const waterUnits: Record<string, string> = { PER_M3: 'm³', PER_PERSON_MONTH: 'người/tháng', PER_MONTH: 'phòng/tháng' };
+/** Same units as the web form, including on included / free rows. */
+const unitOf = (key: ChargeKey, method: string) =>
+  key === 'ELECTRICITY'
+    ? method === 'PER_KWH' ? 'kWh' : ''
+    : key === 'WATER'
+      ? (waterUnits[method] ?? '')
+      : key.endsWith('PARKING')
+        ? 'xe/tháng'
+        : method === 'NOT_APPLICABLE'
+          ? ''
+          : method === 'PER_M2_MONTH' ? 'm²/tháng' : 'phòng/tháng';
 
 export function buildBranchInput(form: BranchFormState): BranchInput {
   if (!form.name.trim()) throw new Error('Vui lòng nhập tên chi nhánh.');
@@ -190,7 +217,7 @@ export function buildBranchInput(form: BranchFormState): BranchInput {
       billingMethod: method,
       amount: paidMethods.has(method) ? Number(amount) : undefined,
       currency: 'VND',
-      unit: method === 'PER_MONTH' && key !== 'ELECTRICITY' ? 'phòng/tháng' : (units[method] ?? ''),
+      unit: unitOf(key, method),
       includedInRent: method === 'INCLUDED' || method === 'FREE',
       sortOrder: index + 1,
     };
