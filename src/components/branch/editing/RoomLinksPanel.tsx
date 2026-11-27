@@ -8,13 +8,17 @@ import { ErrorBlock, LoadingBlock } from '@/components/rental/shared/StateBlocks
 import { useActionDialog, type ConfirmOptions } from '@/components/rental/shared/ActionDialog';
 import {
   MANUAL_STATUS_LABEL,
+  codeMismatch,
+  codeTaken,
   contractStatusLabel,
+  editListingDestination,
   emptyRoom,
   formatDay,
   itemDestination,
   listingStatusLabel,
   newRoomListingDestination,
   permissionBlock,
+  primaryAction,
   rentalRequestDestination,
   sortContracts,
 } from '@/lib/branch-assignment';
@@ -25,6 +29,7 @@ import { branchAssignmentApi } from '@/services/branchMonitorApi';
 import type {
   AssignmentKind,
   RoomContractLink,
+  RoomListingLink,
   RoomManualStatus,
   RoomOption,
 } from '@/types/branch-assignment';
@@ -44,6 +49,8 @@ export interface RoomLinksPanelProps {
   nav: BranchNav;
   /** Call after every write, also a failed one: the status on screen may have changed. */
   onChanged: () => void;
+  /** Renames this cell on the map (the layout save). Rejects with the reason when it cannot. */
+  onRecode?: (roomId: string, code: string) => Promise<void>;
 }
 
 const STATUSES = Object.keys(MANUAL_STATUS_LABEL) as RoomManualStatus[];
@@ -57,10 +64,13 @@ type ListView = null | { pick: AssignmentKind } | { move: RoomContractLink };
 function LinkCard({
   title,
   lines,
+  warning,
   children,
 }: {
   title: string;
   lines: string[];
+  /** Sits right under the item it is about. */
+  warning?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -73,6 +83,7 @@ function LinkCard({
           </Text>
         ))}
       </View>
+      {warning}
       <View className="flex-row flex-wrap gap-2">{children}</View>
     </View>
   );
@@ -87,6 +98,7 @@ export default function RoomLinksPanel({
   lockMessage,
   nav,
   onChanged,
+  onRecode,
 }: RoomLinksPanelProps) {
   const { confirm } = useActionDialog();
   const load = useCallback(() => branchAssignmentApi.getAssignments(branchId), [branchId]);
@@ -99,6 +111,7 @@ export default function RoomLinksPanel({
   const [view, setView] = useState<ListView>(null);
   /** The marks sit at the bottom: their answer is shown beside them, not off screen at the top. */
   const [marking, setMarking] = useState(false);
+  const [marksOpen, setMarksOpen] = useState(false);
 
   if (!data)
     return loadError ? (
@@ -174,16 +187,20 @@ export default function RoomLinksPanel({
             branchId={branchId}
             kind={view.pick}
             roomId={roomId}
+            cellCode={code}
             rooms={rooms}
             disabled={disabled}
             onPick={async (candidate) => {
               const contract = view.pick === 'CONTRACT';
+              const other = contract ? null : codeMismatch(code, candidate.roomCode);
               const ok = await run(
                 () =>
                   contract
                     ? branchAssignmentApi.putContract(branchId, candidate.id, roomId)
                     : branchAssignmentApi.linkListing(branchId, roomId, candidate.id),
-                contract ? `Đã gắn hợp đồng vào phòng ${code}.` : `Đã gắn tin vào phòng ${code}.`
+                contract
+                  ? `Đã gắn hợp đồng vào phòng ${code}.`
+                  : `Đã gắn tin vào phòng ${code}.${other ? ` Mã trên tin là ${other}, khác mã ô.` : ''}`
               );
               if (ok) setView(null);
               return ok;
@@ -193,142 +210,229 @@ export default function RoomLinksPanel({
       </View>
     );
 
-  return (
-    <View className="gap-3">
-      <Heading>Người thuê và tin đăng</Heading>
-      {notes}
-      {marking ? null : result}
-      {empty ? <Empty text="Phòng này chưa gắn hợp đồng hay tin đăng." /> : null}
+  const primary = primaryAction(room);
+  const openPrimary = () =>
+    nav.open(
+      primary.kind === 'contract'
+        ? itemDestination('CONTRACT', primary.id)
+        : primary.kind === 'hold'
+          ? rentalRequestDestination(primary.id)
+          : primary.kind === 'listing'
+            ? itemDestination('LISTING', primary.id)
+            : newRoomListingDestination(branchId, roomId)
+    );
+  const markLabel = MANUAL_STATUS_LABEL[room.manualStatus];
 
-      {sortContracts(room.contracts).map((contract) => {
-        const tenant = contract.tenantName || 'chưa có tên người thuê';
-        const start = formatDay(contract.startDate);
-        const end = formatDay(contract.endDateExclusive);
-        return (
-          <LinkCard
-            key={contract.id}
-            title={`Hợp đồng · ${tenant}`}
-            lines={[
-              [
-                contractStatusLabel(contract.status),
-                start && `từ ${start}`,
-                end && `đến trước ${end}`,
-              ]
-                .filter(Boolean)
-                .join(' · '),
-            ]}>
-            <Action
-              label="Mở hợp đồng"
-              link
-              icon="open-outline"
-              className="w-full"
-              onClick={() => nav.open(itemDestination('CONTRACT', contract.id))}
-            />
-            <Action
-              label="Chuyển phòng"
-              className="grow"
-              disabled={disabled}
-              onClick={() => show({ move: contract })}
-            />
-            <Action
-              label="Gỡ khỏi chi nhánh"
-              className="grow"
-              disabled={disabled}
-              onClick={() =>
-                void remove(
-                  {
-                    title: 'Gỡ hợp đồng khỏi chi nhánh?',
-                    description: `Hợp đồng của ${tenant} chỉ được gỡ khỏi chi nhánh. Điều khoản hợp đồng không thay đổi.`,
-                    confirmLabel: 'Gỡ khỏi chi nhánh',
-                  },
-                  () => branchAssignmentApi.removeContract(branchId, contract.id),
-                  'Đã gỡ hợp đồng khỏi chi nhánh.'
-                )
-              }
-            />
-          </LinkCard>
-        );
-      })}
-
-      {room.holds.map((hold) => (
-        <LinkCard
-          key={hold.rentalRequestId}
-          title={`Giữ chỗ · ${hold.tenantName || 'chưa có tên người thuê'}`}
-          lines={formatDay(hold.moveInDate) ? [`Ngày vào ${formatDay(hold.moveInDate)}`] : []}>
+  /** Mismatch under the listing: change the cell (map save) or fix the listing (editor). */
+  const codeWarning = (listing: RoomListingLink) => {
+    const declared = codeMismatch(code, listing.roomCode);
+    if (!declared) return null;
+    return (
+      <Note
+        tone="warning"
+        text={`Mã trên tin là "${declared}", khác mã ô ${code}. Sơ đồ là chuẩn: nên đổi mã ô hoặc sửa mã trên tin.`}>
+        {codeTaken(rooms, roomId, declared) ? (
+          <Text className="text-sm leading-5 text-warning">
+            Mã "{declared}" đã là của ô khác nên chưa đổi mã ô được.
+          </Text>
+        ) : onRecode ? (
           <Action
-            label="Mở hồ sơ thuê"
-            link
-            icon="open-outline"
-            className="w-full"
-            onClick={() => nav.open(rentalRequestDestination(hold.rentalRequestId))}
-          />
-        </LinkCard>
-      ))}
-
-      {room.listings.map((listing) => (
-        <LinkCard
-          key={listing.id}
-          title={`Tin đăng · ${listing.title}`}
-          lines={[listingStatusLabel(listing.operationalStatus)]}>
-          <Action
-            label="Mở tin"
-            link
-            icon="open-outline"
-            className="grow"
-            onClick={() => nav.open(itemDestination('LISTING', listing.id))}
-          />
-          <Action
-            label="Gỡ khỏi phòng"
-            className="grow"
+            label={`Đổi mã ô thành ${declared}`}
+            variant="warning"
             disabled={disabled}
             onClick={() =>
-              void remove(
-                {
-                  title: 'Gỡ tin khỏi phòng?',
-                  description: `Tin "${listing.title}" chỉ được gỡ khỏi phòng ${code}, tin đăng vẫn giữ nguyên.`,
-                  confirmLabel: 'Gỡ khỏi phòng',
-                },
-                () => branchAssignmentApi.unlinkListing(branchId, roomId, listing.id),
-                'Đã gỡ tin khỏi phòng.'
-              )
+              void run(() => onRecode(roomId, declared), `Đã đổi mã ô thành ${declared}.`)
             }
           />
-        </LinkCard>
-      ))}
+        ) : null}
+        <Action
+          label="Sửa mã trên tin"
+          variant="warning"
+          onClick={() =>
+            void confirm({
+              title: 'Sửa mã trên tin?',
+              description:
+                'Mở trang sửa tin. Tin đang hiển thị sẽ phải được duyệt lại sau khi lưu thay đổi.',
+              confirmLabel: 'Mở trang sửa tin',
+              cancelLabel: 'Để sau',
+              tone: 'warning',
+            }).then((yes) => {
+              if (yes) nav.open(editListingDestination(listing.id));
+            })
+          }
+        />
+      </Note>
+    );
+  };
 
-      {/* The one main action only while the room is free; otherwise the open buttons lead. */}
+  return (
+    <View className="gap-4">
+      {notes}
+      {marking ? null : result}
+
       <Action
-        label="Đăng tin cho phòng này"
-        variant={empty ? 'primary' : 'secondary'}
-        icon="add-circle-outline"
-        disabled={disabled}
-        onClick={() => nav.open(newRoomListingDestination(branchId, roomId))}
+        label={primary.label}
+        variant="primary"
+        icon={primary.kind === 'post' ? 'add-circle-outline' : 'open-outline'}
+        disabled={primary.kind === 'post' && disabled}
+        onClick={openPrimary}
       />
-      <Row
-        title="Gắn hợp đồng có sẵn"
-        disabled={disabled}
-        onPress={() => show({ pick: 'CONTRACT' })}
-      />
-      <Row title="Gắn tin có sẵn" disabled={disabled} onPress={() => show({ pick: 'LISTING' })} />
+
+      <View className="gap-3">
+        <Heading>Liên kết</Heading>
+        {empty ? <Empty text="Phòng này chưa gắn hợp đồng hay tin đăng." /> : null}
+
+        {sortContracts(room.contracts).map((contract) => {
+          const tenant = contract.tenantName || 'chưa có tên người thuê';
+          const start = formatDay(contract.startDate);
+          const end = formatDay(contract.endDateExclusive);
+          return (
+            <LinkCard
+              key={contract.id}
+              title={`Hợp đồng · ${tenant}`}
+              lines={[
+                [
+                  contractStatusLabel(contract.status),
+                  start && `từ ${start}`,
+                  end && `đến trước ${end}`,
+                ]
+                  .filter(Boolean)
+                  .join(' · '),
+              ]}>
+              {primary.kind === 'contract' && primary.id === contract.id ? null : (
+                <Action
+                  label="Mở hợp đồng"
+                  link
+                  icon="open-outline"
+                  className="w-full"
+                  onClick={() => nav.open(itemDestination('CONTRACT', contract.id))}
+                />
+              )}
+              <Action
+                label="Chuyển phòng"
+                className="grow"
+                disabled={disabled}
+                onClick={() => show({ move: contract })}
+              />
+              <Action
+                label="Gỡ khỏi chi nhánh"
+                className="grow"
+                disabled={disabled}
+                onClick={() =>
+                  void remove(
+                    {
+                      title: 'Gỡ hợp đồng khỏi chi nhánh?',
+                      description: `Hợp đồng của ${tenant} chỉ được gỡ khỏi chi nhánh. Điều khoản hợp đồng không thay đổi.`,
+                      confirmLabel: 'Gỡ khỏi chi nhánh',
+                    },
+                    () => branchAssignmentApi.removeContract(branchId, contract.id),
+                    'Đã gỡ hợp đồng khỏi chi nhánh.'
+                  )
+                }
+              />
+            </LinkCard>
+          );
+        })}
+
+        {room.holds.map((hold) => (
+          <LinkCard
+            key={hold.rentalRequestId}
+            title={`Giữ chỗ · ${hold.tenantName || 'chưa có tên người thuê'}`}
+            lines={formatDay(hold.moveInDate) ? [`Ngày vào ${formatDay(hold.moveInDate)}`] : []}>
+            {primary.kind === 'hold' && primary.id === hold.rentalRequestId ? null : (
+              <Action
+                label="Mở hồ sơ thuê"
+                link
+                icon="open-outline"
+                className="w-full"
+                onClick={() => nav.open(rentalRequestDestination(hold.rentalRequestId))}
+              />
+            )}
+          </LinkCard>
+        ))}
+
+        {room.listings.map((listing) => {
+          const declared = listing.roomCode?.trim();
+          return (
+            <LinkCard
+              key={listing.id}
+              title={`Tin đăng · ${listing.title}`}
+              lines={[
+                [listingStatusLabel(listing.operationalStatus), declared && `mã ${declared}`]
+                  .filter(Boolean)
+                  .join(' · '),
+              ]}
+              warning={codeWarning(listing)}>
+              {primary.kind === 'listing' && primary.id === listing.id ? null : (
+                <Action
+                  label="Mở tin"
+                  link
+                  icon="open-outline"
+                  className="grow"
+                  onClick={() => nav.open(itemDestination('LISTING', listing.id))}
+                />
+              )}
+              <Action
+                label="Gỡ khỏi phòng"
+                className="grow"
+                disabled={disabled}
+                onClick={() =>
+                  void remove(
+                    {
+                      title: 'Gỡ tin khỏi phòng?',
+                      description: `Tin "${listing.title}" chỉ được gỡ khỏi phòng ${code}, tin đăng vẫn giữ nguyên.`,
+                      confirmLabel: 'Gỡ khỏi phòng',
+                    },
+                    () => branchAssignmentApi.unlinkListing(branchId, roomId, listing.id),
+                    'Đã gỡ tin khỏi phòng.'
+                  )
+                }
+              />
+            </LinkCard>
+          );
+        })}
+
+        <Row
+          title="Gắn hợp đồng có sẵn"
+          disabled={disabled}
+          onPress={() => show({ pick: 'CONTRACT' })}
+        />
+        <Row title="Gắn tin có sẵn" disabled={disabled} onPress={() => show({ pick: 'LISTING' })} />
+        {primary.kind === 'post' ? null : (
+          <Row
+            title="Đăng tin cho phòng này"
+            disabled={disabled}
+            onPress={() => nav.open(newRoomListingDestination(branchId, roomId))}
+          />
+        )}
+      </View>
 
       <View accessibilityRole="radiogroup" className="gap-2">
-        <Text className="text-sm font-bold text-foreground">Đánh dấu phòng</Text>
-        {STATUSES.map((status) => (
-          <Row
-            key={status}
-            title={MANUAL_STATUS_LABEL[status]}
-            selected={room.manualStatus === status}
-            disabled={disabled}
-            onPress={() => {
-              if (room.manualStatus === status) return;
-              setMarking(true);
-              void run(
-                () => branchAssignmentApi.setManualStatus(branchId, roomId, status),
-                'Đã cập nhật đánh dấu phòng.'
-              );
-            }}
-          />
-        ))}
+        <Row
+          title="Đánh dấu phòng"
+          detail={markLabel}
+          expanded={marksOpen}
+          onPress={() => setMarksOpen((open) => !open)}
+          accessibilityLabel={`Đánh dấu phòng: ${markLabel}. ${marksOpen ? 'Bấm để thu gọn' : 'Bấm để mở'}`}
+        />
+        {marksOpen
+          ? STATUSES.map((status) => (
+              <Row
+                key={status}
+                title={MANUAL_STATUS_LABEL[status]}
+                selected={room.manualStatus === status}
+                disabled={disabled}
+                onPress={() => {
+                  if (room.manualStatus === status) return;
+                  setMarking(true);
+                  void run(
+                    () => branchAssignmentApi.setManualStatus(branchId, roomId, status),
+                    'Đã cập nhật đánh dấu phòng.'
+                  );
+                }}
+              />
+            ))
+          : null}
         {marking ? result : null}
       </View>
     </View>

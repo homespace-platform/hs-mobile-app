@@ -119,6 +119,14 @@ export default function BranchDestinationHost({
           onSelectTab={onSelectTab}
         />
       );
+    case 'edit-listing':
+      return (
+        <NewRoomListingScreen
+          listingId={destination.listingId}
+          onClose={onClose}
+          onSelectTab={onSelectTab}
+        />
+      );
     case 'rental':
       return <Rental route={destination.route} onClose={onClose} onSelectTab={onSelectTab} />;
     case 'listing':

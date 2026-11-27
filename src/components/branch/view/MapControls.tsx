@@ -2,11 +2,36 @@
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import Icon from '@/components/Icon';
-import ActionButton from '@/components/rental/shared/ActionButton';
 import { LAYER_LABEL, monthLabel, shiftMonth, type OverviewLayer } from '@/lib/branch-overview';
 import { BRANCH_TONES, layerLook } from '@/lib/branch-status';
 import { toneBackground } from '@/components/branch/view/tone';
 import type { DraftFloor } from '@/types/branch-layout';
+
+/** Xem (this screen) or Sửa sơ đồ (the editor): structural edits only exist in the editor. */
+export function ModeSwitch({ onEdit }: { onEdit: () => void }) {
+  return (
+    <View
+      accessibilityRole="radiogroup"
+      accessibilityLabel="Chế độ"
+      className="flex-row gap-1 rounded-xl border border-border bg-muted p-1">
+      <View
+        accessibilityRole="radio"
+        accessibilityLabel="Xem, đang chọn"
+        accessibilityState={{ checked: true, selected: true }}
+        className="min-h-[44px] flex-1 items-center justify-center rounded-lg bg-surface px-2">
+        <Text className="text-sm font-bold text-primary">Xem</Text>
+      </View>
+      <Pressable
+        onPress={onEdit}
+        accessibilityRole="radio"
+        accessibilityLabel="Sửa sơ đồ: đổi mã, chuyển, xoá ô, thêm dãy và tầng"
+        accessibilityState={{ checked: false, selected: false }}
+        className="min-h-[44px] flex-1 items-center justify-center rounded-lg px-2 active:bg-surface">
+        <Text className="text-center text-sm font-bold text-muted-foreground">Sửa sơ đồ</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 /** One layer at a time, all four always visible. */
 export function LayerPicker({
@@ -30,7 +55,7 @@ export function LayerPicker({
             accessibilityRole="radio"
             accessibilityLabel={`Lớp ${LAYER_LABEL[id]}`}
             accessibilityState={{ checked: selected, selected }}
-            className={`min-h-[48px] grow basis-[47%] flex-row items-center justify-center gap-1.5 rounded-xl border-2 px-2 py-2 active:opacity-70 ${selected ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
+            className={`min-h-[44px] grow basis-[47%] flex-row items-center justify-center gap-1.5 rounded-xl border-2 px-2 py-1.5 active:opacity-70 ${selected ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
             {selected ? <Icon name="checkmark" size={18} className="text-primary" /> : null}
             <Text
               className={`shrink text-center text-sm font-bold ${selected ? 'text-primary' : 'text-foreground'}`}>
@@ -61,7 +86,7 @@ function MonthArrow({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
-      className={`h-[48px] w-[48px] items-center justify-center rounded-xl border border-border bg-surface active:bg-muted ${disabled ? 'opacity-40' : ''}`}>
+      className={`h-[44px] w-[44px] items-center justify-center rounded-xl border border-border bg-surface active:bg-muted ${disabled ? 'opacity-40' : ''}`}>
       <Icon name={icon} size={22} className="text-foreground" />
     </Pressable>
   );
@@ -78,34 +103,37 @@ export function MonthPicker({
   onChange: (month: string) => void;
 }) {
   return (
-    <View className="gap-2">
-      <View className="flex-row items-center gap-2">
-        <MonthArrow
-          icon="chevron-back"
-          label="Tháng trước"
-          disabled={!shown || shown === '0001-01'}
-          onPress={() => onChange(shiftMonth(shown, -1))}
-        />
+    <View className="flex-row items-center gap-2">
+      <MonthArrow
+        icon="chevron-back"
+        label="Tháng trước"
+        disabled={!shown || shown === '0001-01'}
+        onPress={() => onChange(shiftMonth(shown, -1))}
+      />
+      {month ? (
+        <Pressable
+          onPress={() => onChange('')}
+          accessibilityRole="button"
+          accessibilityLabel={`${shown ? monthLabel(shown) : 'Tháng đã chọn'}. Bấm để về tháng hiện tại`}
+          className="min-h-[44px] flex-1 items-center justify-center rounded-xl active:bg-muted">
+          <Text accessibilityLiveRegion="polite" className="text-base font-bold text-foreground">
+            {shown ? monthLabel(shown) : 'Tháng đã chọn'}
+          </Text>
+          <Text className="text-xs font-semibold text-primary">Về tháng hiện tại</Text>
+        </Pressable>
+      ) : (
         <Text
           accessibilityLiveRegion="polite"
           className="flex-1 text-center text-base font-bold text-foreground">
           {shown ? monthLabel(shown) : 'Tháng hiện tại'}
         </Text>
-        <MonthArrow
-          icon="chevron-forward"
-          label="Tháng sau"
-          disabled={!shown || shown === '9999-12'}
-          onPress={() => onChange(shiftMonth(shown, 1))}
-        />
-      </View>
-      {month ? (
-        <ActionButton
-          label="Về tháng hiện tại"
-          variant="secondary"
-          className="min-h-[48px]"
-          onClick={() => onChange('')}
-        />
-      ) : null}
+      )}
+      <MonthArrow
+        icon="chevron-forward"
+        label="Tháng sau"
+        disabled={!shown || shown === '9999-12'}
+        onPress={() => onChange(shiftMonth(shown, 1))}
+      />
     </View>
   );
 }
@@ -127,14 +155,14 @@ export function SearchBox({
         placeholder="Tìm mã phòng, người thuê"
         autoCorrect={false}
         returnKeyType="search"
-        className="min-h-[48px] flex-1 px-2 py-2 text-base text-foreground selection:text-primary placeholder:text-subtle"
+        className="min-h-[44px] flex-1 px-2 py-1.5 text-base text-foreground selection:text-primary placeholder:text-subtle"
       />
       {value ? (
         <Pressable
           onPress={() => onChange('')}
           accessibilityRole="button"
           accessibilityLabel="Xoá nội dung tìm"
-          className="h-[48px] w-[48px] items-center justify-center active:opacity-60">
+          className="h-[44px] w-[44px] items-center justify-center active:opacity-60">
           <Icon name="close-circle" size={20} className="text-muted-foreground" />
         </Pressable>
       ) : null}
@@ -173,7 +201,7 @@ export function Legend({
             accessibilityRole="button"
             accessibilityLabel={`${label}: ${count} phòng. ${selected ? 'Đang làm nổi, bấm để bỏ' : 'Bấm để làm nổi'}`}
             accessibilityState={{ selected }}
-            className={`min-h-[48px] flex-row items-center gap-1.5 rounded-xl px-3 py-2 active:opacity-70 ${selected ? `border-4 border-foreground ${toneBackground(look.tone)}` : `border-2 ${tone.box}`}`}>
+            className={`min-h-[44px] flex-row items-center gap-1.5 rounded-xl px-2.5 py-1.5 active:opacity-70 ${selected ? `border-4 border-foreground ${toneBackground(look.tone)}` : `border-2 ${tone.box}`}`}>
             <Icon name={look.icon} size={16} className={tone.text} />
             <Text className={`text-sm font-semibold ${tone.text}`}>{label}</Text>
             <Text className={`text-base font-extrabold ${tone.text}`}>{count}</Text>
@@ -216,7 +244,7 @@ export function FloorPicker({
             accessibilityRole="button"
             accessibilityState={{ selected }}
             accessibilityLabel={label}
-            className={`min-h-[48px] min-w-[72px] items-center justify-center rounded-full border-2 px-4 py-2 active:opacity-70 ${selected ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
+            className={`min-h-[44px] min-w-[72px] items-center justify-center rounded-full border-2 px-4 py-1.5 active:opacity-70 ${selected ? 'border-primary bg-primary-soft' : 'border-border bg-surface'}`}>
             <Text className={`text-sm font-bold ${selected ? 'text-primary' : 'text-foreground'}`}>
               {label}
             </Text>

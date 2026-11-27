@@ -10,12 +10,14 @@ import {
   FloorPicker,
   LayerPicker,
   Legend,
+  ModeSwitch,
   MonthPicker,
   SearchBox,
 } from '@/components/branch/view/MapControls';
 import RoomSheet from '@/components/branch/view/RoomSheet';
 import ActionButton from '@/components/rental/shared/ActionButton';
 import { ErrorBlock, LoadingBlock } from '@/components/rental/shared/StateBlocks';
+import { mismatchedRoomIds, roomOptions } from '@/lib/branch-assignment';
 import { branchError } from '@/lib/branch-error';
 import { findSlot } from '@/lib/branch-layout';
 import type { BranchNav, BranchViewState } from '@/lib/branch-nav';
@@ -37,7 +39,7 @@ import {
   unplacedEntries,
 } from '@/lib/branch-view';
 import { useBranchRead, useNowMs } from '@/lib/use-branch-read';
-import { branchOverviewApi } from '@/services/branchMonitorApi';
+import { branchAssignmentApi, branchOverviewApi } from '@/services/branchMonitorApi';
 import type { DraftSlot, LayoutDraft } from '@/types/branch-layout';
 
 export interface BranchMapViewProps {
@@ -87,6 +89,13 @@ export default function BranchMapView({
   );
   // `data` is null as soon as the month changes, so another month is never shown.
   const { data, error, at, loading, reload } = useBranchRead(load, describeError);
+  // The listings' codes, only to mark cells; the room sheet reads its own copy.
+  const loadLinks = useCallback(() => branchAssignmentApi.getAssignments(branchId), [branchId]);
+  const links = useBranchRead(loadLinks, describeError);
+  const flagged = useMemo(
+    () => (links.data ? mismatchedRoomIds(links.data.rooms, roomOptions(floors)) : undefined),
+    [links.data, floors]
+  );
   const elapsed = Math.max(0, useNowMs() - at);
 
   const [query, setQuery] = useState('');
@@ -140,10 +149,10 @@ export default function BranchMapView({
     setOpenKey(null);
     nav.openTarget(target);
   };
-  const changed = () => void reload();
+  const changed = () => void Promise.all([reload(), links.reload()]);
   const refresh = async () => {
     setPulling(true);
-    await Promise.all([reload(), onRefreshLayout(), reloadTray()]);
+    await Promise.all([reload(), links.reload(), onRefreshLayout(), reloadTray()]);
     setPulling(false);
   };
 
@@ -155,6 +164,7 @@ export default function BranchMapView({
         contentContainerClassName="gap-3 px-4 py-4"
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={pulling} onRefresh={() => void refresh()} />}>
+        {canEdit ? <ModeSwitch onEdit={onEditMap} /> : null}
         <LayerPicker layer={layer} onChange={(next) => onViewChange({ layer: next })} />
         {layer === 'payments' ? (
           <MonthPicker
@@ -254,6 +264,7 @@ export default function BranchMapView({
           content={cellContent}
           filtering={filtering}
           matched={matched}
+          flagged={flagged}
           onOpen={(slot) => setOpenKey(slot.key)}
         />
 
@@ -272,15 +283,6 @@ export default function BranchMapView({
         ) : null}
 
         {renderTray(changed)}
-        {canEdit ? (
-          <ActionButton
-            label="Sửa sơ đồ"
-            variant="secondary"
-            icon="create-outline"
-            className="min-h-[48px]"
-            onClick={onEditMap}
-          />
-        ) : null}
       </ScrollView>
 
       {open ? (

@@ -20,13 +20,22 @@ type Props = {
   filtering: boolean;
   /** Slot keys. */
   matched: Set<string>;
+  /** Room ids whose linked listing declares another code than the cell. */
+  flagged?: ReadonlySet<string>;
   onOpen: (slot: DraftSlot) => void;
 };
 
 /** Page and board padding and border, rounded up (rem is 14dp here). */
 const OUTSIDE_COLUMNS = 58;
 
-export default function FloorBoard({ floor, content, filtering, matched, onOpen }: Props) {
+export default function FloorBoard({
+  floor,
+  content,
+  filtering,
+  matched,
+  flagged,
+  onOpen,
+}: Props) {
   const { width, fontScale } = useWindowDimensions();
   const fixed = columnWidth(floor.rows.length, fontScale, width - OUTSIDE_COLUMNS);
 
@@ -48,7 +57,9 @@ export default function FloorBoard({ floor, content, filtering, matched, onOpen 
       : dim
         ? 'border border-dashed border-border-strong bg-surface'
         : `border-2 ${tone.box}`;
+    const mismatch = Boolean(slot.id && flagged?.has(slot.id));
     const name = [`Phòng ${slot.roomCode}`, place, label, ...lines];
+    if (mismatch) name.push('mã trên tin khác mã ô');
     if (match) name.push('đang được làm nổi');
     return (
       <Pressable
@@ -59,7 +70,7 @@ export default function FloorBoard({ floor, content, filtering, matched, onOpen 
         accessibilityHint="Mở chi tiết phòng"
         className={`min-h-[96px] items-center justify-center gap-0.5 rounded-xl px-1.5 py-2 active:opacity-70 ${box}`}>
         <Text
-          className={`text-center text-lg font-extrabold ${dim ? 'text-muted-foreground' : 'text-foreground'}`}>
+          className={`text-center text-xl font-extrabold ${dim ? 'text-muted-foreground' : 'text-foreground'}`}>
           {slot.roomCode}
         </Text>
         <View className="max-w-full flex-row items-center justify-center gap-1">
@@ -69,6 +80,15 @@ export default function FloorBoard({ floor, content, filtering, matched, onOpen 
             {label}
           </Text>
         </View>
+        {mismatch ? (
+          <View className="max-w-full flex-row items-center justify-center gap-1">
+            <Icon name="alert-circle" size={14} className={dim ? 'text-muted-foreground' : 'text-warning'} />
+            <Text
+              className={`shrink text-center text-xs font-bold ${dim ? 'text-muted-foreground' : 'text-warning'}`}>
+              Lệch mã tin
+            </Text>
+          </View>
+        ) : null}
         {lines.map((line, index) => (
           <Text
             key={index}

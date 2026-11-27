@@ -217,3 +217,99 @@ export function candidateState(
   if (inTray && roomId === null) return { disabled: true, note: 'Đã có trong khay.', action: idle };
   return { disabled: false, note: inTray ? 'Đang ở khay Chưa xếp phòng.' : '', action: idle };
 }
+
+/* ---------- room codes: the map is the standard ---------- */
+
+/** Server rule: trimmed, case-insensitive. */
+export const sameRoomCode = (a: string, b: string) =>
+  a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/**
+ * The code a listing declares when it differs from its cell's. Absent, empty or null (a whole house
+ * declares none) means nothing to warn about.
+ */
+export function codeMismatch(
+  cellCode: string | null | undefined,
+  listingCode: string | null | undefined
+): string | null {
+  const declared = listingCode?.trim();
+  return declared && cellCode != null && !sameRoomCode(declared, cellCode) ? declared : null;
+}
+
+/** Rooms whose linked listings declare another code than the cell, for the marker on the map. */
+export function mismatchedRoomIds(rooms: RoomAssignment[], options: RoomOption[]): Set<string> {
+  const codes = new Map(options.map((room) => [room.id, room.code]));
+  return new Set(
+    rooms
+      .filter((room) =>
+        room.listings.some((listing) => codeMismatch(codes.get(room.roomId), listing.roomCode))
+      )
+      .map((room) => room.roomId)
+  );
+}
+
+/** Another cell of the map already uses `code`, so the cell cannot be renamed to it. */
+export const codeTaken = (options: RoomOption[], roomId: string, code: string) =>
+  options.some((room) => room.id !== roomId && sameRoomCode(room.code, code));
+
+/** What a candidate row says about its declared code; empty when it declares none. */
+export function candidateCodeNote(cellCode: string | null | undefined, code: string | null | undefined) {
+  const declared = code?.trim();
+  if (!declared) return '';
+  return codeMismatch(cellCode, declared)
+    ? `Mã trên tin: ${declared}, khác mã ô ${cellCode}.`
+    : `Mã trên tin: ${declared}.`;
+}
+
+/** Listings with the cell's own code first; otherwise the server's order. */
+export function sortCandidates<T extends { roomCode?: string | null }>(
+  items: T[],
+  cellCode: string | null | undefined
+): T[] {
+  if (cellCode == null) return items;
+  const same = (item: T) => (item.roomCode?.trim() && !codeMismatch(cellCode, item.roomCode) ? 0 : 1);
+  return [...items].sort((a, b) => same(a) - same(b));
+}
+
+export const MAX_CANDIDATE_PAGES = 25;
+
+/**
+ * Every candidate, so that search and "same code first" see them all. The server has no search, only
+ * pages; this reads at most MAX_CANDIDATE_PAGES of them and says when more exist.
+ */
+export async function loadAllCandidates(
+  get: (page: number) => Promise<PageOf<AssignmentCandidate>>
+): Promise<{ items: AssignmentCandidate[]; total: number }> {
+  const first = await get(0);
+  const pages = Math.min(pageCount(first), MAX_CANDIDATE_PAGES);
+  const items = [...first.items];
+  for (let page = 1; page < pages; page++) items.push(...(await get(page)).items);
+  const seen = new Set<string>();
+  return {
+    items: items.filter((item) => !seen.has(item.id) && seen.add(item.id)),
+    total: first.totalElements,
+  };
+}
+
+/* ---------- the one main action of a room ---------- */
+
+export type PrimaryAction =
+  | { kind: 'contract'; id: string; label: string }
+  | { kind: 'hold'; id: string; label: string }
+  | { kind: 'listing'; id: string; label: string }
+  | { kind: 'post'; label: string };
+
+/** Running contract, else a hold, else the listing, else start a listing for the free room. */
+export function primaryAction(room: RoomAssignment): PrimaryAction {
+  const contract = sortContracts(room.contracts).find((item) => !ENDED.has(item.status));
+  if (contract) return { kind: 'contract', id: contract.id, label: 'Mở hợp đồng' };
+  if (room.holds[0])
+    return { kind: 'hold', id: room.holds[0].rentalRequestId, label: 'Mở hồ sơ thuê' };
+  if (room.listings[0]) return { kind: 'listing', id: room.listings[0].id, label: 'Mở tin' };
+  return { kind: 'post', label: 'Đăng tin cho phòng này' };
+}
+
+export const editListingDestination = (listingId: string): BranchDestination => ({
+  kind: 'edit-listing',
+  listingId,
+});

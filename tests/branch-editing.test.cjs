@@ -99,7 +99,7 @@ const LAYOUT = {
 
 test('only a plain create can carry a room, and it equals the web module', () => {
   assert.deepEqual(roomLink.listRooms(LAYOUT), webRoomLink.listRooms(LAYOUT));
-  assert.deepEqual(roomLink.listRooms(LAYOUT), [{ id: 's1', label: '101 · Tầng 1 · Dãy 1' }]);
+  assert.deepEqual(roomLink.listRooms(LAYOUT), [{ id: 's1', code: '101', label: '101 · Tầng 1 · Dãy 1' }]);
   const ids = { branchId: 'b', roomId: 's1' };
   assert.deepEqual(roomLink.readRoomLink(ids), ids);
   for (const extra of [{ listingId: 'x' }, { duplicateFromId: 'x' }])

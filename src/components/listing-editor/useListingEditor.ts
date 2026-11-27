@@ -36,6 +36,7 @@ import {
 import { createLatest } from '@/lib/listing-latest';
 import {
   listRooms,
+  prefillRoomCode,
   readRoomLink,
   ROOM_DROPPED_MESSAGE,
   type ListingRoom,
@@ -171,6 +172,16 @@ export function useListingEditor({
     void loadRooms();
     return () => requests.abort();
   }, [loadRooms]);
+
+  // The room's code fills an empty code field once per room and category, never the title. It is not
+  // an edit by the owner, so it does not mark the form dirty.
+  const roomCode =
+    roomLink && Array.isArray(rooms) ? rooms.find((r) => r.id === roomLink.roomId)?.code : undefined;
+  const formReady = Boolean(state);
+  const formCategory = state?.basicInfo.category;
+  useEffect(() => {
+    if (roomCode && formReady) setState((s) => s && prefillRoomCode(s, roomCode));
+  }, [roomCode, formReady, formCategory]);
 
   const category = state?.basicInfo.category;
   useEffect(() => {

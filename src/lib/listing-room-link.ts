@@ -1,11 +1,14 @@
 // Port of hs-web-app lib/listing-room-link.ts: a new listing started from a room of the branch map.
 // The web reads URL params; the phone passes the same values as screen props. No runtime imports.
+import type { ListingFormState } from '@/lib/listing-form';
 import type { ListingPayload } from '@/lib/listing-payload';
 import type { BranchLayout } from '@/types/branch-layout';
 
 export interface ListingRoom {
   id: string;
   label: string;
+  /** Code of the cell on the map. */
+  code: string;
 }
 
 export interface RoomLink {
@@ -37,7 +40,7 @@ export function listRooms(layout: BranchLayout): ListingRoom[] {
     (floor.rows ?? []).flatMap((row) =>
       (row.slots ?? []).flatMap((slot) =>
         slot.roomCode
-          ? [{ id: slot.id, label: `${slot.roomCode} · ${floor.label} · ${row.label}` }]
+          ? [{ id: slot.id, code: slot.roomCode, label: `${slot.roomCode} · ${floor.label} · ${row.label}` }]
           : []
       )
     )
@@ -52,4 +55,18 @@ export function withRoomId(
   return roomId && !request.id && !request.duplicateSourceListingId
     ? { ...request, roomId }
     : request;
+}
+
+/**
+ * A listing started from a room: the room's code goes into the room code (ROOM) or unit number
+ * (APARTMENT) while that field is empty. Never into the title. Anything else is returned untouched.
+ */
+export function prefillRoomCode(state: ListingFormState, code: string): ListingFormState {
+  const value = code.trim();
+  if (!value) return state;
+  if (state.basicInfo.category === 'room' && !state.roomDetails.roomCode?.trim())
+    return { ...state, roomDetails: { ...state.roomDetails, roomCode: value } };
+  if (state.basicInfo.category === 'apartment' && !state.apartmentDetails.unitNumber?.trim())
+    return { ...state, apartmentDetails: { ...state.apartmentDetails, unitNumber: value } };
+  return state;
 }

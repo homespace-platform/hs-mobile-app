@@ -7,21 +7,24 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import BranchAttentionTab from '@/components/branch/attention/BranchAttentionTab';
 import RoomLinksPanel from '@/components/branch/editing/RoomLinksPanel';
 import UnplacedTray from '@/components/branch/editing/UnplacedTray';
+import { createDraftSession } from '@/components/branch/editing/logic';
 import { reloadTray } from '@/components/branch/editing/useLinkAction';
 import BranchMapView from '@/components/branch/view/BranchMapView';
 import ActionButton from '@/components/rental/shared/ActionButton';
+import { useViewer } from '@/components/rental/requests/useViewer';
 import { ErrorBlock, LoadingBlock } from '@/components/rental/shared/StateBlocks';
 import { ErrorNotice, ScreenHeader } from '@/components/Screen';
 import { roomOptions } from '@/lib/branch-assignment';
 import { branchError } from '@/lib/branch-error';
 import { fromLayout } from '@/lib/branch-layout';
-import { loadBranchLayout } from '@/lib/branch-layout-save';
+import { loadBranchLayout, recodeSavedRoom } from '@/lib/branch-layout-save';
 import type { BranchNav, BranchViewState } from '@/lib/branch-nav';
 import type { BranchAttention } from '@/lib/branch-overview';
 import { PERMISSIONS } from '@/lib/permissions';
 import { useBranchRead } from '@/lib/use-branch-read';
 import { useFeatureGate } from '@/lib/use-feature-gate';
 import type { Branch } from '@/services/branchApi';
+import { branchDraftStore } from '@/services/branchDraftStore';
 import { branchLayoutApi } from '@/services/branchMonitorApi';
 
 export interface BranchDetailState {
@@ -60,6 +63,28 @@ function MapTab({ branch, state, onStateChange, nav, onEditMap }: Props) {
   const floors = useMemo(() => (data ? fromLayout(data.layout) : []), [data]);
   const rooms = useMemo(() => roomOptions(floors), [floors]);
   const links = { branchId: branch.id, canEdit: gate.allowed, lockMessage: gate.title, nav };
+  const { userId } = useViewer();
+  /** "Đổi mã ô thành <mã tin>": the normal layout save; rejects with the reason when it cannot. */
+  const recode = async (roomId: string, code: string) => {
+    if (!data) throw new Error('Sơ đồ chưa tải xong.');
+    if (!userId) throw new Error('Chưa xác định được tài khoản. Hãy thử lại sau giây lát.');
+    const { layout } = data;
+    const session = createDraftSession(branchDraftStore, userId, branch.id);
+    const outcome = await recodeSavedRoom(
+      branchLayoutApi,
+      branch.id,
+      layout,
+      roomId,
+      code,
+      async () => (await session.open(layout)) !== null
+    );
+    if (outcome.kind === 'saved') return void (await reload());
+    if (outcome.kind === 'conflict') {
+      await reload();
+      throw new Error('Sơ đồ đã được thay đổi ở nơi khác. Đã tải lại sơ đồ, hãy thử lại.');
+    }
+    throw new Error(outcome.message);
+  };
   const renderTray = (onChanged: () => void) => (
     <UnplacedTray
       {...links}
@@ -143,6 +168,7 @@ function MapTab({ branch, state, onStateChange, nav, onEditMap }: Props) {
             code={room.code}
             rooms={rooms}
             onChanged={onChanged}
+            onRecode={recode}
           />
         )}
         renderTray={renderTray}

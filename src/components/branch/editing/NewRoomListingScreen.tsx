@@ -7,8 +7,10 @@ import MembershipScreen from '@/components/membership/MembershipScreen';
 import ListingDraftScreen from '@/screens/ListingDraftScreen';
 
 export interface NewRoomListingScreenProps {
-  branchId: string;
-  roomId: string;
+  /** A new listing for this room; without them, the editor opens `listingId`. */
+  branchId?: string;
+  roomId?: string;
+  listingId?: string;
   /** Back to the branch, saved or not. */
   onClose: () => void;
   onSelectTab: (tab: MainTab) => void;
@@ -17,6 +19,7 @@ export interface NewRoomListingScreenProps {
 export default function NewRoomListingScreen({
   branchId,
   roomId,
+  listingId,
   onClose,
 }: NewRoomListingScreenProps) {
   // As in MyListingsScreen: leaving the editor for the membership screen replaces it.
@@ -31,6 +34,7 @@ export default function NewRoomListingScreen({
     );
   return (
     <ListingDraftScreen
+      listingId={listingId}
       branchId={branchId}
       roomId={roomId}
       onBack={onClose}

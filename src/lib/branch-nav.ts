@@ -15,6 +15,8 @@ export type BranchDestination =
   | { kind: 'appointment'; appointmentId: string }
   /** The existing listing editor, linked to a room of the map. */
   | { kind: 'new-listing'; branchId: string; roomId: string }
+  /** The existing listing editor on one listing (the owner fixes its room code there). */
+  | { kind: 'edit-listing'; listingId: string }
   /** Handled by the shell itself: the "Chưa xếp phòng" tray of the open branch. */
   | { kind: 'tray'; branchId: string };
 

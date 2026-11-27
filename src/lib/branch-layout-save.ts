@@ -3,7 +3,15 @@ import { isAxiosError } from 'axios';
 
 import { lostAttachedRooms, roomOptions } from '@/lib/branch-assignment';
 import type { BranchAssignments } from '@/types/branch-assignment';
-import { buildTemplate, fromLayout, isSavedCopy, toSaveRequest } from '@/lib/branch-layout';
+import {
+  buildTemplate,
+  fromLayout,
+  isSavedCopy,
+  roomCodeError,
+  setRoomCode,
+  toSaveRequest,
+  validateDraft,
+} from '@/lib/branch-layout';
 import { getApiErrorMessage } from '@/lib/rental/apiError';
 import type { BranchLayout, LayoutDraft, SaveBranchLayoutRequest } from '@/types/branch-layout';
 
@@ -134,4 +142,50 @@ export async function loadBranchLayout(
   if (outcome.kind === 'saved') return { layout: outcome.layout, houseError: '' };
   if (outcome.kind === 'conflict') return { layout: await api.getLayout(branchId), houseError: '' };
   return { layout, houseError: 'message' in outcome ? outcome.message : NOT_SAVED };
+}
+
+export type RecodeOutcome =
+  | { kind: 'saved'; layout: BranchLayout }
+  /** Nothing was sent; `message` says why. */
+  | { kind: 'blocked'; message: string }
+  /** The map changed elsewhere: read it again, then offer the action again. */
+  | { kind: 'conflict' }
+  | { kind: 'failed'; message: string };
+
+/**
+ * "Đổi mã ô thành <mã tin>": renames one saved room through the normal layout save (revision,
+ * acknowledgedDetach, 409 handling). `hasDraft` answers whether this phone holds unsaved map edits:
+ * the save would make that draft stale, so it is refused until the owner deals with the draft.
+ * Never throws.
+ */
+export async function recodeSavedRoom(
+  api: LayoutApi,
+  branchId: string,
+  layout: BranchLayout,
+  roomId: string,
+  code: string,
+  hasDraft: () => Promise<boolean>
+): Promise<RecodeOutcome> {
+  const base = fromLayout(layout);
+  const found = base.flatMap((floor) => floor.rows.flatMap((row) => row.slots)).find(
+    (slot) => slot.id === roomId && slot.roomCode !== null
+  );
+  if (!found) return { kind: 'blocked', message: 'Ô này không còn trong sơ đồ. Hãy tải lại sơ đồ.' };
+  const reason = roomCodeError(base, found.key, code);
+  if (reason) return { kind: 'blocked', message: reason };
+  const next = setRoomCode(base, found.key, code);
+  const problem = validateDraft(next)[0];
+  if (problem) return { kind: 'blocked', message: problem };
+  if (await hasDraft())
+    return {
+      kind: 'blocked',
+      message:
+        'Bạn có bản nháp sơ đồ chưa lưu trên máy này. Hãy mở Sửa sơ đồ để lưu hoặc bỏ bản nháp, rồi đổi mã.',
+    };
+  const outcome = await saveLayoutDraft(api, branchId, next, base, layout.revision);
+  if (outcome.kind === 'saved') return outcome;
+  if (outcome.kind === 'conflict') return outcome;
+  if (outcome.kind === 'failed' || outcome.kind === 'refused')
+    return { kind: 'failed', message: outcome.message };
+  return { kind: 'failed', message: NOT_SAVED };
 }
