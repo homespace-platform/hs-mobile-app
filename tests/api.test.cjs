@@ -840,6 +840,10 @@ test('notification preferences use the web endpoints and normalize to every cate
   assert.equal(calls[1].args[0], '/api/v1/notifications/preferences');
   assert.deepEqual({ ...calls[1].args[1] }, { category: 'CHAT', channel: 'push', enabled: false });
   assert.equal(n.withDefaultPreferences(null).length, n.NOTIFICATION_CATEGORIES.length);
+  assert.deepEqual(
+    Array.from(n.withDefaultPreferences(null), (item) => item).filter((item) => !item.email).map((item) => item.category),
+    ['SYSTEM']
+  );
   for (const category of n.NOTIFICATION_CATEGORIES)
     assert.ok(n.NOTIFICATION_SETTINGS_META[category].title, category);
 });

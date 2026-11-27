@@ -203,13 +203,19 @@ export default function NotificationSettingsScreen({ onBack }: { onBack: () => v
   }, [load]);
 
   // Auto-save like web: optimistic, one category at a time, revert + dialog on failure.
-  async function togglePush(category: NotificationCategory, value: boolean) {
+  async function toggleChannel(
+    category: NotificationCategory,
+    channel: 'push' | 'email',
+    value: boolean
+  ) {
     if (saving) return;
     const previous = items;
-    setItems(items.map((item) => (item.category === category ? { ...item, push: value } : item)));
+    setItems(
+      items.map((item) => (item.category === category ? { ...item, [channel]: value } : item))
+    );
     setSaving(category);
     try {
-      setItems(await patchNotificationPreference(category, 'push', value));
+      setItems(await patchNotificationPreference(category, channel, value));
     } catch (cause) {
       setItems(previous);
       showDialog('Không thể lưu cài đặt thông báo', apiError(cause));
@@ -280,18 +286,30 @@ export default function NotificationSettingsScreen({ onBack }: { onBack: () => v
                       value={item.push}
                       disabled={saving !== null}
                       accessibilityLabel={`${meta.title} - Push`}
-                      onValueChange={(value) => void togglePush(item.category, value)}
+                      onValueChange={(value) => void toggleChannel(item.category, 'push', value)}
                     />
-                    <View className="ml-5 flex-row items-center opacity-60">
-                      <Text className="mr-2 text-xs font-medium text-muted-foreground">
-                        Email <Text className="text-[10px]">(Sắp có)</Text>
-                      </Text>
-                      <Switch
-                        value={item.email}
-                        disabled
-                        accessibilityLabel={`${meta.title} - Email`}
-                      />
-                    </View>
+                    {item.category === 'SYSTEM' ? (
+                      <View className="ml-5 flex-row items-center">
+                        <Text className="mr-2 text-xs font-medium text-muted-foreground">Email</Text>
+                        <Switch
+                          value={item.email}
+                          disabled={saving !== null}
+                          accessibilityLabel={`${meta.title} - Email`}
+                          onValueChange={(value) => void toggleChannel(item.category, 'email', value)}
+                        />
+                      </View>
+                    ) : (
+                      <View className="ml-5 flex-row items-center opacity-60">
+                        <Text className="mr-2 text-xs font-medium text-muted-foreground">
+                          Email <Text className="text-[10px]">(Sắp có)</Text>
+                        </Text>
+                        <Switch
+                          value={item.email}
+                          disabled
+                          accessibilityLabel={`${meta.title} - Email`}
+                        />
+                      </View>
+                    )}
                   </View>
                 </View>
               );

@@ -119,7 +119,10 @@ export function withDefaultPreferences(
   );
   return NOTIFICATION_CATEGORIES.map((category) => {
     const existing = byCategory.get(category);
-    return { category, push: existing?.push ?? true, email: existing?.email ?? true };
+    return { category, push: existing?.push ?? true,
+      // SYSTEM email is opt-in (default off); other categories' email is not offered yet.
+      email: existing?.email ?? category !== 'SYSTEM',
+    };
   });
 }
 
