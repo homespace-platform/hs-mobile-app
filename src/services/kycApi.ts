@@ -7,6 +7,7 @@ export type KycStatusResponse = {
   status: KycBackendStatus;
   verifiedAt: string | null;
   provider: string;
+  providerLabel?: string | null;
   sessionId: string | null;
   sessionUrl: string | null;
   rejectionReason?: string | null;

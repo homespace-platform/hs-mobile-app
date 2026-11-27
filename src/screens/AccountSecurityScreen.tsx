@@ -95,6 +95,11 @@ export default function AccountSecurityScreen({ onBack }: { onBack: () => void }
           <Text className="mt-2 text-sm text-secondary">
             Trạng thái: {kyc ? (KYC_STATUS_LABELS[kyc.status] ?? kyc.status) : 'Đang tải...'}
           </Text>
+          {kyc?.status === 'VERIFIED' && (kyc.providerLabel ?? kyc.provider) ? (
+            <Text className="mt-1 text-sm text-secondary">
+              Nhà cung cấp: {kyc.providerLabel ?? kyc.provider}
+            </Text>
+          ) : null}
           {kyc?.rejectionReason ? (
             <Text className="mt-2 text-sm text-danger">{kyc.rejectionReason}</Text>
           ) : null}
