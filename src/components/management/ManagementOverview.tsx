@@ -1,5 +1,6 @@
 import { Pressable, Text, View } from 'react-native';
 import Icon from '@/components/Icon';
+import { LandlordSummaryView, TenantSummaryView } from './DashboardSummary';
 import {
   MANAGEMENT_NAVIGATION,
   type ManagementDestination,
@@ -9,14 +10,24 @@ import {
 export default function ManagementOverview({
   role,
   onOpen,
+  onAction,
 }: {
   role: ManagementRole;
   onOpen: (destination: ManagementDestination) => void;
+  onAction: (href: string) => void;
 }) {
   const menuItems = MANAGEMENT_NAVIGATION[role].flatMap((group) => group.items);
 
   return (
-    <View className="gap-2">
+    <View className="gap-4">
+      {role === 'landlord' ? (
+        <LandlordSummaryView key={role} onAction={onAction} />
+      ) : (
+        <TenantSummaryView key={role} onAction={onAction} />
+      )}
+      <Text accessibilityRole="header" className="text-base font-bold text-foreground">
+        Truy cập nhanh
+      </Text>
       {menuItems.map(({ id, icon, title }) => {
         if (id === 'dashboard') return null;
 
