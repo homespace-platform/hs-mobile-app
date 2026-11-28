@@ -30,7 +30,7 @@ export default function ContractPropertySection({ property: original }: { proper
     <Anchor id={draft ? 'contract-property' : 'amendment-property'}>
       <Section
         icon="home-outline"
-        title="Thông tin bất động sản bàn giao"
+        title="Thông tin bàn giao địa điểm thuê"
         badge={listingCode ? `Mã tin: ${str(listingCode)}` : undefined}>
         <View>
           <FieldRow label="Địa chỉ tài sản" value={property.fullAddress} highlight />

@@ -97,7 +97,7 @@ export const NOTIFICATION_SETTINGS_META: Record<
   },
   APPOINTMENT: {
     title: 'Lịch hẹn xem nhà',
-    description: 'Yêu cầu đặt lịch, xác nhận hoặc thay đổi lịch hẹn xem bất động sản',
+    description: 'Yêu cầu đặt lịch, xác nhận hoặc thay đổi lịch hẹn xem nhà',
   },
   RENTAL_REQUEST: {
     title: 'Yêu cầu thuê',

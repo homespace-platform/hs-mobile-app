@@ -1,5 +1,6 @@
 // Port of hs-web-app utils/apiError.ts (verbatim; only import paths changed).
 import axios from 'axios';
+import { formatHousingWording } from '@/lib/housing-wording';
 
 export interface ApiValidationErrorItem {
   field?: string;
@@ -32,18 +33,18 @@ export function getApiErrorMessage(
         .map((err) => (err.field ? `${err.field}: ${err.message}` : err.message))
         .filter(Boolean);
       if (messages.length > 0) {
-        return messages.join('; ');
+        return formatHousingWording(messages.join('; '));
       }
     }
 
     // 2. Check response.data.message
     if (data.message && typeof data.message === 'string' && data.message.trim()) {
-      return data.message.trim();
+      return formatHousingWording(data.message.trim());
     }
-    if (typeof data.detail === 'string' && data.detail.trim()) return data.detail.trim();
+    if (typeof data.detail === 'string' && data.detail.trim()) return formatHousingWording(data.detail.trim());
     if (Array.isArray(data.detail)) {
       const details = data.detail.map((item) => item.msg).filter(Boolean);
-      if (details.length) return details.join('; ');
+      if (details.length) return formatHousingWording(details.join('; '));
     }
   }
 

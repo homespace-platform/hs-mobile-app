@@ -73,7 +73,7 @@ Paths are under `src/` except `App.tsx`, `tests/`, `package.json`.
 20. [A] Disabled when not PUBLISHED/RESERVED and no booking; with a booking on a non-public listing it opens my bookings. RD:530-535. **has**
 21. [A] Owner tap: "Bạn là chủ bài đăng này, không thể tự đặt lịch xem nhà." RD:536-539. **has**
 22. [A] Signed-out toast "Vui lòng đăng nhập để đặt lịch xem nhà" + login. RD:540-544. **has** (n/a: app is signed-in only)
-23. [A] `APPOINTMENT_BOOK` gate `guard()`; hint "Đặt lịch hẹn gặp trực tiếp chủ nhà tại bất động sản". RD:545,556. **missing**
+23. [A] `APPOINTMENT_BOOK` gate `guard()`; hint "Đặt lịch gặp chủ nhà tại địa điểm cho thuê". RD:545,556. **missing**
 24. [A] KYC before opening. Profile unavailable: "Đang tải thông tin tài khoản. Vui lòng thử lại trong giây lát."; unverified: "Vui lòng xác minh danh tính (KYC) trước khi thực hiện thao tác này." + "Xác minh ngay" (`startKyc()`). Use `getUserProfileApi(true)` if the cached value is unverified. RD:546-550, `lib/kyc-gate.ts:19-52`. **missing**
 25. [A] Replace the "Tính năng đang phát triển" dialog with the modal; pass id, title, location, price `priceMillion * 1_000_000`, first image, owner id. RD:945-965. **missing**
 26. [A] After the modal closes, look the booking up again. RD:948-956. **missing**
@@ -81,7 +81,7 @@ Paths are under `src/` except `App.tsx`, `tests/`, `package.json`.
 
 ## A. Booking modal
 
-28. [A] Header "Đặt lịch xem nhà" / "Yêu cầu đổi lịch xem nhà", subtitle "Hẹn gặp trực tiếp chủ nhà tại bất động sản", close button. BM:302-325. **partial** (old BookingForm)
+28. [A] Header "Đặt lịch xem nhà" / "Yêu cầu đổi lịch xem nhà", subtitle "Hẹn gặp trực tiếp chủ nhà tại địa điểm cho thuê", close button. BM:302-325. **partial** (old BookingForm)
 29. [A] Listing summary: thumbnail or "Ảnh", title, address, "{VND} / tháng". BM:329-360. **missing**
 30. [A] On open and each date change: active booking, then availability for the date; ignore stale responses (old form aborts). BM:148-185. **partial**
 31. [A] If the date's weekday is closed, jump to the next open one (`nextAllowedViewingDate`). BM:161-176. **missing**
@@ -138,7 +138,7 @@ Paths are under `src/` except `App.tsx`, `tests/`, `package.json`.
 76. [B] Calendar tab uses `loadCalendarAppointments`, no date filter, no pagination. OWN:78-93. **partial** (old loader uses `hasMore`)
 77. [B] Load error "Không thể tải danh sách lịch tiếp khách." / "Không thể tải danh sách lịch đi xem."; ignore stale responses. OWN:109-111, MY:116-118. **partial** (generic message)
 78. [B] Loading "Đang tải calendar lịch tiếp khách..." / "Đang tải danh sách lịch tiếp khách..." / "Đang tải calendar lịch đi xem của bạn..." / "Đang tải danh sách lịch đi xem của bạn...". OWN:352-368, MY:248-263. **partial**
-79. [B] Owner empty "Không có lịch hẹn nào"; "Không tìm thấy lịch hẹn nào trong ngày đã chọn. Thử chọn ngày khác hoặc xem tất cả." / "Hiện chưa có khách hàng nào đặt lịch xem các bất động sản của bạn."; "Xem tất cả ngày" with a date. OWN:369-387. **partial**
+79. [B] Owner empty "Không có lịch hẹn nào"; "Không tìm thấy lịch hẹn nào trong ngày đã chọn. Thử chọn ngày khác hoặc xem tất cả." / "Hiện chưa có khách hàng nào đặt lịch xem nhà của bạn."; "Xem tất cả ngày" with a date. OWN:369-387. **partial**
 80. [B] Renter empty "Bạn chưa có lịch hẹn xem nhà nào"; "Không có lịch hẹn nào vào ngày đã chọn. Thử đổi ngày khác hoặc bấm xem tất cả." / "Khám phá các căn hộ đang cho thuê trên HomeSpace và đặt lịch xem nhà ngay."; "Xem tất cả ngày" with a date; "Khám phá nhà thuê" always (search tab). MY:264-290. **partial**
 81. [B] Pagination only when totalPages > 1: "Tổng cộng: N lịch hẹn", "Trước", "x / y", "Sau", disabled at the ends. OWN:405-432, MY:305-332. **partial** (old "Tải thêm")
 

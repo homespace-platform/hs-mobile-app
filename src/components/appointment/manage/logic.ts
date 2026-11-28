@@ -20,7 +20,7 @@ export const PAGE_COPY = {
     emptyTitle: 'Không có lịch hẹn nào',
     emptyFiltered:
       'Không tìm thấy lịch hẹn nào trong ngày đã chọn. Thử chọn ngày khác hoặc xem tất cả.',
-    emptyAll: 'Hiện chưa có khách hàng nào đặt lịch xem các bất động sản của bạn.',
+    emptyAll: 'Hiện chưa có khách hàng nào đặt lịch xem nhà của bạn.',
   },
   RENTER: {
     title: 'Lịch tôi đi xem (Khách thuê)',

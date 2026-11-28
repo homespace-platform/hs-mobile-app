@@ -147,7 +147,7 @@ export default function ContactCta({
         <View
           accessible
           accessibilityRole="button"
-          accessibilityHint={`Bất động sản này đang được giữ chỗ trong ${RENTAL_HOLD_DURATION_LABEL} cho một khách thuê khác`}
+          accessibilityHint={`Địa điểm cho thuê này đang được giữ chỗ trong ${RENTAL_HOLD_DURATION_LABEL} cho một khách thuê khác`}
           accessibilityState={{ disabled: true }}
           className="min-h-12 w-full flex-row items-center justify-center gap-2 rounded-xl border border-border bg-muted px-4 py-3.5">
           <Icon name="shield-checkmark-outline" size={18} className="text-muted-foreground" />
@@ -187,7 +187,7 @@ export default function ContactCta({
           }}
           accessibilityRole="button"
           accessibilityHint={
-            bookGate.title ?? 'Đặt lịch hẹn gặp trực tiếp chủ nhà tại bất động sản'
+            bookGate.title ?? 'Đặt lịch gặp trực tiếp chủ nhà tại địa điểm cho thuê'
           }
           accessibilityState={{ disabled: bookingDisabled, busy: checkingKyc }}
           className={`min-h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 ${hasActiveBooking ? 'border-success bg-success-soft' : 'border-border bg-surface'} ${bookingDisabled ? 'opacity-50' : ''}`}>

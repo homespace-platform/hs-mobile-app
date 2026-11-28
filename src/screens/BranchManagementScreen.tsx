@@ -769,7 +769,7 @@ export default function BranchManagementScreen({
               placeholder="Ví dụ: CN-VL01"
             />
             <Options
-              label="Loại bất động sản *"
+              label="Loại hình cho thuê *"
               options={BRANCH_CATEGORIES.map((item) => [item.value, item.label])}
               value={form.category}
               onChange={(value) => change({ category: value as BranchCategory })}

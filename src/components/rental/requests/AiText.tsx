@@ -4,11 +4,13 @@
 import { Linking, ScrollView, Text, View } from 'react-native';
 
 import { webBaseUrl } from '@/config/env';
+import { formatHousingWording } from '@/lib/housing-wording';
 
 import { markdownLines, type MarkdownPart } from './logic';
 
 function Runs({ parts }: { parts: MarkdownPart[] }) {
-  return parts.map(({ text, bold, italic, href }, index) => {
+  return parts.map(({ text: rawText, bold, italic, href }, index) => {
+    const text = formatHousingWording(rawText);
     const style = `${bold ? 'font-semibold' : ''} ${italic ? 'italic' : ''}`;
     return href ? (
       <Text

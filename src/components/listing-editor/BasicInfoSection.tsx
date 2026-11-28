@@ -93,7 +93,7 @@ export default function BasicInfoSection({
           <Text className="text-xs leading-5 text-warning">
             {mode === 'edit'
               ? 'Loại hình được cố định sau khi tạo bài đăng.'
-              : 'Loại hình bất động sản được chọn tự động và cố định từ chi nhánh đã chọn.'}
+              : 'Loại hình được chọn tự động theo chi nhánh và không thể chỉnh sửa.'}
           </Text>
         ) : null}
       </View>

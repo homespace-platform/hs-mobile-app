@@ -414,7 +414,7 @@ export function changeCategory(
 /** Option label of the branch picker; the empty option is BRANCH_NONE_LABEL. */
 export const branchLabel = (branch: Branch) =>
   `${branch.name} ${branch.code ? `(${branch.code})` : ''} - ${branch.display}`;
-export const BRANCH_NONE_LABEL = '-- Bất động sản độc lập (Không chọn chi nhánh) --';
+export const BRANCH_NONE_LABEL = '-- Không chọn chi nhánh --';
 
 /** Branches of legacy categories (OFFICE...) still come back from the API; the editor cannot use them. */
 export const isSupportedBranch = (branch: Branch) =>
@@ -437,8 +437,7 @@ export function selectBranch(
       },
       notice: {
         type: 'info',
-        message:
-          'Đã chuyển sang Bất động sản độc lập (bạn có thể tự nhập thủ công tất cả thông tin).',
+        message: 'Đã chọn đăng tin riêng lẻ. Bạn có thể tự nhập tất cả thông tin.',
       },
     };
   }

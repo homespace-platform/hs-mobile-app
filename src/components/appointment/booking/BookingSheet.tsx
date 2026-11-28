@@ -70,7 +70,7 @@ export default function BookingSheet({
                 {state.rescheduling ? 'Yêu cầu đổi lịch xem nhà' : 'Đặt lịch xem nhà'}
               </Text>
               <Text className="text-xs text-muted-foreground">
-                Hẹn gặp trực tiếp chủ nhà tại bất động sản
+                Hẹn gặp trực tiếp chủ nhà tại địa điểm cho thuê
               </Text>
             </View>
             <Pressable

@@ -918,7 +918,7 @@ function Detail({
               <View className="flex-row flex-wrap gap-x-5">
                 {anchorLink('contract-handover', 'Chỉ số điện nước')}
                 {anchorLink('contract-parties', 'Thông tin hai bên')}
-                {anchorLink('contract-property', 'Thông tin bất động sản')}
+                {anchorLink('contract-property', 'Thông tin địa điểm thuê')}
                 {anchorLink('contract-policies', 'Phí chậm trả & thỏa thuận')}
               </View>
               {draftDirty ? (

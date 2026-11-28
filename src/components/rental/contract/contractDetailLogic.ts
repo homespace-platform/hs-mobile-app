@@ -277,7 +277,7 @@ export function leaseSummary(input: {
         value: text(counterpart.fullName),
       },
       {
-        label: 'Bất động sản',
+        label: 'Địa điểm thuê',
         icon: 'location-outline',
         value: title ?? address,
         sub: title && address ? address : undefined,
@@ -309,7 +309,7 @@ export function leaseSummary(input: {
         ],
       },
       {
-        title: 'Bất động sản',
+        title: 'Địa điểm thuê',
         rows: [
           ['Địa chỉ', address],
           ['Loại hình', text(property.propertyType)],
