@@ -43,3 +43,13 @@ export function pageRange(page: number, pageSize: number, shown: number, totalIt
   const start = (page - 1) * pageSize;
   return { from: Math.min(start + 1, totalItems), to: Math.min(start + shown, totalItems) };
 }
+
+/** Items per page on every list that shares the web paging pattern (hs-web-app/lib/pagination.ts). */
+export const PAGE_SIZE = 10;
+
+export const pageCount = (total: number, size = PAGE_SIZE) =>
+  Math.max(1, Math.ceil(Math.max(0, total) / size));
+
+/** Keeps a page number inside 1..pages; junk (NaN, 0, negatives) becomes 1. */
+export const clampPage = (page: number, pages: number) =>
+  Math.min(Math.max(1, Math.trunc(page) || 1), Math.max(1, pages));

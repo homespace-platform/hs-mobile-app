@@ -78,3 +78,10 @@ test('pageRange: "Hiển thị a - b trong tổng số n" for first, middle and 
   assert.deepEqual({ ...pageRange(4, 10, 3, 33) }, { from: 31, to: 33 }); // short last page
   assert.deepEqual({ ...pageRange(1, 10, 0, 0) }, { from: 0, to: 0 });
 });
+
+test('PAGE_SIZE is 10; pageCount rounds up; clampPage handles first/last and junk', () => {
+  const { PAGE_SIZE, pageCount, clampPage } = load(path.join(__dirname, '../src/lib/pagination.ts'));
+  assert.equal(PAGE_SIZE, 10);
+  assert.deepEqual([0, 10, 11, 95].map((n) => pageCount(n)), [1, 1, 2, 10]);
+  assert.deepEqual([clampPage(1, 5), clampPage(5, 5), clampPage(99, 5), clampPage(0, 5), clampPage(NaN, 5), clampPage(3, 0)], [1, 5, 5, 1, 1, 1]);
+});

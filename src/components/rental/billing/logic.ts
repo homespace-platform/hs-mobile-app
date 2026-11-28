@@ -1,5 +1,6 @@
 // Pure decisions of the billing screens, cut out of the web components (file:line noted on each).
 // No React Native imports: tests/rental-billing.test.cjs runs them, several against the web source.
+import { PAGE_SIZE } from '@/lib/pagination';
 import { formatNumberVi } from '@/lib/rent-detail';
 import { getApiErrorMessage } from '@/lib/rental/apiError';
 import { numberVi, currencyVnd, roundDecimal } from '@/lib/rental/format';
@@ -781,7 +782,7 @@ export function findOwnPayment(payments: PaymentRequest[], paymentId: string, us
 
 // --- payment history (PRP) ---
 
-export const RECEIPT_PAGE_SIZE = 12;
+export const RECEIPT_PAGE_SIZE = PAGE_SIZE;
 
 export const receiptQuery = (
   role: 'landlord' | 'tenant',

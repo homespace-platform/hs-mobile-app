@@ -9,6 +9,7 @@ export interface MembershipReceipt {
   receiptNumber: string;
   itemName: string;
   kind: 'PLAN' | 'ADDON';
+  tier?: string | null;
   quantity: number;
   periodDays: number;
   totalAmount: number;
@@ -28,6 +29,11 @@ const base = '/api/v1/membership/receipts';
 export const membershipReceiptService = {
   async list(params: { page?: number; size?: number }) {
     return (await axiosClient.get<PageResponse<MembershipReceipt>>(base, { params })).data;
+  },
+  async get(id: string) {
+    return (
+      await axiosClient.get<ApiResponse<MembershipReceipt>>(`${base}/${encodeURIComponent(id)}`)
+    ).data.result;
   },
   async retry(id: string) {
     return (

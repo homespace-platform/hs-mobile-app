@@ -940,13 +940,13 @@ test('payment history: query, filter, money, row line; payment lookup stays in t
   assert.deepEqual(plain(logic.receiptQuery('landlord', undefined, 1)), {
     role: 'LANDLORD',
     page: 1,
-    size: 12,
+    size: 10,
   });
   assert.deepEqual(plain(logic.receiptQuery('tenant', 'c9', 3)), {
     role: 'TENANT',
     contractId: 'c9',
     page: 3,
-    size: 12,
+    size: 10,
   });
   const intlMoney = (totalAmount, currency) =>
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency }).format(totalAmount);
@@ -977,7 +977,8 @@ test('payment history: query, filter, money, row line; payment lookup stays in t
   );
   assert.equal(logic.receiptFileName('BL/2026 01'), 'BL-2026-01.pdf');
   const prp = read('components/dashboard/invoices/PaymentReceiptsPanel.tsx');
-  assert.ok(prp.includes('size: 12'));
+  assert.ok(prp.includes('size: PAGE_SIZE'));
+  assert.equal(logic.RECEIPT_PAGE_SIZE, 10);
 
   const list = [payment(), payment({ id: 'p2', payerId: 'x', payeeId: 'y' })];
   assert.equal(logic.findOwnPayment(list, ' p1 ', 't').id, 'p1');
@@ -1135,4 +1136,24 @@ openProof;`),
     await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(opened, expected);
   }
+});
+
+// Both payment-history tabs share one row (Xem + Tải PDF) and one pager at 10 per page.
+test('membership and rental tabs use the same receipt row and pager', () => {
+  const src = (f) => fs.readFileSync(path.join(SRC, f), 'utf8');
+  const tab = src('components/rental/billing/MembershipReceiptsTab.tsx');
+  const rental = src('screens/rental/PaymentHistoryScreen.tsx');
+  const row = src('components/rental/billing/ReceiptRow.tsx');
+  for (const code of [tab, rental]) {
+    assert.match(code, /<ReceiptRow/);
+    assert.match(code, /<ReceiptPager/);
+  }
+  assert.match(tab, /size: PAGE_SIZE/);
+  assert.match(tab, /\.get\(id\)/);
+  assert.match(row, /label="Xem"/);
+  assert.match(row, /label="Tải PDF"/);
+  assert.match(row, /disabled=\{!ready\}/);
+  for (const label of ['Trang đầu', 'Trang trước', 'Trang sau', 'Trang cuối'])
+    assert.ok(row.includes(label), label);
+  assert.match(row, /giao dịch/);
 });

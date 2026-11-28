@@ -8,6 +8,7 @@ import Icon from '@/components/Icon';
 import { ScreenHeader } from '@/components/Screen';
 import { useAlive, useToast } from '@/components/rental/billing/common';
 import { receiptMoney, receiptQuery, receiptSubtitle } from '@/components/rental/billing/logic';
+import { ReceiptPager, ReceiptRow, shareReceiptPdf } from '@/components/rental/billing/ReceiptRow';
 import MembershipReceiptsTab from '@/components/rental/billing/MembershipReceiptsTab';
 import PaymentReceiptActions from '@/components/rental/billing/PaymentReceiptActions';
 import ActionButton from '@/components/rental/shared/ActionButton';
@@ -17,6 +18,7 @@ import { PolicyNotice } from '@/components/rental/shared/PolicyNotice';
 import { Skeleton } from '@/components/rental/shared/StateBlocks';
 import { useVisiblePoll } from '@/lib/rental-sync/hooks';
 import type { RentalScreenNavProps } from '@/lib/rental-nav/routes';
+import { clampPage } from '@/lib/pagination';
 import { getApiErrorMessage } from '@/lib/rental/apiError';
 import type { DashboardRole } from '@/lib/rental/dashboard-role';
 import { vnDate, vnDateTime } from '@/lib/rental/format';
@@ -32,9 +34,19 @@ export type PaymentHistoryScreenProps = RentalScreenNavProps & {
 
 export default function PaymentHistoryScreen(props: PaymentHistoryScreenProps) {
   const [tab, setTab] = useState<'rent' | 'membership'>('rent');
+  // Web: one "Làm mới" above the tabs refreshes whichever tab is open.
+  const [refreshKey, setRefreshKey] = useState(0);
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <ScreenHeader title="Lịch sử thanh toán" onBack={props.onBack} />
+      <View className="items-end px-4 pt-3">
+        <ActionButton
+          label="Làm mới"
+          icon="refresh"
+          variant="secondary"
+          onClick={() => setRefreshKey((v) => v + 1)}
+        />
+      </View>
       <View accessibilityRole="tablist" className="flex-row gap-2 px-4 pt-3">
         {(
           [
@@ -56,10 +68,14 @@ export default function PaymentHistoryScreen(props: PaymentHistoryScreenProps) {
         ))}
       </View>
       {tab === 'membership' ? (
-        <MembershipReceiptsTab />
+        <MembershipReceiptsTab refreshKey={refreshKey} />
       ) : (
         /* Web key: another role or contract starts from page 1 with nothing carried over. */
-        <Receipts key={`${props.role}:${props.contractId ?? ''}`} {...props} />
+        <Receipts
+          key={`${props.role}:${props.contractId ?? ''}`}
+          {...props}
+          refreshKey={refreshKey}
+        />
       )}
     </SafeAreaView>
   );
@@ -69,10 +85,17 @@ const Muted = ({ children }: { children: React.ReactNode }) => (
   <Text className="text-sm leading-6 text-muted-foreground">{children}</Text>
 );
 
-function Receipts({ role, contractId, onNavigate }: PaymentHistoryScreenProps) {
+function Receipts({
+  role,
+  contractId,
+  onNavigate,
+  refreshKey,
+}: PaymentHistoryScreenProps & { refreshKey: number }) {
   const [rows, setRows] = useState<PaymentReceipt[]>([]);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retrying, setRetrying] = useState<string | null>(null);
@@ -91,8 +114,12 @@ function Receipts({ role, contractId, onNavigate }: PaymentHistoryScreenProps) {
       try {
         const data = await paymentReceiptService.list(receiptQuery(role, contractId, page));
         if (token !== sequence.current.value) return;
+        const count = Math.max(1, data.totalPages);
+        // A page past the end (rows removed meanwhile) falls back to the last one.
+        if (page > count) return void setPage(clampPage(page, count));
         setRows(data.result ?? []);
-        setPages(Math.max(1, data.totalPages));
+        setPages(count);
+        setTotal(data.totalElements ?? 0);
         setError('');
       } catch (cause) {
         if (token === sequence.current.value)
@@ -110,8 +137,19 @@ function Receipts({ role, contractId, onNavigate }: PaymentHistoryScreenProps) {
     return () => {
       counter.value++;
     };
-  }, [load]);
+  }, [load, refreshKey]);
   useVisiblePoll(() => load(true), 15_000);
+
+  async function share(row: PaymentReceipt) {
+    setBusyId(row.id);
+    try {
+      await shareReceiptPdf(await paymentReceiptService.pdf(row.id), row.receiptNumber, isAlive);
+    } catch (cause) {
+      if (isAlive()) toast.error(getApiErrorMessage(cause, 'Chưa tải được PDF.'));
+    } finally {
+      if (isAlive()) setBusyId(null);
+    }
+  }
 
   async function retry(row: PaymentReceipt) {
     if (retryLock.current) return;
@@ -163,14 +201,6 @@ function Receipts({ role, contractId, onNavigate }: PaymentHistoryScreenProps) {
           </Pressable>
         </View>
       ) : null}
-      <ActionButton
-        label="Làm mới"
-        icon="refresh"
-        variant="secondary"
-        busy={loading}
-        onClick={() => void load()}
-        className="self-end"
-      />
       {error ? (
         <Text
           accessibilityRole="alert"
@@ -199,55 +229,23 @@ function Receipts({ role, contractId, onNavigate }: PaymentHistoryScreenProps) {
       ) : (
         <View className="overflow-hidden rounded-2xl border border-border bg-surface">
           {rows.map((row) => (
-            <Pressable
+            <ReceiptRow
               key={row.id}
-              onPress={() => setSelectedId(row.id)}
-              accessibilityRole="button"
-              className="min-h-14 flex-row items-center gap-3 border-b border-border px-4 py-3 active:bg-muted">
-              <Icon
-                name={row.kind === 'REFUND' ? 'return-up-back-outline' : 'document-text-outline'}
-                size={20}
-                className="text-primary"
-              />
-              <View className="flex-1 gap-1">
-                <View className="flex-row items-baseline gap-3">
-                  <Text numberOfLines={1} className="flex-1 text-sm font-semibold text-foreground">
-                    {row.title}
-                  </Text>
-                  <Text className="text-sm font-bold text-primary">{receiptMoney(row)}</Text>
-                </View>
-                <View className="flex-row items-center gap-3">
-                  <Text
-                    numberOfLines={1}
-                    className="flex-1 text-xs leading-5 text-muted-foreground">
-                    {receiptSubtitle({ ...row, day: vnDate(row.issuedAt) })}
-                  </Text>
-                  <Badge tone="success">Đã xác nhận</Badge>
-                </View>
-              </View>
-              <Icon name="chevron-forward" size={18} className="text-muted-foreground" />
-            </Pressable>
+              icon={row.kind === 'REFUND' ? 'return-up-back-outline' : 'document-text-outline'}
+              title={row.title}
+              subtitle={receiptSubtitle({ ...row, day: vnDate(row.issuedAt) })}
+              amount={receiptMoney(row)}
+              status={<Badge tone="success">Đã xác nhận</Badge>}
+              pdfStatus={row.pdfStatus}
+              busy={busyId === row.id}
+              onView={() => setSelectedId(row.id)}
+              onPdf={() => void share(row)}
+            />
           ))}
         </View>
       )}
-      {pages > 1 ? (
-        <View className="flex-row items-center justify-between gap-3">
-          <ActionButton
-            label="Trước"
-            variant="secondary"
-            disabled={loading || page <= 1}
-            onClick={() => go(page - 1)}
-          />
-          <Text className="text-sm text-foreground">
-            Trang {page} / {pages}
-          </Text>
-          <ActionButton
-            label="Tiếp"
-            variant="secondary"
-            disabled={loading || page >= pages}
-            onClick={() => go(page + 1)}
-          />
-        </View>
+      {!loading && total > 0 ? (
+        <ReceiptPager page={page} pages={pages} total={total} onPage={go} />
       ) : null}
       {selected ? (
         <ReceiptDetail
