@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ComponentProps } from 'react';
 import Ionicons from '@/components/Icon';
-import { ActivityIndicator, Pressable, ScrollView, Share, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, Share, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ProfileHeader from '@/components/profile/ProfileHeader';
@@ -19,6 +19,7 @@ import { apiError } from '@/lib/api-error';
 import { webBaseUrl } from '@/config/env';
 import { buildProfileLink } from '@/lib/profile-format';
 import { getReservationPolicy } from '@/services/bookingApi';
+import { dashboardWebUrl } from '@/lib/dashboard-summary';
 
 function displayName(profile: UserProfileResponse | null) {
   if (!profile) return 'Người dùng';
@@ -127,11 +128,6 @@ export default function ProfileScreen({
       showDialog('Không thể chia sẻ liên kết', apiError(e));
     }
   };
-  const unavailable = (title: string) =>
-    showDialog(
-      title,
-      'Backend hiện chưa cung cấp API cho chức năng này. Ứng dụng chưa hỗ trợ mục này.'
-    );
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <TabHeader profile={profile} />
@@ -177,8 +173,17 @@ export default function ProfileScreen({
             />
             <MenuItem
               icon="help-circle-outline"
-              label="Trung tâm hỗ trợ (chưa hỗ trợ)"
-              onPress={() => unavailable('Trung tâm hỗ trợ')}
+              label="Trung tâm hỗ trợ"
+              onPress={() => {
+                const url = dashboardWebUrl(webBaseUrl, '/support');
+                if (!url) {
+                  showDialog('Không mở được hỗ trợ', 'Địa chỉ hỗ trợ chưa hợp lệ.');
+                  return;
+                }
+                void Linking.openURL(url).catch(() =>
+                  showDialog('Không mở được hỗ trợ', 'Vui lòng thử lại sau.')
+                );
+              }}
             />
             <MenuItem
               icon="information-circle-outline"

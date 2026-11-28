@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Animated,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -13,8 +14,10 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import BottomTabBar, { type MainTab } from '@/components/BottomTabBar';
 import Icon from '@/components/Icon';
 import ManagementOverview from '@/components/management/ManagementOverview';
+import LandlordAnalytics from '@/components/management/LandlordAnalytics';
+import { useDialog } from '@/components/AppDialog';
 import { ScreenHeader } from '@/components/Screen';
-import TabHeader from '@/components/TabHeader';
+import TabHeader, { TabHeaderNavigation } from '@/components/TabHeader';
 import {
   MANAGEMENT_NAVIGATION,
   MANAGEMENT_TITLES,
@@ -22,6 +25,9 @@ import {
   type ManagementRole,
 } from '@/lib/dashboard-navigation';
 import { rentalRouteForDestination, type RentalRoute } from '@/lib/rental-nav/routes';
+import { rentalRouteFromActionPath } from '@/lib/rental-nav/deep-link';
+import { dashboardWebUrl } from '@/lib/dashboard-summary';
+import { webBaseUrl } from '@/config/env';
 
 const ROLE_OPTIONS = [
   { id: 'landlord', label: 'Cho thuê', icon: 'business-outline' },
@@ -55,6 +61,39 @@ export default function ManagementDashboardScreen({
   const [reduceMotion, setReduceMotion] = useState(false);
   const progress = useRef(new Animated.Value(0)).current;
   const drawerWidth = Math.min(width * 0.85, 360);
+  const showDialog = useDialog();
+  const navigation = useContext(TabHeaderNavigation);
+
+  function openAction(href: string) {
+    if (href === '/favorites' && navigation) {
+      navigation.onOpenShortcut('favorites');
+      return;
+    }
+    const route = rentalRouteFromActionPath(href, role);
+    if (route) {
+      onOpenRental(route);
+      return;
+    }
+    const sections: Record<string, Parameters<typeof onOpenSection>[0]> = {
+      '/dashboard/properties': 'landlord-properties',
+      '/dashboard/branches': 'landlord-branches',
+      '/dashboard/membership': 'landlord-membership',
+      '/dashboard/viewing-schedules': 'landlord-appointments',
+      '/dashboard/viewing-schedules/my-bookings': 'tenant-appointments',
+    };
+    if (sections[href]) {
+      onOpenSection(sections[href]);
+      return;
+    }
+    const url = dashboardWebUrl(webBaseUrl, href);
+    if (!url) {
+      showDialog('Không mở được mục này', 'Đường dẫn chưa được hỗ trợ.');
+      return;
+    }
+    void Linking.openURL(url).catch(() =>
+      showDialog('Không mở được trang', 'Vui lòng thử lại sau.')
+    );
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -68,7 +107,7 @@ export default function ManagementDashboardScreen({
     };
   }, []);
 
-  // Listings, membership, branches, appointments and the rental flow have screens; the rest stay title-only.
+  // Existing native destinations keep their navigation and verified-context data.
   function openDestination(next: ManagementDestination) {
     const rentalRoute = rentalRouteForDestination(next);
     if (rentalRoute) onOpenRental(rentalRoute);
@@ -100,7 +139,17 @@ export default function ManagementDashboardScreen({
       className={`flex-1 ${destination ? 'bg-surface' : 'bg-background'}`}
       edges={['top', 'bottom']}>
       {destination ? (
-        <ScreenHeader title={MANAGEMENT_TITLES[destination]} onBack={() => setDestination(null)} />
+        <>
+          <ScreenHeader
+            title={MANAGEMENT_TITLES[destination]}
+            onBack={() => setDestination(null)}
+          />
+          <ScrollView className="flex-1" contentContainerClassName="px-5 pb-6 pt-5">
+            {destination === 'landlord-analytics' ? (
+              <LandlordAnalytics onAction={openAction} />
+            ) : null}
+          </ScrollView>
+        </>
       ) : (
         <>
           <TabHeader
@@ -117,7 +166,7 @@ export default function ManagementDashboardScreen({
             }
           />
           <ScrollView className="flex-1" contentContainerClassName="px-5 pb-6 pt-5">
-            <ManagementOverview role={role} onOpen={openDestination} />
+            <ManagementOverview role={role} onOpen={openDestination} onAction={openAction} />
           </ScrollView>
           <BottomTabBar
             active="management"
@@ -192,7 +241,10 @@ export default function ManagementDashboardScreen({
                       key={option.id}
                       accessibilityRole="button"
                       accessibilityState={{ selected }}
-                      onPress={() => onSelectRole(option.id)}
+                      onPress={() => {
+                        setDestination(null);
+                        onSelectRole(option.id);
+                      }}
                       className={`min-h-12 flex-1 flex-row items-center justify-center gap-1.5 rounded-xl px-2 ${selected ? 'bg-brand' : ''}`}>
                       <Icon name={option.icon} size={18} className={textColor} />
                       <Text className={`text-sm font-bold ${textColor}`}>{option.label}</Text>
