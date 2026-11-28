@@ -28,8 +28,9 @@ const SERVICES = [
   'bank-account',
 ];
 // Imported by rental screens on web, but already covered by other mobile modules:
-// appointment -> services/appointmentApi, notification -> notification API + lib/realtime.
-const OUTSIDE = ['appointment', 'notification'];
+// appointment -> services/appointmentApi, notification -> notification API + lib/realtime,
+// membership-receipt -> services/rental/membership-receipt.service (mobile-specific shape).
+const OUTSIDE = ['appointment', 'notification', 'membership-receipt'];
 
 const PDF = '%PDF-1.7 fake';
 const PDF_BASE64 = Buffer.from(PDF).toString('base64');

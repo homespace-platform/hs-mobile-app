@@ -589,7 +589,7 @@ test('membership checkout quotes, creates, checks and cancels through the authen
   assert.equal(calls[0].args[0], '/api/v1/membership/quote');
   assert.equal(calls[0].args[1].params.tier, 'STARTER');
   assert.equal(calls[1].args[0], '/api/v1/membership/checkout');
-  assert.deepEqual({ ...calls[1].args[1] }, { tier: 'STARTER', provider: 'SEPAY' });
+  assert.deepEqual({ ...calls[1].args[1] }, { tier: 'STARTER', provider: 'SEPAY', confirmRepeat: false });
   assert.equal(calls[2].args[0], `/api/v1/membership/orders/${id}`);
   assert.equal(calls[3].args[0], `/api/v1/membership/orders/${id}/cancel`);
 });
