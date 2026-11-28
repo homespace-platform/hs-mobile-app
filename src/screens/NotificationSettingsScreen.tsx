@@ -22,6 +22,8 @@ import {
   type PushStatus,
 } from '@/lib/push/device';
 import {
+  EMAIL_ENABLED_CATEGORIES,
+  EMAIL_SETTINGS_NOTES,
   NOTIFICATION_SETTINGS_META,
   type NotificationCategory,
   type NotificationPreferenceItem,
@@ -278,6 +280,11 @@ export default function NotificationSettingsScreen({ onBack }: { onBack: () => v
                       <Text className="mt-0.5 text-xs leading-5 text-muted-foreground">
                         {meta.description}
                       </Text>
+                      {EMAIL_SETTINGS_NOTES[item.category] ? (
+                        <Text className="mt-1 text-xs leading-5 text-muted-foreground">
+                          {EMAIL_SETTINGS_NOTES[item.category]}
+                        </Text>
+                      ) : null}
                     </View>
                   </View>
                   <View className="mt-3 flex-row items-center justify-end">
@@ -288,7 +295,7 @@ export default function NotificationSettingsScreen({ onBack }: { onBack: () => v
                       accessibilityLabel={`${meta.title} - Push`}
                       onValueChange={(value) => void toggleChannel(item.category, 'push', value)}
                     />
-                    {item.category === 'SYSTEM' ? (
+                    {EMAIL_ENABLED_CATEGORIES.includes(item.category) ? (
                       <View className="ml-5 flex-row items-center">
                         <Text className="mr-2 text-xs font-medium text-muted-foreground">Email</Text>
                         <Switch

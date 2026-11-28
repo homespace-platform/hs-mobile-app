@@ -1027,3 +1027,15 @@ test('profile join date is "tháng M năm YYYY" and share link follows web /u/{u
   assert.equal(buildProfileLink('', 'a'), null);
   assert.equal(buildProfileLink(undefined, 'a'), null);
 });
+
+test('email toggle is offered only for SYSTEM, PAYMENT and CONTRACT, with notes on the last two', () => {
+  const n = load('lib/notification.ts');
+  assert.deepEqual([...n.EMAIL_ENABLED_CATEGORIES], ['SYSTEM', 'PAYMENT', 'CONTRACT']);
+  assert.deepEqual({ ...n.EMAIL_SETTINGS_NOTES }, {
+    PAYMENT: 'Biên nhận thanh toán luôn được gửi qua email kèm file PDF.',
+    CONTRACT: 'Khi hợp đồng thuê ký xong, email kèm PDF hợp đồng thuê và hợp đồng cọc.',
+  });
+  const screen = fs.readFileSync(path.join(__dirname, '../src/screens/NotificationSettingsScreen.tsx'), 'utf8');
+  assert.match(screen, /EMAIL_ENABLED_CATEGORIES\.includes\(item\.category\)/);
+  assert.match(screen, /EMAIL_SETTINGS_NOTES\[item\.category\]/);
+});

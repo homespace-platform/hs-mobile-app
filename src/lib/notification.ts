@@ -70,6 +70,14 @@ export type NotificationPreferenceItem = {
   email: boolean;
 };
 
+// Mirrors hs-web-app EMAIL_ENABLED_CATEGORIES / EMAIL_SETTINGS_NOTES; the effective on/off value comes from the server.
+export const EMAIL_ENABLED_CATEGORIES: readonly NotificationCategory[] = ['SYSTEM', 'PAYMENT', 'CONTRACT'];
+
+export const EMAIL_SETTINGS_NOTES: Partial<Record<NotificationCategory, string>> = {
+  PAYMENT: 'Biên nhận thanh toán luôn được gửi qua email kèm file PDF.',
+  CONTRACT: 'Khi hợp đồng thuê ký xong, email kèm PDF hợp đồng thuê và hợp đồng cọc.',
+};
+
 // Titles/descriptions mirror hs-web-app NOTIFICATION_CATEGORY_META (settingsTitle/settingsDescription).
 export const NOTIFICATION_SETTINGS_META: Record<
   NotificationCategory,
