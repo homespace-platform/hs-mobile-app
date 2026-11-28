@@ -260,67 +260,67 @@ export default function NotificationSettingsScreen({ onBack }: { onBack: () => v
           </View>
         ) : (
           <View className="mt-4 overflow-hidden rounded-2xl border border-border bg-surface">
-            {items.map((item, index) => {
-              const meta = NOTIFICATION_SETTINGS_META[item.category];
-              return (
-                <View
-                  key={item.category}
-                  className={`p-4 ${index ? 'border-t border-border' : ''}`}>
-                  <View className="flex-row items-start">
-                    <View className="h-10 w-10 items-center justify-center rounded-2xl border border-primary-border bg-primary-soft">
-                      <Icon name={ICONS[item.category]} size={20} className="text-primary" />
-                    </View>
-                    <View className="ml-3 flex-1">
-                      <View className="flex-row items-center">
-                        <Text className="text-sm font-bold text-foreground">{meta.title}</Text>
-                        {saving === item.category ? (
-                          <ActivityIndicator size="small" className="ml-2 text-primary" />
+            {/* Categories with email first; the rest keep their order and show Push only. */}
+            {[...items]
+              .sort(
+                (a, b) =>
+                  Number(EMAIL_ENABLED_CATEGORIES.includes(b.category)) -
+                  Number(EMAIL_ENABLED_CATEGORIES.includes(a.category))
+              )
+              .map((item, index) => {
+                const meta = NOTIFICATION_SETTINGS_META[item.category];
+                return (
+                  <View
+                    key={item.category}
+                    className={`p-4 ${index ? 'border-t border-border' : ''}`}>
+                    <View className="flex-row items-start">
+                      <View className="h-10 w-10 items-center justify-center rounded-2xl border border-primary-border bg-primary-soft">
+                        <Icon name={ICONS[item.category]} size={20} className="text-primary" />
+                      </View>
+                      <View className="ml-3 flex-1">
+                        <View className="flex-row items-center">
+                          <Text className="text-sm font-bold text-foreground">{meta.title}</Text>
+                          {saving === item.category ? (
+                            <ActivityIndicator size="small" className="ml-2 text-primary" />
+                          ) : null}
+                        </View>
+                        <Text className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                          {meta.description}
+                        </Text>
+                        {EMAIL_SETTINGS_NOTES[item.category] ? (
+                          <Text className="mt-1 text-xs leading-5 text-muted-foreground">
+                            {EMAIL_SETTINGS_NOTES[item.category]}
+                          </Text>
                         ) : null}
                       </View>
-                      <Text className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                        {meta.description}
-                      </Text>
-                      {EMAIL_SETTINGS_NOTES[item.category] ? (
-                        <Text className="mt-1 text-xs leading-5 text-muted-foreground">
-                          {EMAIL_SETTINGS_NOTES[item.category]}
-                        </Text>
+                    </View>
+                    <View className="mt-3 flex-row items-center justify-end">
+                      <Text className="mr-2 text-xs font-medium text-muted-foreground">Push</Text>
+                      <Switch
+                        value={item.push}
+                        disabled={saving !== null}
+                        accessibilityLabel={`${meta.title} - Push`}
+                        onValueChange={(value) => void toggleChannel(item.category, 'push', value)}
+                      />
+                      {EMAIL_ENABLED_CATEGORIES.includes(item.category) ? (
+                        <View className="ml-5 flex-row items-center">
+                          <Text className="mr-2 text-xs font-medium text-muted-foreground">
+                            Email
+                          </Text>
+                          <Switch
+                            value={item.email}
+                            disabled={saving !== null}
+                            accessibilityLabel={`${meta.title} - Email`}
+                            onValueChange={(value) =>
+                              void toggleChannel(item.category, 'email', value)
+                            }
+                          />
+                        </View>
                       ) : null}
                     </View>
                   </View>
-                  <View className="mt-3 flex-row items-center justify-end">
-                    <Text className="mr-2 text-xs font-medium text-muted-foreground">Push</Text>
-                    <Switch
-                      value={item.push}
-                      disabled={saving !== null}
-                      accessibilityLabel={`${meta.title} - Push`}
-                      onValueChange={(value) => void toggleChannel(item.category, 'push', value)}
-                    />
-                    {EMAIL_ENABLED_CATEGORIES.includes(item.category) ? (
-                      <View className="ml-5 flex-row items-center">
-                        <Text className="mr-2 text-xs font-medium text-muted-foreground">Email</Text>
-                        <Switch
-                          value={item.email}
-                          disabled={saving !== null}
-                          accessibilityLabel={`${meta.title} - Email`}
-                          onValueChange={(value) => void toggleChannel(item.category, 'email', value)}
-                        />
-                      </View>
-                    ) : (
-                      <View className="ml-5 flex-row items-center opacity-60">
-                        <Text className="mr-2 text-xs font-medium text-muted-foreground">
-                          Email <Text className="text-[10px]">(Sắp có)</Text>
-                        </Text>
-                        <Switch
-                          value={item.email}
-                          disabled
-                          accessibilityLabel={`${meta.title} - Email`}
-                        />
-                      </View>
-                    )}
-                  </View>
-                </View>
-              );
-            })}
+                );
+              })}
           </View>
         )}
       </ScrollView>
