@@ -7,6 +7,7 @@ import { DialogProvider } from '@/components/AppDialog';
 import { ChatCallProvider } from '@/components/chat/ChatCallProvider';
 import BackendHealthGate from '@/components/BackendHealthGate';
 import NetworkGate from '@/components/NetworkGate';
+import PrivacyNotice from '@/components/PrivacyNotice';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 import type { MainTab } from '@/components/BottomTabBar';
 import { TabHeaderNavigation, type HeaderShortcut } from '@/components/TabHeader';
@@ -332,11 +333,18 @@ function SignedOutApp() {
 function AuthGate() {
   const { status } = useAuth();
 
-  if (status === 'loading') {
-    return <LoadingScreen message="Đang khởi tạo phiên đăng nhập..." />;
-  }
-
-  return status === 'signedIn' ? <SignedInRoot /> : <SignedOutApp />;
+  return (
+    <>
+      {status === 'loading' ? (
+        <LoadingScreen message="Đang khởi tạo phiên đăng nhập..." />
+      ) : status === 'signedIn' ? (
+        <SignedInRoot />
+      ) : (
+        <SignedOutApp />
+      )}
+      <PrivacyNotice loading={status === 'loading'} signedIn={status === 'signedIn'} />
+    </>
+  );
 }
 
 export default function App() {

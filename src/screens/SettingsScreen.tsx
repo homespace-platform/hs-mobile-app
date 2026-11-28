@@ -3,6 +3,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import Ionicons from '@/components/Icon';
+import { PrivacyPolicyLinks } from '@/components/PrivacyNotice';
 import { ScreenHeader } from '@/components/Screen';
 import AccountSecurityScreen from '@/screens/AccountSecurityScreen';
 import AppearanceSettingsScreen from '@/screens/AppearanceSettingsScreen';
@@ -89,6 +90,9 @@ export default function SettingsScreen({
               <Ionicons name="chevron-forward" size={18} className="text-subtle" />
             </Pressable>
           ))}
+        </View>
+        <View className="mt-4 overflow-hidden rounded-3xl border border-border bg-surface">
+          <PrivacyPolicyLinks />
         </View>
       </ScrollView>
     </SafeAreaView>

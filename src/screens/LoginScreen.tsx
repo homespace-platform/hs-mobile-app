@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, Text } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import AuthLayout from '@/components/AuthLayout';
 import { PolicyNotice } from '@/components/PolicyDialog';
+import { PrivacyPolicyLinks } from '@/components/PrivacyNotice';
 import { useAuth } from '@/features/auth/AuthProvider';
 
 /**
@@ -63,6 +64,9 @@ export default function LoginScreen() {
         summary="Đăng nhập bằng tài khoản HomeSpace hoặc Google."
         text="Đăng nhập bằng tài khoản HomeSpace hoặc Google. Bạn sẽ tự động quay lại ứng dụng sau khi xác thực."
       />
+      <View className="mt-4 overflow-hidden rounded-xl border border-border">
+        <PrivacyPolicyLinks />
+      </View>
     </AuthLayout>
   );
 }
